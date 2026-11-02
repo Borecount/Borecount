@@ -1,4 +1,4 @@
-import { type EntryEntity, InvariantViolationError } from '@luxledger/core';
+import { type EntryEntity, InvariantViolationError } from '@borecount/core';
 import type { EntryResponse } from '../contracts/entries';
 
 export const toEntryResponse = (entry: EntryEntity): EntryResponse => {

@@ -1,4 +1,4 @@
-import { invalidInputPayload, toHttpErrorPayload } from '@luxledger/http/errors';
+import { invalidInputPayload, toHttpErrorPayload } from '@borecount/http/errors';
 import type { FastifyReply } from 'fastify';
 
 export const sendDomainError = (reply: FastifyReply, error: unknown): FastifyReply => {

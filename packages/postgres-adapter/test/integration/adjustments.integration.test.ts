@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import {
   AdjustmentConflictError,
   OverdraftPolicyViolationError,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { and, eq } from 'drizzle-orm';
 import { createDbClient } from '../../src/client';
 import { DrizzleAdjustmentRepository } from '../../src/repositories/adjustment-repository';

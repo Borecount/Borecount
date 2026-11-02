@@ -1,13 +1,13 @@
-# @luxledger/postgres-adapter
+# @borecount/postgres-adapter
 
-Drizzle/PostgreSQL adapter for `@luxledger/core`.
+Drizzle/PostgreSQL adapter for `@borecount/core`.
 
 This package contains infrastructure implementations:
 
 - `DrizzleLedgerRepository`
 - Drizzle schema and row mappers
 - PostgreSQL client factory
-- `luxLedgerDrizzleSchemaPath` for consumer `drizzle.config.ts` files
+- `borecountDrizzleSchemaPath` for consumer `drizzle.config.ts` files
 
 It is intentionally tied to Drizzle and Postgres.
 
@@ -21,11 +21,11 @@ Use metadata for stable external IDs, provider references, flags, and other comp
 
 ## Host-composable unit of work
 
-Use `createUnitOfWork` when a host row or outbox record must commit atomically with LuxLedger operations:
+Use `createUnitOfWork` when a host row or outbox record must commit atomically with Borecount operations:
 
 ```ts
-import { TenantId } from '@luxledger/core';
-import { createDbClient, createUnitOfWork } from '@luxledger/postgres-adapter';
+import { TenantId } from '@borecount/core';
+import { createDbClient, createUnitOfWork } from '@borecount/postgres-adapter';
 import { purchaseOutbox } from './db/schema';
 
 const client = createDbClient({ hostSchema: { purchaseOutbox } });
@@ -65,11 +65,11 @@ JWT, rate-limit, bootstrap, port, and shutdown configuration belongs to the host
 ## Drizzle config
 
 ```ts
-import { luxLedgerDrizzleSchemaPath } from '@luxledger/postgres-adapter/drizzle-config';
+import { borecountDrizzleSchemaPath } from '@borecount/postgres-adapter/drizzle-config';
 import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
-  schema: ['./src/db/schema.ts', luxLedgerDrizzleSchemaPath],
+  schema: ['./src/db/schema.ts', borecountDrizzleSchemaPath],
   out: './drizzle',
   dialect: 'postgresql',
   dbCredentials: {
@@ -80,4 +80,4 @@ export default defineConfig({
 
 Apply migrations before starting application code that depends on a newer adapter schema. Numbered migrations upgrade the consolidated `0000` baseline in place; reset databases created by the retired history that predates that baseline. Package downgrade does not roll back a database; follow the repository [upgrade procedure](../../docs/integration/versioning.md).
 
-Before production use, pin compatible LuxLedger package versions and review the [documentation publication checklist](../../docs/integration/versioning.md#documentation-publication-checklist).
+Before production use, pin compatible Borecount package versions and review the [documentation publication checklist](../../docs/integration/versioning.md#documentation-publication-checklist).

@@ -6,7 +6,7 @@ import {
   Money,
   TransactionEntity,
   TransactionId,
-} from '@luxledger/core';
+} from '@borecount/core';
 import { type ReconRecord, type ReconRule, reconcileOneToOne } from './index';
 
 const rule = (criteria: ReconRule['criteria']): ReconRule => ({

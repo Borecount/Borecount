@@ -1,5 +1,5 @@
-import { invalidInputPayload, toHttpErrorPayload } from '@luxledger/http/errors';
-import { withErrorHandling } from '@luxledger/http/route-core';
+import { invalidInputPayload, toHttpErrorPayload } from '@borecount/http/errors';
+import { withErrorHandling } from '@borecount/http/route-core';
 import type { Response } from 'express';
 
 export const sendInvalidInput = (res: Response, message: string): Response =>

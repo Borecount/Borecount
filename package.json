@@ -1,5 +1,5 @@
 {
-  "name": "luxledger",
+  "name": "borecount",
   "version": "0.1.0",
   "private": true,
   "workspaces": [
@@ -29,7 +29,7 @@
     "contract:verify": "bun test packages/http/src/test/contract-suite.test.ts packages/express-routes/src/openapi-drift.test.ts",
     "release:verify": "bun run ./scripts/release-readiness.ts",
     "migration:verify": "bash ./scripts/verify-migration-restore.sh",
-    "pack:dry-run": "export npm_config_cache=.tmp/npm-cache && npm pack --dry-run --workspace @luxledger/core && npm pack --dry-run --workspace @luxledger/http && npm pack --dry-run --workspace @luxledger/postgres-adapter && npm pack --dry-run --workspace @luxledger/fastify-routes && npm pack --dry-run --workspace @luxledger/express-routes",
+    "pack:dry-run": "export npm_config_cache=.tmp/npm-cache && npm pack --dry-run --workspace @borecount/core && npm pack --dry-run --workspace @borecount/http && npm pack --dry-run --workspace @borecount/postgres-adapter && npm pack --dry-run --workspace @borecount/fastify-routes && npm pack --dry-run --workspace @borecount/express-routes",
     "pack:verify": "bash ./scripts/verify-packed-packages.sh"
   },
   "dependencies": {

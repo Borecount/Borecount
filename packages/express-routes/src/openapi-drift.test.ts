@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { ApplicationServices } from '@luxledger/core/application';
-import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@luxledger/fastify-routes';
+import type { ApplicationServices } from '@borecount/core/application';
+import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@borecount/fastify-routes';
 import type { Application } from 'express';
 import Fastify from 'fastify';
 import { registerLedgerAdapter as registerExpressLedgerAdapter } from './index';

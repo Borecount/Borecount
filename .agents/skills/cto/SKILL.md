@@ -1,6 +1,6 @@
 ---
 name: cto
-description: Refine a LuxLedger issue or feature request into an implementation-ready plan grounded in the repository. Use for task refinement and technical planning.
+description: Refine a Borecount issue or feature request into an implementation-ready plan grounded in the repository. Use for task refinement and technical planning.
 ---
 
 # Refine an engineering issue

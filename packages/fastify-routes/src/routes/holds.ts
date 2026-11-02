@@ -1,4 +1,4 @@
-import type { HoldService } from '@luxledger/core/application';
+import type { HoldService } from '@borecount/core/application';
 import {
   type CommitHoldRequest,
   type CreateHoldRequest,
@@ -9,7 +9,7 @@ import {
   type HoldByIdParams,
   holdByIdParamsSchema,
   voidHoldResponseSchema,
-} from '@luxledger/http/contracts';
+} from '@borecount/http/contracts';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
 import { BaseRoute } from '../routing/base-route';

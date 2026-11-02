@@ -1,10 +1,22 @@
 # Changelog
 
-LuxLedger uses coordinated releases: every public `@luxledger/*` package and
+Borecount uses coordinated releases: every public `@borecount/*` package and
 the OpenAPI contract share one version. Release details and migration guidance
 are linked from each entry.
 
 ## [Unreleased]
+
+## [0.6.0] - 2026-11-02
+
+### Changed
+
+- **Breaking:** renamed all five packages from `@luxledger/*` to `@borecount/*`.
+- **Breaking:** renamed `luxLedgerDrizzleSchemaPath` to `borecountDrizzleSchemaPath` without a compatibility alias.
+- Moved the repositories to `Borecount/Borecount` and `Borecount/Borecount-demo`.
+- Updated active documentation, package metadata, build configuration and release automation for Borecount.
+- Ledger behavior, HTTP wire contracts, database migrations and existing local database/volume identities are unchanged.
+
+See [the 0.6.0 release notes](docs/releases/0.6.0.md).
 
 ## [0.5.0] - 2026-10-25
 
@@ -65,7 +77,8 @@ See [the 0.2.1 release notes](docs/releases/0.2.1.md).
 
 See [the 0.2.0 release notes](docs/releases/0.2.0.md).
 
-[Unreleased]: https://github.com/Crusader4Christ/LuxLedger/tree/main
+[Unreleased]: https://github.com/Borecount/Borecount/tree/main
+[0.6.0]: docs/releases/0.6.0.md
 [0.4.0]: docs/releases/0.4.0.md
 [0.3.0]: docs/releases/0.3.0.md
 [0.2.1]: docs/releases/0.2.1.md

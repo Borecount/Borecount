@@ -1,5 +1,5 @@
-import { InvariantViolationError, type TransactionEntity } from '@luxledger/core';
-import type { CreateTransactionResult } from '@luxledger/core/application';
+import { InvariantViolationError, type TransactionEntity } from '@borecount/core';
+import type { CreateTransactionResult } from '@borecount/core/application';
 import type { CreateTransactionResponse, TransactionResponse } from '../contracts/transactions';
 
 export const toTransactionResponse = (transaction: TransactionEntity): TransactionResponse => {

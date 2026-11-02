@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 
-import { AccountSide } from '@luxledger/core';
-import { InvariantViolationError, LedgerNotFoundError } from '@luxledger/core/application';
+import { AccountSide } from '@borecount/core';
+import { InvariantViolationError, LedgerNotFoundError } from '@borecount/core/application';
 import { eq } from 'drizzle-orm';
 import { DrizzleAccountRepository } from '../../src/repositories/account-repository';
 import { DrizzleBalanceRepository } from '../../src/repositories/balance-repository';

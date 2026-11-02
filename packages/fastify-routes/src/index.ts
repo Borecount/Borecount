@@ -1,5 +1,5 @@
 import './fastify-extensions';
-import type { ApplicationServices } from '@luxledger/core/application';
+import type { ApplicationServices } from '@borecount/core/application';
 import type { FastifyInstance } from 'fastify';
 import { AccountsRoutes } from './routes/accounts';
 import { AdjustmentRoutes } from './routes/adjustments';

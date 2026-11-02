@@ -6,8 +6,8 @@ import {
   Money,
   TransactionEntity,
   TransactionId,
-} from '@luxledger/core';
-import type { TransactionMetadata } from '@luxledger/core/transaction';
+} from '@borecount/core';
+import type { TransactionMetadata } from '@borecount/core/transaction';
 import { toTransactionResponse } from './transactions';
 
 const createTransaction = (metadata?: TransactionMetadata): TransactionEntity =>

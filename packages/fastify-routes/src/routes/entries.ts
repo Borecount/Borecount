@@ -1,17 +1,17 @@
-import type { EntryEntity } from '@luxledger/core';
-import type { entryListFilter, TransactionService, WhereFor } from '@luxledger/core/application';
+import type { EntryEntity } from '@borecount/core';
+import type { entryListFilter, TransactionService, WhereFor } from '@borecount/core/application';
 import {
   entryFilterFields,
   invalidWhereError,
   readWhereParameter,
   whereQueryProperty,
-} from '@luxledger/http';
+} from '@borecount/http';
 import {
   type EntryResponse,
   entriesPageResponseSchema,
   type ListEntriesQuery,
-} from '@luxledger/http/contracts';
-import { toEntryResponse } from '@luxledger/http/mappers';
+} from '@borecount/http/contracts';
+import { toEntryResponse } from '@borecount/http/mappers';
 import { BasePaginatedRoute, type PaginatedRequest } from '../routing/paginated-route';
 
 export class EntriesListRoute extends BasePaginatedRoute<

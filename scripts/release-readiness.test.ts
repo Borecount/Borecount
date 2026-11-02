@@ -16,7 +16,7 @@ async function fixture(
     documentedOperations?: string[];
   } = {},
 ): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'luxledger-release-readiness-'));
+  const root = await mkdtemp(join(tmpdir(), 'borecount-release-readiness-'));
   roots.push(root);
   const version = overrides.packageVersion ?? '1.2.3';
   for (const name of packages) {
@@ -24,23 +24,23 @@ async function fixture(
     await writeFile(
       join(root, 'packages', name, 'package.json'),
       JSON.stringify({
-        name: `@luxledger/${name}`,
+        name: `@borecount/${name}`,
         version,
         dependencies:
-          name === 'http' ? { '@luxledger/core': overrides.dependencyRange ?? `^${version}` } : {},
+          name === 'http' ? { '@borecount/core': overrides.dependencyRange ?? `^${version}` } : {},
       }),
     );
   }
   await mkdir(join(root, 'packages/http/openapi'), { recursive: true });
   await writeFile(
     join(root, 'packages/http/openapi/openapi.yaml'),
-    `openapi: 3.1.0\ninfo:\n  title: LuxLedger\n  version: ${overrides.openApiVersion ?? version}\npaths:\n  /v1/widgets:\n    post:\n      responses: {}\n`,
+    `openapi: 3.1.0\ninfo:\n  title: Borecount\n  version: ${overrides.openApiVersion ?? version}\npaths:\n  /v1/widgets:\n    post:\n      responses: {}\n`,
   );
   const releaseVersion = overrides.releaseVersion ?? version;
   await mkdir(join(root, 'docs/releases'), { recursive: true });
   await writeFile(
     join(root, 'docs/releases', `${version}.md`),
-    packages.map((name) => `| \`@luxledger/${name}\` | \`${releaseVersion}\` |`).join('\n'),
+    packages.map((name) => `| \`@borecount/${name}\` | \`${releaseVersion}\` |`).join('\n'),
   );
   await writeFile(join(root, 'CHANGELOG.md'), `# Changelog\n\n## [${version}]\n`);
   await mkdir(join(root, 'docs/integration'), { recursive: true });
@@ -65,7 +65,7 @@ describe('release readiness', () => {
   it('rejects an incompatible internal package range', async () => {
     await expect(
       verifyReleaseReadiness(await fixture({ dependencyRange: '^1.2.2' })),
-    ).rejects.toThrow('must depend on @luxledger/core@^1.2.3');
+    ).rejects.toThrow('must depend on @borecount/core@^1.2.3');
   });
 
   it('rejects OpenAPI version drift', async () => {
@@ -77,7 +77,7 @@ describe('release readiness', () => {
   it('rejects release-note version drift', async () => {
     await expect(
       verifyReleaseReadiness(await fixture({ releaseVersion: '1.2.2' })),
-    ).rejects.toThrow('Release notes do not declare @luxledger/core@1.2.3');
+    ).rejects.toThrow('Release notes do not declare @borecount/core@1.2.3');
   });
 
   it('rejects invalid semantic versions', async () => {

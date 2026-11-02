@@ -1,4 +1,4 @@
-import { AccountSide, type TransactionMetadata, type UnknownRecord } from '@luxledger/core';
+import { AccountSide, type TransactionMetadata, type UnknownRecord } from '@borecount/core';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,

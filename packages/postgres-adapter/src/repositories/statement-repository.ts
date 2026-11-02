@@ -1,4 +1,4 @@
-import { type AccountSide, calculateAvailableMinor, parseAccountSide } from '@luxledger/core';
+import { type AccountSide, calculateAvailableMinor, parseAccountSide } from '@borecount/core';
 import {
   AccountNotFoundError,
   type AccountStatement,
@@ -9,7 +9,7 @@ import {
   RepositoryError,
   type StatementBalance,
   type StatementRepository,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { type AnyColumn, and, desc, eq, gt, lt, lte, or, sql } from 'drizzle-orm';
 import type { DbClient, DrizzleDatabase } from '../client';
 import { paginateByCursor } from '../paginate-by-cursor';

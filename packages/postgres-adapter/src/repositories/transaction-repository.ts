@@ -5,8 +5,8 @@ import {
   parseAccountSide,
   type TransactionEntity,
   type TransactionMetadata,
-} from '@luxledger/core';
-import type { PaginationQuery } from '@luxledger/core/application';
+} from '@borecount/core';
+import type { PaginationQuery } from '@borecount/core/application';
 import {
   AdjustmentConflictError,
   assertAvailableBalance,
@@ -27,7 +27,7 @@ import {
   type TransactionApplicationRepository,
   type TransactionPaginationQuery,
   transactionListFilter,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { and, desc, eq, getTableColumns, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { DbClient } from '../client';

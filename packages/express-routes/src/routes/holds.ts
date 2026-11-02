@@ -1,4 +1,4 @@
-import type { ApplicationServices } from '@luxledger/core/application';
+import type { ApplicationServices } from '@borecount/core/application';
 import {
   type CommitHoldRequest,
   type CommitHoldResponse,
@@ -8,8 +8,8 @@ import {
   createHoldRequestSchema,
   type HoldByIdParams,
   type VoidHoldResponse,
-} from '@luxledger/http/contracts';
-import { parseUuidParam } from '@luxledger/http/validation-utils';
+} from '@borecount/http/contracts';
+import { parseUuidParam } from '@borecount/http/validation-utils';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
 import { requireContext } from '../request/context';

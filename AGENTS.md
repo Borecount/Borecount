@@ -1,4 +1,4 @@
-# LuxLedger
+# Borecount
 
 Public financial core infrastructure: a double-entry ledger. Runtime: Bun >= 1.x and PostgreSQL 16.
 The reference API demo host lives in a separate repository.
@@ -26,7 +26,7 @@ The reference API demo host lives in a separate repository.
   debt: do not extend it or move it unless the task includes extraction.
 - Hosts own bootstrap, DI, configuration, authentication/authorization, rate limiting, observability,
   and shutdown. Keep provider/product-specific workflows there; consume public package exports.
-- Import workspace packages only through declared `@luxledger/*` exports. Cross-package source
+- Import workspace packages only through declared `@borecount/*` exports. Cross-package source
   imports are allowed only in tests explicitly enforcing repository boundaries.
 - Treat exports, entry-point barrels, declaration build inputs, and README usage as one public API.
   Keep coordinated versions/dependency ranges aligned; never export internals merely for tests.
@@ -75,8 +75,8 @@ The reference API demo host lives in a separate repository.
 
 ## Privacy and Restricted Files
 
-- This repository (`Crusader4Christ/LuxLedger`) is public. Public repository facts may be copied to
-  private LuxLedger Linear; never publish secrets, private attachments, customer/roadmap data,
+- This repository (`Borecount/Borecount`) is public. Public repository facts may be copied to
+  private Borecount Linear; never publish secrets, private attachments, customer/roadmap data,
   environment values, or unrelated private content into this repository or public artifacts.
 - Do not read/edit/commit `node_modules/`, `packages/*/dist/`, `build/`, `tmp/`, `.tmp/`, `.temp/`,
   `.env*` (except tracked `.env.example`), `*.log`, `.codex/`, `.gokin/`, `ll-old/`, or `.idea/`.

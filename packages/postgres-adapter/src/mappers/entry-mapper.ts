@@ -1,4 +1,4 @@
-import { AccountId, EntryEntity, Money } from '@luxledger/core';
+import { AccountId, EntryEntity, Money } from '@borecount/core';
 import type * as schema from '../schema';
 
 export const toEntryEntity = (row: typeof schema.entries.$inferSelect): EntryEntity =>

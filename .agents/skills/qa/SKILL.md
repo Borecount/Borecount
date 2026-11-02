@@ -1,6 +1,6 @@
 ---
 name: qa
-description: Verify implemented LuxLedger behavior against an issue or acceptance criteria with tests and evidence. Use for QA and acceptance validation.
+description: Verify implemented Borecount behavior against an issue or acceptance criteria with tests and evidence. Use for QA and acceptance validation.
 ---
 
 # Validate an implementation

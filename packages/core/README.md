@@ -1,6 +1,6 @@
-# @luxledger/core
+# @borecount/core
 
-Domain-first ledger library for LuxLedger.
+Domain-first ledger library for Borecount.
 
 ## Design goals
 
@@ -66,8 +66,8 @@ are adapter concerns. Omitted metadata remains distinct from an empty object.
 ## Example
 
 ```ts
-import { CreateTransactionUseCase } from '@luxledger/core';
-import { assertNonEmpty } from '@luxledger/core/utils';
+import { CreateTransactionUseCase } from '@borecount/core';
+import { assertNonEmpty } from '@borecount/core/utils';
 
 const useCase = new CreateTransactionUseCase(repository);
 assertNonEmpty(input.tenantId, 'tenantId is required');
@@ -78,13 +78,13 @@ const result = await useCase.execute(command);
 
 1. Keep API/DB adapters in the host app.
 2. Move invariant checks into module use-cases.
-3. Keep repository interfaces in `@luxledger/core`, implementations outside.
+3. Keep repository interfaces in `@borecount/core`, implementations outside.
 
 ## Integration
 
-Application hosts should normally compose this package through a route adapter and `@luxledger/postgres-adapter`. See the repository [integration guide](../../docs/integration/README.md) and [architecture overview](../../docs/product/overview.md).
+Application hosts should normally compose this package through a route adapter and `@borecount/postgres-adapter`. See the repository [integration guide](../../docs/integration/README.md) and [architecture overview](../../docs/product/overview.md).
 
-Before production use, pin compatible LuxLedger package versions and cross-check behavior against the released OpenAPI shipped with that version; see [versioning and publication](../../docs/integration/versioning.md).
+Before production use, pin compatible Borecount package versions and cross-check behavior against the released OpenAPI shipped with that version; see [versioning and publication](../../docs/integration/versioning.md).
 
 ## List filters
 
@@ -94,7 +94,7 @@ optional `cursor`, returning `{ data, nextCursor }`. API-key lists receive the a
 actor separately; their query cannot select a tenant.
 
 ```ts
-import { accountListFilter, type WhereFor } from '@luxledger/core/application';
+import { accountListFilter, type WhereFor } from '@borecount/core/application';
 
 const where: WhereFor<typeof accountListFilter> = {
   name: { eq: 'Wallet' },
@@ -132,7 +132,7 @@ a named query type is needed only when it adds operation-specific fields:
 import {
   type PaginationQuery,
   transactionListFilter,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 
 export interface TransactionPaginationQuery
   extends PaginationQuery<typeof transactionListFilter> {
@@ -160,8 +160,8 @@ when following `nextCursor`; consume every page instead of assuming the first pa
 | creditGrants.listLineageByGrant, creditGrants.listLineageByTransaction | creditLineageListFilter |
 | balances.listHistory | balanceHistoryListFilter |
 
-Policies and `WhereFor` are exported from `@luxledger/core/application`. Entity policies
-are also exported from their domain entry points, such as `@luxledger/core/transaction`.
+Policies and `WhereFor` are exported from `@borecount/core/application`. Entity policies
+are also exported from their domain entry points, such as `@borecount/core/transaction`.
 ID value objects use string filter values. Persisted entry IDs and entry/transaction
 timestamps are non-nullable in filters.
 

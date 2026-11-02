@@ -1,5 +1,5 @@
-import { ApiKeyEntity, ApiKeyRole } from '@luxledger/core';
-import { RepositoryError } from '@luxledger/core/application';
+import { ApiKeyEntity, ApiKeyRole } from '@borecount/core';
+import { RepositoryError } from '@borecount/core/application';
 import type * as schema from '../schema';
 
 const parseApiKeyRole = (role: string): ApiKeyRole => {

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 
-import { AccountSide } from '@luxledger/core';
-import { LedgerNotFoundError, RepositoryError } from '@luxledger/core/application';
+import { AccountSide } from '@borecount/core';
+import { LedgerNotFoundError, RepositoryError } from '@borecount/core/application';
 import { DrizzleAccountRepository } from '../../src/repositories/account-repository';
 import { DrizzleBalanceRepository } from '../../src/repositories/balance-repository';
 import { DrizzleLedgerRepository } from '../../src/repositories/ledger-repository';

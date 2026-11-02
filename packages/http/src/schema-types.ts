@@ -1,4 +1,4 @@
-import type { JsonObject, UnknownRecord } from '@luxledger/core/base';
+import type { JsonObject, UnknownRecord } from '@borecount/core/base';
 
 type SchemaProperties = Readonly<UnknownRecord>;
 

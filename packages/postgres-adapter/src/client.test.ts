@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { InvariantViolationError, RepositoryError } from '@luxledger/core/application';
+import { InvariantViolationError, RepositoryError } from '@borecount/core/application';
 import { createDbClient } from './client';
 
 describe('db client module', () => {
@@ -25,13 +25,13 @@ describe('db client module', () => {
     }
   });
 
-  it('rejects host schema keys that shadow LuxLedger schema', () => {
+  it('rejects host schema keys that shadow Borecount schema', () => {
     expect(() =>
       createDbClient({
         databaseUrl: 'postgresql://unused:unused@127.0.0.1:1/unused',
         hostSchema: { transactions: {} },
       }),
-    ).toThrow('hostSchema must not redefine LuxLedger schema key: transactions');
+    ).toThrow('hostSchema must not redefine Borecount schema key: transactions');
   });
 
   it('execute preserves domain errors', async () => {

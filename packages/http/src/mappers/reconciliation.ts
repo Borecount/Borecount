@@ -4,7 +4,7 @@ import type {
   ReconRule,
   ReconRun,
   ReconUpload,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import type {
   ReconCriterionRequest,
   ReconResultResponse,

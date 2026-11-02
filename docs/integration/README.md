@@ -2,14 +2,14 @@
 
 ## Choose an integration boundary
 
-- Use `@luxledger/fastify-routes` or `@luxledger/express-routes` when embedding the complete HTTP surface in an existing host.
-- Use `@luxledger/core/application` with `@luxledger/postgres-adapter` when composing services without the supplied routes.
-- Use `@luxledger/core` alone when implementing custom ports while preserving domain invariants.
+- Use `@borecount/fastify-routes` or `@borecount/express-routes` when embedding the complete HTTP surface in an existing host.
+- Use `@borecount/core/application` with `@borecount/postgres-adapter` when composing services without the supplied routes.
+- Use `@borecount/core` alone when implementing custom ports while preserving domain invariants.
 
 ## Host responsibilities
 
 1. Provision PostgreSQL 16 and apply the migrations shipped by the adapter.
-2. Create a database client and application services from `@luxledger/postgres-adapter`.
+2. Create a database client and application services from `@borecount/postgres-adapter`.
 3. Authenticate requests before route registration and populate tenant/API-key context.
 4. Register exactly one framework adapter.
 5. Expose liveness and dependency-aware readiness endpoints (the reference convention is `GET /health` and `GET /ready`), metrics, and structured JSON logs with at least timestamp, level, message, request ID, and tenant-safe context. Handle `SIGTERM`, stop accepting new work, drain in-flight requests, close database connections, and enforce a bounded timeout chosen for the deployment platform.
@@ -17,7 +17,7 @@
 
 ## Configuration ownership
 
-`@luxledger/postgres-adapter` reads `DATABASE_URL`, `DB_POOL_MAX`, `DB_IDLE_TIMEOUT`, and `DB_CONNECT_TIMEOUT`. A host may instead pass the corresponding database-client options directly. The core and HTTP contract packages do not read process configuration.
+`@borecount/postgres-adapter` reads `DATABASE_URL`, `DB_POOL_MAX`, `DB_IDLE_TIMEOUT`, and `DB_CONNECT_TIMEOUT`. A host may instead pass the corresponding database-client options directly. The core and HTTP contract packages do not read process configuration.
 
 Authentication, rate limiting, bootstrap, server `PORT`, and `SHUTDOWN_TIMEOUT_MS` belong to the host application. The reference profile uses `JWT_ACCESS_TTL_SECONDS=900`; accepted configurable values are 300 through 900 seconds. Node.js does not load `.env` automatically: the host must use its runtime's env-file option or load a dotenv-compatible file before reading configuration.
 
@@ -45,7 +45,7 @@ Do not generate a new payload for an existing transaction reference. Retrieve or
 
 ### Currency or ledger mismatch
 
-Verify that every account belongs to the target ledger and that each account and entry uses the transaction currency. LuxLedger rejects cross-ledger and mixed-currency postings before committing any effects; see the [posting invariants](../product/invariants.md#posting).
+Verify that every account belongs to the target ledger and that each account and entry uses the transaction currency. Borecount rejects cross-ledger and mixed-currency postings before committing any effects; see the [posting invariants](../product/invariants.md#posting).
 
 ### Missing tenant context
 

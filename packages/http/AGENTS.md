@@ -1,10 +1,10 @@
-# @luxledger/http Instructions
+# @borecount/http Instructions
 
 These rules extend the repository root instructions for `packages/http`.
 
 ## Ownership
 
-- `@luxledger/http` is the source of truth for transport contracts; framework adapters consume those
+- `@borecount/http` is the source of truth for transport contracts; framework adapters consume those
   contracts and must not redefine or fork them locally.
 - Own framework-neutral request/response contracts, runtime schemas, DTO mappers, validation helpers,
   transport-safe error mapping, shared route primitives, and the canonical OpenAPI document at
@@ -16,7 +16,7 @@ These rules extend the repository root instructions for `packages/http`.
 
 ## Boundaries
 
-- Runtime code may depend on `@luxledger/core` only.
+- Runtime code may depend on `@borecount/core` only.
 - Do not import Fastify, Express, NestJS, Drizzle, PostgreSQL clients, adapters, or host applications.
 - Keep values such as `bigint`, dates, optional fields, and pagination cursors serialized consistently
   across both route adapters.

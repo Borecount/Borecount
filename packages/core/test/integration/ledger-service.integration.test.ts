@@ -4,7 +4,7 @@ import {
   AccountSide,
   type EntryEntity,
   type TransactionEntity,
-} from '@luxledger/core';
+} from '@borecount/core';
 import {
   type AccountPaginationQuery,
   AccountService,
@@ -39,7 +39,7 @@ import {
   TransactionService,
   type TrialBalance,
   type VoidHoldInput,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 
 class InMemoryLedgerRepository {
   private readonly ledgers = new Map<string, Ledger>();

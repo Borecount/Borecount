@@ -1,18 +1,18 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 
-import { AccountSide } from '@luxledger/core';
+import { AccountSide } from '@borecount/core';
 import {
   BulkTransactionError,
   InvariantViolationError,
   ReconRunNotFoundError,
   RepositoryError,
-} from '@luxledger/core/application';
-import { CrossLedgerAccountError } from '@luxledger/core/transaction';
+} from '@borecount/core/application';
+import { CrossLedgerAccountError } from '@borecount/core/transaction';
 import {
   createApplicationServices,
   createDbClient,
   DrizzleTenantRepository,
-} from '@luxledger/postgres-adapter';
+} from '@borecount/postgres-adapter';
 import {
   accounts,
   assets,
@@ -20,7 +20,7 @@ import {
   reconRuns,
   reconUploads,
   transactions,
-} from '@luxledger/postgres-adapter/schema';
+} from '@borecount/postgres-adapter/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';

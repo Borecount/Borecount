@@ -1,4 +1,4 @@
-import type { AccountEntity } from '@luxledger/core';
+import type { AccountEntity } from '@borecount/core';
 import {
   type AccountPaginationQuery,
   type AccountRepository,
@@ -7,7 +7,7 @@ import {
   InvariantViolationError,
   LedgerNotFoundError,
   type PaginatedResult,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { and, eq, getTableColumns } from 'drizzle-orm';
 import type { DbClient } from '../client';
 import { exactTimestamp } from '../exact-timestamp';

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { AccountSide } from '@luxledger/core';
-import { AccountNotFoundError, InvariantViolationError } from '@luxledger/core/application';
+import { AccountSide } from '@borecount/core';
+import { AccountNotFoundError, InvariantViolationError } from '@borecount/core/application';
 import { eq, sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import { creditGrants } from '../../src/schema';

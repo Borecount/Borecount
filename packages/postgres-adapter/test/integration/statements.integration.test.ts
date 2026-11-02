@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { AccountSide } from '@luxledger/core';
+import { AccountSide } from '@borecount/core';
 import {
   AccountNotFoundError,
   InvariantViolationError,
   RepositoryError,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { type SQL, sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import {

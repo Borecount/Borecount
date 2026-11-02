@@ -1,5 +1,5 @@
-import { ForbiddenError, UnauthorizedError } from '@luxledger/core/application';
-import { ApiKeyRole } from '@luxledger/http/contracts';
+import { ForbiddenError, UnauthorizedError } from '@borecount/core/application';
+import { ApiKeyRole } from '@borecount/http/contracts';
 import type { RequestContext, RequestWithContext } from '../types';
 
 export const requireContext = (req: RequestWithContext): RequestContext => {

@@ -1,4 +1,4 @@
-import type { AccountStatement, CreditLotStatement } from '@luxledger/core/application';
+import type { AccountStatement, CreditLotStatement } from '@borecount/core/application';
 import type { AccountStatementResponse, CreditLotStatementResponse } from '../contracts/statements';
 
 const toBalance = (balance: AccountStatement['opening']) => ({

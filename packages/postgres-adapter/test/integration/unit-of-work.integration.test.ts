@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { AccountSide, isDomainError, TenantId } from '@luxledger/core';
-import { createDbClient, createUnitOfWork } from '@luxledger/postgres-adapter';
+import { AccountSide, isDomainError, TenantId } from '@borecount/core';
+import { createDbClient, createUnitOfWork } from '@borecount/postgres-adapter';
 import { sql } from 'drizzle-orm';
 import { pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { transactions } from '../../src/schema';

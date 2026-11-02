@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { CREDIT_LOT_MOVEMENT_KINDS } from '@luxledger/core/application';
+import { CREDIT_LOT_MOVEMENT_KINDS } from '@borecount/core/application';
 import Ajv from 'ajv';
 import {
   reconResultResponseSchema,

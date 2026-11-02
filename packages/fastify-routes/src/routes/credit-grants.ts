@@ -3,14 +3,14 @@ import type {
   creditGrantListFilter,
   creditLineageListFilter,
   WhereFor,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import {
   creditGrantFilterFields,
   creditLineageFilterFields,
   invalidWhereError,
   readWhereParameter,
   whereQueryProperty,
-} from '@luxledger/http';
+} from '@borecount/http';
 import {
   type CreateCreditGrantRequest,
   type CreditGrantIdParams,
@@ -32,7 +32,7 @@ import {
   refundCreditGrantBodySchema,
   refundCreditGrantResponseSchema,
   reverseCreditGrantBodySchema,
-} from '@luxledger/http/contracts';
+} from '@borecount/http/contracts';
 import {
   toCreditBalanceResponse,
   toCreditGrantExpirationResponse,
@@ -41,7 +41,7 @@ import {
   toCreditGrantResponse,
   toPaginatedResponse,
   toRefundCreditGrantResponse,
-} from '@luxledger/http/mappers';
+} from '@borecount/http/mappers';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
 import { createPaginationQuerySchema, resolvePaginationLimit } from '../query/pagination';

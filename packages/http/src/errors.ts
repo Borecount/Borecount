@@ -1,4 +1,4 @@
-import { type DomainError, isDomainError, type UnknownRecord } from '@luxledger/core/base';
+import { type DomainError, isDomainError, type UnknownRecord } from '@borecount/core/base';
 
 export type ErrorResponse = {
   error: string;

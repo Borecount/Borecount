@@ -1,7 +1,7 @@
 {
-  "name": "@luxledger/http",
-  "version": "0.5.0",
-  "description": "Framework-agnostic HTTP contracts, schemas, mappers, and OpenAPI source for LuxLedger.",
+  "name": "@borecount/http",
+  "version": "0.6.0",
+  "description": "Framework-agnostic HTTP contracts, schemas, mappers, and OpenAPI source for Borecount.",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -58,14 +58,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Crusader4Christ/LuxLedger.git",
+    "url": "git+https://github.com/Borecount/Borecount.git",
     "directory": "packages/http"
   },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@luxledger/core": "^0.5.0"
+    "@borecount/core": "^0.6.0"
   },
   "devDependencies": {
     "ajv": "^8.17.1"

@@ -1,9 +1,9 @@
-import type { ApplicationServices } from '@luxledger/core/application';
+import type { ApplicationServices } from '@borecount/core/application';
 import {
   type CreateAdjustmentRequest,
   createAdjustmentBodySchema,
-} from '@luxledger/http/contracts';
-import { toAdjustmentResponse } from '@luxledger/http/mappers';
+} from '@borecount/http/contracts';
+import { toAdjustmentResponse } from '@borecount/http/mappers';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
 import { requireContext } from '../request/context';

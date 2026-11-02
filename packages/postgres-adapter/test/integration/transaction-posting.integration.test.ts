@@ -4,13 +4,13 @@ import {
   InvariantViolationError,
   OverdraftPolicyViolationError,
   RepositoryError,
-} from '@luxledger/core/application';
-import type { JsonObject } from '@luxledger/core/base';
+} from '@borecount/core/application';
+import type { JsonObject } from '@borecount/core/base';
 import {
   CrossLedgerAccountError,
   CurrencyMismatchError,
   UnbalancedTransactionError,
-} from '@luxledger/core/transaction';
+} from '@borecount/core/transaction';
 import { and, eq, sql } from 'drizzle-orm';
 import { createDbClient } from '../../src/client';
 import { DrizzleAccountRepository } from '../../src/repositories/account-repository';

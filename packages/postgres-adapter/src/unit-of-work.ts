@@ -1,8 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { isDomainError } from '@luxledger/core';
-import type { ApplicationUnitOfWorkContext } from '@luxledger/core/application';
-import { InvariantViolationError, RepositoryError } from '@luxledger/core/application';
-import type { TenantId, UnitOfWork } from '@luxledger/core/base';
+import { isDomainError } from '@borecount/core';
+import type { ApplicationUnitOfWorkContext } from '@borecount/core/application';
+import { InvariantViolationError, RepositoryError } from '@borecount/core/application';
+import type { TenantId, UnitOfWork } from '@borecount/core/base';
 import { createApplicationServices } from './application-services';
 import type { DbClient, DrizzleDatabase } from './client';
 
@@ -21,7 +21,7 @@ const createTransactionClient = <THostSchema extends Record<string, unknown>>(
   transaction: DrizzleDatabase<THostSchema>,
   tenantId: string,
 ): DbClient => {
-  // The combined transaction always contains the complete LuxLedger schema.
+  // The combined transaction always contains the complete Borecount schema.
   // Repositories receive only the narrower package-owned schema view.
   const ledgerTransaction = transaction as unknown as DrizzleDatabase;
   return {

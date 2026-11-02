@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { InvariantViolationError } from '@luxledger/core/application';
+import { InvariantViolationError } from '@borecount/core/application';
 import { sql } from 'drizzle-orm';
 import { tenants } from '../../src/schema';
 import {

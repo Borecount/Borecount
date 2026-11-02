@@ -1,4 +1,7 @@
-# LuxLedger
+# Borecount
+
+Reusable double-entry ledger packages, previously named LuxLedger. The coordinated
+`0.6.0` release uses `@borecount/*`; see the [release notes](docs/releases/0.6.0.md).
 Financial core infrastructure: double-entry ledger domain packages, transport contracts, and persistence adapters.
 
 ## Local setup
@@ -14,7 +17,7 @@ Financial core infrastructure: double-entry ledger domain packages, transport co
 
 The current migration chain starts with the consolidated pre-production baseline in `drizzle/0000_initial-schema.sql`. Later numbered migrations upgrade that baseline in place; databases created from the retired history that predates `0000` must still be reset.
 
-The [reference API demo](https://github.com/Crusader4Christ/LuxLedger-demo) is maintained separately so this repository can stay focused on reusable packages. Start with the [product overview](docs/product/overview.md), then use the [integration guide](docs/integration/README.md) before running the demo.
+The [reference API demo](https://github.com/Borecount/Borecount-demo) is maintained separately so this repository can stay focused on reusable packages. Start with the [product overview](docs/product/overview.md), then use the [integration guide](docs/integration/README.md) before running the demo.
 
 ## Test strategy
 
@@ -27,6 +30,9 @@ The [reference API demo](https://github.com/Crusader4Christ/LuxLedger-demo) is m
 
 - Local application DB: `DATABASE_URL=postgresql://luxledger:luxledger@127.0.0.1:5432/luxledger`
 - Local test DB: `DATABASE_URL_TEST=postgresql://luxledger:luxledger@127.0.0.1:5433/luxledger_test`
+
+Local database, container, volume and backup names intentionally retain their
+existing identities so the rebrand does not disconnect existing data.
 - To prepare only the test database schema locally:
   `bun run db:migrate:test`
 - To reset the test database before rerunning integration tests:

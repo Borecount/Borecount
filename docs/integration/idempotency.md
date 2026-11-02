@@ -1,6 +1,6 @@
 # Idempotency Reference
 
-This is the single retry contract for LuxLedger state-changing commands. Keys
+This is the single retry contract for Borecount state-changing commands. Keys
 are always tenant-scoped. A documented identical replay returns the original
 resource/result and does not repeat ledger effects; a conflicting replay fails.
 Commands marked non-idempotent must not be retried automatically after an
