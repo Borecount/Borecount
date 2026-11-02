@@ -1,4 +1,19 @@
-import type { HoldService } from '@borecount/core/application';
+import type {
+  HoldService,
+  holdCaptureListFilter,
+  holdCreditAllocationListFilter,
+  holdEntryListFilter,
+  holdListFilter,
+  WhereFor,
+} from '@borecount/core/application';
+import {
+  holdCaptureFilterFields,
+  holdCreditAllocationFilterFields,
+  holdEntryFilterFields,
+  holdFilterFields,
+  invalidWhereError,
+  readWhereParameter,
+} from '@borecount/http';
 import {
   type CommitHoldRequest,
   type CreateHoldRequest,
@@ -8,10 +23,27 @@ import {
   createHoldResponseSchema,
   type HoldByIdParams,
   holdByIdParamsSchema,
+  holdCapturesPageResponseSchema,
+  holdCreditAllocationsPageResponseSchema,
+  holdEntriesPageResponseSchema,
+  holdSummaryResponseSchema,
+  holdsPageResponseSchema,
+  listHoldCapturesQuerySchema,
+  listHoldCreditAllocationsQuerySchema,
+  listHoldEntriesQuerySchema,
+  listHoldsQuerySchema,
   voidHoldResponseSchema,
 } from '@borecount/http/contracts';
+import {
+  toHoldCaptureResponse,
+  toHoldCreditAllocationResponse,
+  toHoldEntryResponse,
+  toHoldSummaryResponse,
+  toPaginatedResponse,
+} from '@borecount/http/mappers';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
+import { resolvePaginationLimit } from '../query/pagination';
 import { BaseRoute } from '../routing/base-route';
 
 export class HoldsRoutes extends BaseRoute {
@@ -20,9 +52,145 @@ export class HoldsRoutes extends BaseRoute {
   }
 
   public register(server: FastifyInstance): void {
+    this.registerReads(server);
     this.registerCreateHold(server);
     this.registerCommitHold(server);
     this.registerVoidHold(server);
+  }
+
+  private registerReads(server: FastifyInstance): void {
+    server.get<{ Params: HoldByIdParams }>(
+      '/v1/holds/:id',
+      {
+        errorHandler: handleValidationError,
+        schema: { params: holdByIdParamsSchema, response: { 200: holdSummaryResponseSchema } },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () => {
+          const hold = await this.holds.getById(request.tenantId as string, request.params.id);
+          return reply.status(200).send(toHoldSummaryResponse(hold));
+        }),
+    );
+
+    server.get<{
+      Params: HoldByIdParams;
+      Querystring: { limit?: number; cursor?: string; where?: string };
+    }>(
+      '/v1/holds',
+      {
+        errorHandler: handleValidationError,
+        schema: { querystring: listHoldsQuerySchema, response: { 200: holdsPageResponseSchema } },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () => {
+          const where = readWhereParameter<WhereFor<typeof holdListFilter>>(
+            request.raw.url ?? '',
+            holdFilterFields,
+          );
+          if (where === null) throw invalidWhereError();
+          const page = await this.holds.list({
+            tenantId: request.tenantId as string,
+
+            limit: resolvePaginationLimit(request.query.limit),
+            cursor: request.query.cursor,
+            where,
+          });
+          return reply.status(200).send(toPaginatedResponse(page, toHoldSummaryResponse));
+        }),
+    );
+
+    server.get<{
+      Params: HoldByIdParams;
+      Querystring: { limit?: number; cursor?: string; where?: string };
+    }>(
+      '/v1/holds/:id/entries',
+      {
+        errorHandler: handleValidationError,
+        schema: {
+          params: holdByIdParamsSchema,
+          querystring: listHoldEntriesQuerySchema,
+          response: { 200: holdEntriesPageResponseSchema },
+        },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () => {
+          const where = readWhereParameter<WhereFor<typeof holdEntryListFilter>>(
+            request.raw.url ?? '',
+            holdEntryFilterFields,
+          );
+          if (where === null) throw invalidWhereError();
+          const page = await this.holds.listEntries({
+            tenantId: request.tenantId as string,
+            holdId: request.params.id,
+            limit: resolvePaginationLimit(request.query.limit),
+            cursor: request.query.cursor,
+            where,
+          });
+          return reply.status(200).send(toPaginatedResponse(page, toHoldEntryResponse));
+        }),
+    );
+
+    server.get<{
+      Params: HoldByIdParams;
+      Querystring: { limit?: number; cursor?: string; where?: string };
+    }>(
+      '/v1/holds/:id/captures',
+      {
+        errorHandler: handleValidationError,
+        schema: {
+          params: holdByIdParamsSchema,
+          querystring: listHoldCapturesQuerySchema,
+          response: { 200: holdCapturesPageResponseSchema },
+        },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () => {
+          const where = readWhereParameter<WhereFor<typeof holdCaptureListFilter>>(
+            request.raw.url ?? '',
+            holdCaptureFilterFields,
+          );
+          if (where === null) throw invalidWhereError();
+          const page = await this.holds.listCaptures({
+            tenantId: request.tenantId as string,
+            holdId: request.params.id,
+            limit: resolvePaginationLimit(request.query.limit),
+            cursor: request.query.cursor,
+            where,
+          });
+          return reply.status(200).send(toPaginatedResponse(page, toHoldCaptureResponse));
+        }),
+    );
+
+    server.get<{
+      Params: HoldByIdParams;
+      Querystring: { limit?: number; cursor?: string; where?: string };
+    }>(
+      '/v1/holds/:id/credit-allocations',
+      {
+        errorHandler: handleValidationError,
+        schema: {
+          params: holdByIdParamsSchema,
+          querystring: listHoldCreditAllocationsQuerySchema,
+          response: { 200: holdCreditAllocationsPageResponseSchema },
+        },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () => {
+          const where = readWhereParameter<WhereFor<typeof holdCreditAllocationListFilter>>(
+            request.raw.url ?? '',
+            holdCreditAllocationFilterFields,
+          );
+          if (where === null) throw invalidWhereError();
+          const page = await this.holds.listCreditAllocations({
+            tenantId: request.tenantId as string,
+            holdId: request.params.id,
+            limit: resolvePaginationLimit(request.query.limit),
+            cursor: request.query.cursor,
+            where,
+          });
+          return reply.status(200).send(toPaginatedResponse(page, toHoldCreditAllocationResponse));
+        }),
+    );
   }
 
   private registerCreateHold(server: FastifyInstance): void {

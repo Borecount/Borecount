@@ -73,6 +73,43 @@ export const creditLineageFilterFields = {
   amount_minor: { ...minor, target: 'amountMinor' },
   created_at: { ...time, target: 'createdAt' },
 } satisfies FilterFields;
+export const holdSummaryFilterFields = {
+  id,
+  ledger_id: { ...id, target: 'ledgerId' },
+  reference: text,
+  currency: text,
+  description: nullableText,
+  state: { kind: 'enum', values: ['HELD', 'APPLIED', 'VOIDED'] },
+  original_amount_minor: { ...minor, target: 'originalAmountMinor' },
+  remaining_amount_minor: { ...minor, target: 'remainingAmountMinor' },
+  created_at: { ...time, target: 'createdAt' },
+  applied_at: { ...time, nullable: true, target: 'appliedAt' },
+  voided_at: { ...time, nullable: true, target: 'voidedAt' },
+  account_id: { ...id, target: 'accountId' },
+} satisfies FilterFields;
+export const holdFilterFields = holdSummaryFilterFields;
+export const holdEntryFilterFields = {
+  id,
+  account_id: { ...id, target: 'accountId' },
+  signed_amount_minor: { ...minor, target: 'signedAmountMinor' },
+  currency: text,
+  created_at: { ...time, target: 'createdAt' },
+} satisfies FilterFields;
+export const holdCaptureFilterFields = {
+  id,
+  reference: text,
+  amount_minor: { ...minor, target: 'amountMinor' },
+  currency: text,
+  created_at: { ...time, target: 'createdAt' },
+} satisfies FilterFields;
+export const holdCreditAllocationFilterFields = {
+  id,
+  hold_entry_id: { ...id, target: 'holdEntryId' },
+  account_id: { ...id, target: 'accountId' },
+  grant_id: { ...id, target: 'grantId' },
+  amount_minor: { ...minor, target: 'amountMinor' },
+  created_at: { ...time, target: 'createdAt' },
+} satisfies FilterFields;
 export const balanceHistoryFilterFields = {
   id,
   ledger_id: { ...id, target: 'ledgerId' },

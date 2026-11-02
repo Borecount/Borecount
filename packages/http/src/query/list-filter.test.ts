@@ -5,9 +5,140 @@ import {
   readWhereParameter,
   whereFieldsToJsonSchema,
 } from './list-filter';
-import { accountFilterFields, transactionFilterFields } from './list-filter-fields';
+import {
+  accountFilterFields,
+  holdCaptureFilterFields,
+  holdCreditAllocationFilterFields,
+  holdEntryFilterFields,
+  holdSummaryFilterFields,
+  transactionFilterFields,
+} from './list-filter-fields';
 
 describe('typed list filter parsing', () => {
+  it('parses every hold read filter map with precise typed values and aliases', () => {
+    const uuid = '123e4567-e89b-12d3-a456-426614174000';
+    const instant = '2025-01-01T10:20:30.123000Z';
+    expect(
+      parseWhere<Record<string, unknown>>(
+        JSON.stringify({
+          id: { eq: uuid },
+          ledger_id: { eq: uuid },
+          reference: { eq: 'hold-ref' },
+          currency: { eq: 'USD' },
+          description: { eq: null },
+          state: { eq: 'HELD' },
+          original_amount_minor: { gt: '9007199254740993' },
+          remaining_amount_minor: { gte: '0' },
+          created_at: { gte: instant },
+          applied_at: { eq: null },
+          voided_at: { ne: null },
+          account_id: { eq: uuid },
+        }),
+        holdSummaryFilterFields,
+      ),
+    ).toEqual({
+      id: { eq: uuid },
+      ledgerId: { eq: uuid },
+      reference: { eq: 'hold-ref' },
+      currency: { eq: 'USD' },
+      description: { eq: null },
+      state: { eq: 'HELD' },
+      originalAmountMinor: { gt: 9007199254740993n },
+      remainingAmountMinor: { gte: 0n },
+      createdAt: { gte: new Date(instant) },
+      appliedAt: { eq: null },
+      voidedAt: { ne: null },
+      accountId: { eq: uuid },
+    });
+    expect(
+      parseWhere<Record<string, unknown>>(
+        JSON.stringify({
+          id: { eq: uuid },
+          account_id: { eq: uuid },
+          signed_amount_minor: { lte: '-9007199254740993' },
+          currency: { eq: 'USD' },
+          created_at: { eq: instant },
+        }),
+        holdEntryFilterFields,
+      ),
+    ).toEqual({
+      id: { eq: uuid },
+      accountId: { eq: uuid },
+      signedAmountMinor: { lte: -9007199254740993n },
+      currency: { eq: 'USD' },
+      createdAt: { eq: new Date(instant) },
+    });
+    expect(
+      parseWhere<Record<string, unknown>>(
+        JSON.stringify({
+          id: { eq: uuid },
+          reference: { eq: 'capture-ref' },
+          amount_minor: { gt: '3' },
+          currency: { eq: 'USD' },
+          created_at: { eq: instant },
+        }),
+        holdCaptureFilterFields,
+      ),
+    ).toEqual({
+      id: { eq: uuid },
+      reference: { eq: 'capture-ref' },
+      amountMinor: { gt: 3n },
+      currency: { eq: 'USD' },
+      createdAt: { eq: new Date(instant) },
+    });
+    expect(
+      parseWhere<Record<string, unknown>>(
+        JSON.stringify({
+          id: { eq: uuid },
+          hold_entry_id: { eq: uuid },
+          account_id: { eq: uuid },
+          grant_id: { eq: uuid },
+          amount_minor: { eq: '9007199254740993' },
+          created_at: { eq: instant },
+        }),
+        holdCreditAllocationFilterFields,
+      ),
+    ).toEqual({
+      id: { eq: uuid },
+      holdEntryId: { eq: uuid },
+      accountId: { eq: uuid },
+      grantId: { eq: uuid },
+      amountMinor: { eq: 9007199254740993n },
+      createdAt: { eq: new Date(instant) },
+    });
+  });
+
+  it('rejects forbidden, unknown, wrongly typed, null, and imprecise hold filters', () => {
+    const forbidden = [
+      ['tenant_id', { eq: '123e4567-e89b-12d3-a456-426614174000' }],
+      ['state', { eq: 'PENDING' }],
+      ['description', { contains: 'hold' }],
+      ['id', { eq: 'not-a-uuid' }],
+      ['created_at', { gte: '2025-01-01T10:20:30.123001Z' }],
+      ['account_id', { eq: null }],
+    ] as const;
+    for (const [field, filter] of forbidden) {
+      expect(parseWhere(JSON.stringify({ [field]: filter }), holdSummaryFilterFields)).toBeNull();
+    }
+    expect(
+      parseWhere('{"created_at":{"eq":"2025-01-01T00:00:00.000001Z"}}', holdCaptureFilterFields),
+    ).toBeNull();
+    expect(parseWhere('{"amount_minor":{"eq":"1.5"}}', holdCaptureFilterFields)).toBeNull();
+    expect(
+      parseWhere(
+        '{"hold_id":{"eq":"123e4567-e89b-12d3-a456-426614174000"}}',
+        holdEntryFilterFields,
+      ),
+    ).toBeNull();
+    expect(
+      parseWhere(
+        '{"hold_id":{"eq":"123e4567-e89b-12d3-a456-426614174000"}}',
+        holdCreditAllocationFilterFields,
+      ),
+    ).toBeNull();
+    expect(parseWhere('{"created_at":{"eq":null}}', holdCaptureFilterFields)).toBeNull();
+  });
+
   it('parses typed values, aliases snake case and preserves bigint precision', () => {
     expect(
       parseWhere<Record<string, unknown>>(
