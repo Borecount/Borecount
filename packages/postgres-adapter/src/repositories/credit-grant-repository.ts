@@ -23,7 +23,7 @@ import {
   type ProcessCreditGrantExpirationsInput,
   type RefundCreditGrantInput,
   type ReverseCreditGrantInput,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { and, desc, eq, getTableColumns, inArray, type SQL, sql } from 'drizzle-orm';
 import type { DbClient, DrizzleDatabase } from '../client';
 import { exactTimestamp } from '../exact-timestamp';

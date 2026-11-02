@@ -1,10 +1,10 @@
-import type { AdjustmentService } from '@luxledger/core/application';
+import type { AdjustmentService } from '@borecount/core/application';
 import {
   adjustmentResponseSchema,
   type CreateAdjustmentRequest,
   createAdjustmentBodySchema,
-} from '@luxledger/http/contracts';
-import { toAdjustmentResponse } from '@luxledger/http/mappers';
+} from '@borecount/http/contracts';
+import { toAdjustmentResponse } from '@borecount/http/mappers';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
 import { BaseRoute } from '../routing/base-route';

@@ -1,6 +1,6 @@
 # Known Limitations
 
-LuxLedger is a reusable component, not a managed accounting product.
+Borecount is a reusable component, not a managed accounting product.
 
 - The packages do not provide a hosted control plane, UI, customer onboarding, or deployment automation.
 - A host must supply authentication middleware, secret management, TLS, rate limiting, monitoring, and lifecycle management.

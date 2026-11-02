@@ -11,7 +11,7 @@ import {
   ReconciliationService,
   StatementService,
   TransactionService,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import type { DbClient } from './client';
 import { DrizzleAccountRepository } from './repositories/account-repository';
 import { DrizzleAdjustmentRepository } from './repositories/adjustment-repository';

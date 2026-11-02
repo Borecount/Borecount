@@ -77,7 +77,7 @@ jobs:
       - name: Upload installable package tarballs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: luxledger-package-tarballs
+          name: borecount-package-tarballs
           path: .tmp/package-smoke/tarballs/*.tgz
           if-no-files-found: error
 
@@ -150,7 +150,7 @@ jobs:
       - name: Download verified package tarballs
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: luxledger-package-tarballs
+          name: borecount-package-tarballs
           path: .tmp/release-tarballs
 
       - name: Validate distribution tag
@@ -176,7 +176,7 @@ jobs:
           trap 'rm -f "$view_error"' EXIT
           packages=(core http postgres-adapter fastify-routes express-routes)
           for directory in "${packages[@]}"; do
-            package_name="@luxledger/$directory"
+            package_name="@borecount/$directory"
             if npm view "$package_name@$RELEASE_VERSION" version >/dev/null 2>"$view_error"; then
               echo "$package_name@$RELEASE_VERSION is already published; skipping."
               continue
@@ -186,7 +186,7 @@ jobs:
               cat "$view_error" >&2
               exit 1
             fi
-            tarball=".tmp/release-tarballs/luxledger-$directory-$RELEASE_VERSION.tgz"
+            tarball=".tmp/release-tarballs/borecount-$directory-$RELEASE_VERSION.tgz"
             npm publish "$tarball" --access public --provenance --tag "$NPM_TAG"
           done
 
@@ -202,7 +202,7 @@ jobs:
           packages=(core http postgres-adapter fastify-routes express-routes)
           package_specs=()
           for directory in "${packages[@]}"; do
-            package_specs+=("@luxledger/$directory@$RELEASE_VERSION")
+            package_specs+=("@borecount/$directory@$RELEASE_VERSION")
           done
 
           for attempt in {1..6}; do
@@ -217,4 +217,4 @@ jobs:
           done
 
           node --input-type=module --eval "await Promise.all(process.argv.slice(1).map((name) => import(name)))" \
-            "${packages[@]/#/@luxledger/}"
+            "${packages[@]/#/@borecount/}"

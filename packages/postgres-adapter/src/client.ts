@@ -1,22 +1,22 @@
-import { isDomainError, type UnknownRecord } from '@luxledger/core';
+import { isDomainError, type UnknownRecord } from '@borecount/core';
 import {
   HoldLifecycleMismatchError,
   InsufficientReservedCapacityError,
   InvariantViolationError,
   RepositoryError,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { sql as drizzleSql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres, { type Sql } from 'postgres';
 import type { DatabaseErrorLike } from './repository-types';
-import * as luxLedgerSchema from './schema';
+import * as borecountSchema from './schema';
 
 type EmptyHostSchema = Record<never, never>;
-type LuxLedgerSchema = typeof luxLedgerSchema;
+type BorecountSchema = typeof borecountSchema;
 
 export type DrizzleDatabase<THostSchema extends Record<string, unknown> = EmptyHostSchema> =
-  PostgresJsDatabase<LuxLedgerSchema & THostSchema>;
+  PostgresJsDatabase<BorecountSchema & THostSchema>;
 
 const CONSTRAINT_VIOLATION_CODES = new Set([
   '22001',
@@ -119,9 +119,9 @@ export const createDbClient = <THostSchema extends Record<string, unknown> = Emp
     options.connectTimeoutSeconds ??
     parsePositiveInt(process.env.DB_CONNECT_TIMEOUT, 10, 'DB_CONNECT_TIMEOUT');
   const hostSchema = options.hostSchema ?? {};
-  const conflictingSchemaKey = Object.keys(hostSchema).find((key) => key in luxLedgerSchema);
+  const conflictingSchemaKey = Object.keys(hostSchema).find((key) => key in borecountSchema);
   if (conflictingSchemaKey) {
-    throw new Error(`hostSchema must not redefine LuxLedger schema key: ${conflictingSchemaKey}`);
+    throw new Error(`hostSchema must not redefine Borecount schema key: ${conflictingSchemaKey}`);
   }
 
   const sql = postgres(databaseUrl, {
@@ -131,9 +131,9 @@ export const createDbClient = <THostSchema extends Record<string, unknown> = Emp
   });
 
   const schema = {
-    ...luxLedgerSchema,
+    ...borecountSchema,
     ...hostSchema,
-  } as LuxLedgerSchema & THostSchema;
+  } as BorecountSchema & THostSchema;
   const db = drizzle(sql, { schema });
 
   const execute = async <T>(

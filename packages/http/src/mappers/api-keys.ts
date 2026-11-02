@@ -1,5 +1,5 @@
-import type { ApiKeyEntity } from '@luxledger/core';
-import type { CreateApiKeyResult } from '@luxledger/core/application';
+import type { ApiKeyEntity } from '@borecount/core';
+import type { CreateApiKeyResult } from '@borecount/core/application';
 import type {
   ApiKeyContract,
   CreateApiKeyResponse,

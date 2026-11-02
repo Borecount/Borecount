@@ -1,4 +1,4 @@
-import { ApiKeyRole } from '@luxledger/core/application';
+import { ApiKeyRole } from '@borecount/core/application';
 import { whereQueryProperty } from '../query/list-filter';
 import { apiKeyFilterFields } from '../query/list-filter-fields';
 import type { InferSchema } from '../schema-types';

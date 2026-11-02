@@ -48,7 +48,7 @@ The provider-neutral refund command is exposed as `POST /v1/credit-grants/{id}/r
 optional `grant_id` filter. It flattens immutable capacity-version provenance into a bounded movement
 stream, including hold reservation/release events, and returns opening/closing available totals.
 This keeps lot explanation reconcilable without embedding an unbounded collection in a balance or
-ledger statement. Product-specific grant labels and redaction remain outside LuxLedger.
+ledger statement. Product-specific grant labels and redaction remain outside Borecount.
 
 Granted, reversed, consumed, compensated, expired, and remaining come from each grant's latest immutable capacity version and reconcile to the authoritative ledger-entry total without an `effective_at` cutoff: this is the current posted balance, not a historical as-of balance. The mutable `accounts.balance_minor` projection is not an authority for this read and cache drift does not make grant history unreadable. Capacity versions can be reconstructed from the append-only lineage if verification ever finds a mismatch.
 

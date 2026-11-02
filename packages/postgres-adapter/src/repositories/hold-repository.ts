@@ -1,4 +1,4 @@
-import { aggregateAccountEntries, parseAccountSide } from '@luxledger/core';
+import { aggregateAccountEntries, parseAccountSide } from '@borecount/core';
 import {
   assertAvailableBalance,
   type CommitHoldInput,
@@ -12,7 +12,7 @@ import {
   RepositoryError,
   type VoidHoldInput,
   type VoidHoldResult,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { DbClient } from '../client';

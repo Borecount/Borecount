@@ -1,11 +1,11 @@
-import type { LedgerEntity } from '@luxledger/core';
+import type { LedgerEntity } from '@borecount/core';
 import type {
   CreateLedgerInput,
   LedgerRepository,
   PaginatedResult,
   PaginationQuery,
-} from '@luxledger/core/application';
-import { ledgerListFilter } from '@luxledger/core/application';
+} from '@borecount/core/application';
+import { ledgerListFilter } from '@borecount/core/application';
 import { and, eq, getTableColumns } from 'drizzle-orm';
 import type { DbClient } from '../client';
 import { exactTimestamp } from '../exact-timestamp';

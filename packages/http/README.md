@@ -1,6 +1,6 @@
-# @luxledger/http
+# @borecount/http
 
-HTTP mapping helpers for `@luxledger/core` domain/application errors.
+HTTP mapping helpers for `@borecount/core` domain/application errors.
 
 ## Boundaries
 
@@ -13,23 +13,23 @@ HTTP mapping helpers for `@luxledger/core` domain/application errors.
 ## Forbidden dependencies
 - No framework runtime deps (for example: `fastify`, `express`, `nestjs`).
 - No adapter/runtime deps (for example: `drizzle-orm`, `postgres`).
-- Keep dependency direction: can depend on `@luxledger/core`, never on `apps/*`.
+- Keep dependency direction: can depend on `@borecount/core`, never on `apps/*`.
 
 ## Public API
-- `@luxledger/http`:
+- `@borecount/http`:
   - `mapDomainErrorToHttp`
   - `errorResponseSchema`
   - `defaultErrorResponses`
   - `readWhereParameter`, typed list-filter field maps, and URL-encoded JSON schema helpers
   - `HttpErrorDto`, `HttpErrorMapper`, `ErrorResponse` types
-- `@luxledger/http/errors`: schema and response contracts
-- `@luxledger/http/errors`: error mapping
-- `@luxledger/http/route-specs`: default route error response specs
+- `@borecount/http/errors`: schema and response contracts
+- `@borecount/http/errors`: error mapping
+- `@borecount/http/route-specs`: default route error response specs
 
 ## Usage
 
 ```ts
-import { defaultErrorResponses, mapDomainErrorToHttp } from '@luxledger/http';
+import { defaultErrorResponses, mapDomainErrorToHttp } from '@borecount/http';
 
 const dto = mapDomainErrorToHttp(error);
 reply.code(dto.statusCode).send(dto);
@@ -37,7 +37,7 @@ route.schema.response = { ...defaultErrorResponses };
 ```
 
 ```ts
-import { errorResponseSchema } from '@luxledger/http/errors';
+import { errorResponseSchema } from '@borecount/http/errors';
 ```
 
 ## Canonical contract

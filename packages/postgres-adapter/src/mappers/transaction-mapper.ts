@@ -1,4 +1,4 @@
-import { type EntryEntity, LedgerId, TransactionEntity, TransactionId } from '@luxledger/core';
+import { type EntryEntity, LedgerId, TransactionEntity, TransactionId } from '@borecount/core';
 import type * as schema from '../schema';
 
 export const toTransactionEntity = (

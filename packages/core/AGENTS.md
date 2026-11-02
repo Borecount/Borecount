@@ -1,4 +1,4 @@
-# @luxledger/core Instructions
+# @borecount/core Instructions
 
 These rules extend the repository root instructions for `packages/core`.
 
@@ -18,7 +18,7 @@ These rules extend the repository root instructions for `packages/core`.
 ## Boundaries
 
 - This package has zero external runtime dependencies.
-- Do not import `@luxledger/http`, a route adapter, a persistence adapter, or host application code.
+- Do not import `@borecount/http`, a route adapter, a persistence adapter, or host application code.
 - Do not move an invariant to an adapter because it is convenient to enforce there. Adapters may add
   defense-in-depth constraints, but core remains the authoritative expression of business policy.
 - Define transaction requirements through persistence-neutral ports. Concrete transaction, RLS, and

@@ -1,4 +1,4 @@
-import { withErrorHandling } from '@luxledger/http/route-core';
+import { withErrorHandling } from '@borecount/http/route-core';
 import type { FastifyReply } from 'fastify';
 import { sendDomainError } from '../errors/send-domain-error';
 

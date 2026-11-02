@@ -2,10 +2,10 @@
 
 ## Coordinated semantic versions
 
-All public `@luxledger/*` packages and OpenAPI `info.version` ship as one
+All public `@borecount/*` packages and OpenAPI `info.version` ship as one
 coordinated SemVer version. Internal package dependencies use the caret range
 for that exact version. Consumers should upgrade the complete set together and
-commit their lockfile; mixed LuxLedger versions are unsupported.
+commit their lockfile; mixed Borecount versions are unsupported.
 
 Before `1.0.0`, a breaking public contract change increments the minor version.
 After `1.0.0`, it increments the major version. Additive, backward-compatible
@@ -26,6 +26,10 @@ When safety permits, deprecated APIs remain available for at least one minor
 release and produce a documented replacement before removal. Security or ledger
 correctness issues may require immediate removal; the release notes must explain
 the exception and mitigation.
+
+The pre-customer `0.6.0` Borecount rename is a direct cutover: no old-name
+aliases, dual publishing, deprecation notices or compatibility window are
+required. This exception does not authorize deleting old published artifacts.
 
 ## Tags and publication
 

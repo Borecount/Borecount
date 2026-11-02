@@ -1,15 +1,15 @@
-import type { TransactionEntity } from '@luxledger/core';
+import type { TransactionEntity } from '@borecount/core';
 import type {
   TransactionService,
   transactionListFilter,
   WhereFor,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import {
   invalidWhereError,
   readWhereParameter,
   transactionFilterFields,
   whereQueryProperty,
-} from '@luxledger/http';
+} from '@borecount/http';
 import {
   type CorrectTransactionRequest,
   correctTransactionRequestSchema,
@@ -24,8 +24,8 @@ import {
   transactionByIdParamsSchema,
   transactionResponseSchema,
   transactionsPageResponseSchema,
-} from '@luxledger/http/contracts';
-import { toTransactionResponse } from '@luxledger/http/mappers';
+} from '@borecount/http/contracts';
+import { toTransactionResponse } from '@borecount/http/mappers';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
 import { BasePaginatedRoute, type PaginatedRequest } from '../routing/paginated-route';

@@ -4,12 +4,12 @@
 
 Transactions have two timestamps:
 
-- `created_at`: when LuxLedger persisted the transaction.
+- `created_at`: when Borecount persisted the transaction.
 - `effective_at`: when the transaction affects accounting history.
 
 When `effective_at` is omitted, the repository stores the current timestamp. Backdated postings set `effective_at` to the accounting event time.
 
-Balance snapshots are materialized account states. For a backdated transaction, LuxLedger inserts the new snapshot at the transaction `effective_at` and applies the same posted-balance delta to later snapshots for each affected account. This keeps `balance-as-of` and balance history reads deterministic without reconstructing from every transaction.
+Balance snapshots are materialized account states. For a backdated transaction, Borecount inserts the new snapshot at the transaction `effective_at` and applies the same posted-balance delta to later snapshots for each affected account. This keeps `balance-as-of` and balance history reads deterministic without reconstructing from every transaction.
 
 ## Bulk policy
 

@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Review a LuxLedger diff or pull request for actionable correctness and architecture defects. Use for code review rather than full acceptance testing.
+description: Review a Borecount diff or pull request for actionable correctness and architecture defects. Use for code review rather than full acceptance testing.
 ---
 
 # Review code changes

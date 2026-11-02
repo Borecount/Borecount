@@ -4,7 +4,7 @@ import {
   serializeListWhere,
   validateListWhere,
   type WhereFor,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import {
   type AnyColumn,
   and,

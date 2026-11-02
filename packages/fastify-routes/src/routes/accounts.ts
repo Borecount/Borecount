@@ -1,4 +1,4 @@
-import type { AccountEntity, AccountSide } from '@luxledger/core';
+import type { AccountEntity, AccountSide } from '@borecount/core';
 import type {
   AccountService,
   accountListFilter,
@@ -6,14 +6,14 @@ import type {
   balanceHistoryListFilter,
   StatementService,
   WhereFor,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import {
   accountFilterFields,
   balanceHistoryFilterFields,
   invalidWhereError,
   readWhereParameter,
   whereQueryProperty,
-} from '@luxledger/http';
+} from '@borecount/http';
 import {
   type AccountByIdParams,
   type AccountResponse,
@@ -36,13 +36,13 @@ import {
   listAccountsQuerySchemaExtra,
   type StatementQuery,
   statementQuerySchema,
-} from '@luxledger/http/contracts';
-import { invalidInputPayload } from '@luxledger/http/errors';
+} from '@borecount/http/contracts';
+import { invalidInputPayload } from '@borecount/http/errors';
 import {
   toAccountResponse,
   toAccountStatementResponse,
   toCreditLotStatementResponse,
-} from '@luxledger/http/mappers';
+} from '@borecount/http/mappers';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
 import { createPaginationQuerySchema, resolvePaginationLimit } from '../query/pagination';

@@ -1,11 +1,11 @@
-# @luxledger/fastify-routes
+# @borecount/fastify-routes
 
-Fastify route registration package for LuxLedger HTTP routes.
+Fastify route registration package for Borecount HTTP routes.
 
 ## Registering the adapter
 
 ```ts
-import { registerLedgerAdapter } from '@luxledger/fastify-routes';
+import { registerLedgerAdapter } from '@borecount/fastify-routes';
 
 registerLedgerAdapter(server, {
   ledgerService,
@@ -24,7 +24,7 @@ This package reads no environment variables. Authentication, JWT, rate limiting,
 - `ledgerService` (`LedgerService`) for ledger/account/transaction/entry route handlers.
 - `apiKeyService` (`ApiKeyService`) for admin API key route handlers.
 
-Both are application services from `@luxledger/core/application`.
+Both are application services from `@borecount/core/application`.
 
 ## Supported route families
 
@@ -36,8 +36,8 @@ The adapter registers these route families:
 - `entries` (`/v1/entries`)
 - `admin api keys` (`/v1/admin/api-keys`)
 
-The complete and versioned route surface, including bulk posting, reversal/correction, historical balances, holds, and reconciliation, is defined by [`@luxledger/http` OpenAPI](../http/openapi/openapi.yaml). Hosts must register authentication before these routes and keep business logic in application services.
+The complete and versioned route surface, including bulk posting, reversal/correction, historical balances, holds, and reconciliation, is defined by [`@borecount/http` OpenAPI](../http/openapi/openapi.yaml). Hosts must register authentication before these routes and keep business logic in application services.
 
 Ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
 
-Pin compatible LuxLedger package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
+Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).

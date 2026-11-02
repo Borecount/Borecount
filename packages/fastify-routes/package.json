@@ -1,7 +1,7 @@
 {
-  "name": "@luxledger/fastify-routes",
-  "version": "0.5.0",
-  "description": "Fastify route registration package for LuxLedger HTTP routes.",
+  "name": "@borecount/fastify-routes",
+  "version": "0.6.0",
+  "description": "Fastify route registration package for Borecount HTTP routes.",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -24,15 +24,15 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Crusader4Christ/LuxLedger.git",
+    "url": "git+https://github.com/Borecount/Borecount.git",
     "directory": "packages/fastify-routes"
   },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@luxledger/core": "^0.5.0",
-    "@luxledger/http": "^0.5.0",
+    "@borecount/core": "^0.6.0",
+    "@borecount/http": "^0.6.0",
     "fastify": "^5.10.0"
   },
   "scripts": {

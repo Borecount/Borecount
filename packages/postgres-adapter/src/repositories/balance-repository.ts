@@ -1,4 +1,4 @@
-import { AccountSide, calculateAvailableMinor, isUuidV7, parseAccountSide } from '@luxledger/core';
+import { AccountSide, calculateAvailableMinor, isUuidV7, parseAccountSide } from '@borecount/core';
 import {
   type BalanceApplicationRepository,
   type BalanceAtQuery,
@@ -13,7 +13,7 @@ import {
   RepositoryError,
   type TrialBalance,
   type TrialBalanceAccount,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { and, asc, desc, eq, getTableColumns, gt, gte, lte, or, sql } from 'drizzle-orm';
 import stringify from 'safe-stable-stringify';
 import type { DbClient } from '../client';

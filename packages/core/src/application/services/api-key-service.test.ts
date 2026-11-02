@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { ApiKeyEntity, ApiKeyRole } from '@luxledger/core';
-import type { ApiKeyRepository, PaginatedResult } from '@luxledger/core/application';
+import { ApiKeyEntity, ApiKeyRole } from '@borecount/core';
+import type { ApiKeyRepository, PaginatedResult } from '@borecount/core/application';
 import {
   ApiKeyService,
   type BootstrapAdminRepositoryInput,
@@ -8,7 +8,7 @@ import {
   ForbiddenError,
   InvariantViolationError,
   UnauthorizedError,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 
 const hash = (value: string): string => new Bun.CryptoHasher('sha256').update(value).digest('hex');
 

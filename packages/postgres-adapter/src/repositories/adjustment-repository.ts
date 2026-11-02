@@ -1,4 +1,4 @@
-import type { TransactionMetadata } from '@luxledger/core';
+import type { TransactionMetadata } from '@borecount/core';
 import {
   AccountNotFoundError,
   AdjustmentConflictError,
@@ -6,7 +6,7 @@ import {
   type AdjustmentRepository,
   type AdjustmentResult,
   type CreateAdjustmentInput,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DbClient } from '../client';
 import * as schema from '../schema';

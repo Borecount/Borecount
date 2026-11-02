@@ -2,7 +2,7 @@
 
 ## Scope
 
-This runbook covers HS256 access-token signing keys used by runnable API applications built on LuxLedger. The reference API demo app lives in a separate repository.
+This runbook covers HS256 access-token signing keys used by runnable API applications built on Borecount. The reference API demo app lives in a separate repository.
 
 ## Configuration contract
 

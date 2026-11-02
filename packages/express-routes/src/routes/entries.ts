@@ -1,7 +1,7 @@
-import type { ApplicationServices, entryListFilter, WhereFor } from '@luxledger/core/application';
-import { entryFilterFields, readWhereParameter } from '@luxledger/http';
-import type { EntriesPageResponse } from '@luxledger/http/contracts';
-import { toEntryResponse } from '@luxledger/http/mappers';
+import type { ApplicationServices, entryListFilter, WhereFor } from '@borecount/core/application';
+import { entryFilterFields, readWhereParameter } from '@borecount/http';
+import type { EntriesPageResponse } from '@borecount/http/contracts';
+import { toEntryResponse } from '@borecount/http/mappers';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
 import { parsePaginationQuery } from '../query/pagination';

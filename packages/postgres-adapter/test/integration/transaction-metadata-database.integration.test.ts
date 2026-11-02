@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { InvariantViolationError } from '@luxledger/core/application';
-import type { JsonObject } from '@luxledger/core/base';
+import { InvariantViolationError } from '@borecount/core/application';
+import type { JsonObject } from '@borecount/core/base';
 import { sql } from 'drizzle-orm';
 import { DrizzleTransactionRepository } from '../../src/repositories/transaction-repository';
 import {

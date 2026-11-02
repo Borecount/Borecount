@@ -66,7 +66,7 @@ export async function verifyReleaseReadiness(root: string): Promise<string> {
   const expectedRange = `^${version}`;
   for (const manifest of manifests) {
     for (const [dependency, range] of Object.entries(manifest.dependencies ?? {})) {
-      if (dependency.startsWith('@luxledger/') && range !== expectedRange) {
+      if (dependency.startsWith('@borecount/') && range !== expectedRange) {
         throw new Error(
           `${manifest.name} must depend on ${dependency}@${expectedRange}, received ${range}`,
         );

@@ -1,4 +1,4 @@
-import { AccountEntity, parseAccountSide, parseOverdraftPolicy } from '@luxledger/core';
+import { AccountEntity, parseAccountSide, parseOverdraftPolicy } from '@borecount/core';
 import type * as schema from '../schema';
 
 export const toAccountEntity = (row: typeof schema.accounts.$inferSelect): AccountEntity =>

@@ -1,4 +1,4 @@
-import type { UnknownRecord } from '@luxledger/core/base';
+import type { UnknownRecord } from '@borecount/core/base';
 import type { InferSchema } from '../schema-types';
 import { isRecord } from '../validation-utils';
 

@@ -1,4 +1,4 @@
-import { invalidInputPayload } from '@luxledger/http/errors';
+import { invalidInputPayload } from '@borecount/http/errors';
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 
 type ValidationError = FastifyError & {

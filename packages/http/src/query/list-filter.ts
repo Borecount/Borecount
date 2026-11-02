@@ -1,4 +1,4 @@
-import type { UnknownRecord } from '@luxledger/core/base';
+import type { UnknownRecord } from '@borecount/core/base';
 
 export const MAX_WHERE_LENGTH = 8192;
 const INT64_MIN = -(1n << 63n);

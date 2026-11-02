@@ -1,6 +1,6 @@
 # Baseline Reconciliation Runbook
 
-Use baseline reconciliation to compare external provider records with posted LuxLedger transactions.
+Use baseline reconciliation to compare external provider records with posted Borecount transactions.
 
 ## Daily Workflow
 

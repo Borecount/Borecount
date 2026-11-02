@@ -1,4 +1,4 @@
-import { CREDIT_LOT_MOVEMENT_KINDS } from '@luxledger/core/application';
+import { CREDIT_LOT_MOVEMENT_KINDS } from '@borecount/core/application';
 import type { InferSchema } from '../schema-types';
 import { mergePaginationQuerySchema } from './pagination';
 

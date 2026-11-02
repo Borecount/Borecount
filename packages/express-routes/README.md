@@ -1,12 +1,12 @@
-# @luxledger/express-routes
+# @borecount/express-routes
 
-Express route registration package for LuxLedger HTTP routes, aligned with `@luxledger/fastify-routes`.
+Express route registration package for Borecount HTTP routes, aligned with `@borecount/fastify-routes`.
 
 ## Composition API
 
 ```ts
 import express from 'express';
-import { registerLedgerAdapter } from '@luxledger/express-routes';
+import { registerLedgerAdapter } from '@borecount/express-routes';
 
 const app = express();
 registerLedgerAdapter(app, {
@@ -20,7 +20,7 @@ registerLedgerAdapter(app, {
 - `ledgerService` (`LedgerService`)
 - `apiKeyService` (`ApiKeyService`)
 
-Both are from `@luxledger/core/application`.
+Both are from `@borecount/core/application`.
 
 ## Request context requirements
 
@@ -45,8 +45,8 @@ This package reads no environment variables. Authentication, JWT, rate limiting,
 - JSON parsing:
   Route registration ensures JSON middleware exists for request body parsing.
 
-The complete and versioned route surface is defined by [`@luxledger/http` OpenAPI](../http/openapi/openapi.yaml). See the repository [integration guide](../../docs/integration/README.md) before composing the adapter in a host application.
+The complete and versioned route surface is defined by [`@borecount/http` OpenAPI](../http/openapi/openapi.yaml). See the repository [integration guide](../../docs/integration/README.md) before composing the adapter in a host application.
 
 Ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
 
-Pin compatible LuxLedger package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
+Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).

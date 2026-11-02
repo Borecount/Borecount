@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { AccountSide, InvalidCreditGrantError } from '@luxledger/core';
-import { CreditGrantConflictError, CreditGrantNotFoundError } from '@luxledger/core/application';
+import { AccountSide, InvalidCreditGrantError } from '@borecount/core';
+import { CreditGrantConflictError, CreditGrantNotFoundError } from '@borecount/core/application';
 import { eq, sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import { createDbClient, type DbClient, type DrizzleDatabase } from '../../src/client';

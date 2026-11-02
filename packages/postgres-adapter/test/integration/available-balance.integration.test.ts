@@ -4,8 +4,8 @@ import {
   InvariantViolationError,
   OverdraftPolicyViolationError,
   RepositoryError,
-} from '@luxledger/core/application';
-import { InvalidAmountError } from '@luxledger/core/transaction';
+} from '@borecount/core/application';
+import { InvalidAmountError } from '@borecount/core/transaction';
 import { eq } from 'drizzle-orm';
 import { DrizzleHoldRepository } from '../../src/repositories/hold-repository';
 import { DrizzleTransactionRepository } from '../../src/repositories/transaction-repository';

@@ -1,6 +1,6 @@
-import type { ApiKeyEntity } from '@luxledger/core';
-import type { ApiKeyService, apiKeyListFilter, WhereFor } from '@luxledger/core/application';
-import { apiKeyFilterFields, invalidWhereError, readWhereParameter } from '@luxledger/http';
+import type { ApiKeyEntity } from '@borecount/core';
+import type { ApiKeyService, apiKeyListFilter, WhereFor } from '@borecount/core/application';
+import { apiKeyFilterFields, invalidWhereError, readWhereParameter } from '@borecount/http';
 import {
   type ApiKeyContract,
   type ApiKeyRole,
@@ -11,8 +11,8 @@ import {
   listApiKeysResponseSchema,
   type RevokeApiKeyParams,
   revokeApiKeyParamsSchema,
-} from '@luxledger/http/contracts';
-import { toApiKeyContract } from '@luxledger/http/mappers';
+} from '@borecount/http/contracts';
+import { toApiKeyContract } from '@borecount/http/mappers';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
 import { resolvePaginationLimit } from '../query/pagination';

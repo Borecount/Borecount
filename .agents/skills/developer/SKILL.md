@@ -1,6 +1,6 @@
 ---
 name: developer
-description: Implement LuxLedger application or package code from a request or Linear issue. Use for implementation, not planning-only or review-only requests.
+description: Implement Borecount application or package code from a request or Linear issue. Use for implementation, not planning-only or review-only requests.
 ---
 
 # Implement a repository change

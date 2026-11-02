@@ -5,7 +5,7 @@ import type {
   CreditGrantLineage,
   CreditGrantLotBalance,
   CreditGrantRefundResult,
-} from '@luxledger/core/application';
+} from '@borecount/core/application';
 import type {
   CreditBalanceResponse,
   CreditGrantExpirationResponse,

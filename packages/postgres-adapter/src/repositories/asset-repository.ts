@@ -4,8 +4,8 @@ import type {
   CreateAssetInput,
   PaginatedResult,
   PaginationQuery,
-} from '@luxledger/core/application';
-import { assetListFilter } from '@luxledger/core/application';
+} from '@borecount/core/application';
+import { assetListFilter } from '@borecount/core/application';
 import { and, eq, getTableColumns } from 'drizzle-orm';
 import type { DbClient } from '../client';
 import { listWhereScope, listWhereSql } from '../list-where';

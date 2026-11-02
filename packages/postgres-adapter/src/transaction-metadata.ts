@@ -1,5 +1,5 @@
-import type { TransactionMetadata } from '@luxledger/core';
-import { InvariantViolationError } from '@luxledger/core/application';
+import type { TransactionMetadata } from '@borecount/core';
+import { InvariantViolationError } from '@borecount/core/application';
 
 // Keep retry comparisons bounded while leaving enough room for compact integration context.
 export const MAX_TRANSACTION_METADATA_BYTES = 16 * 1024;

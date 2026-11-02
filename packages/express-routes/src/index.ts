@@ -1,4 +1,4 @@
-import type { ApplicationServices } from '@luxledger/core/application';
+import type { ApplicationServices } from '@borecount/core/application';
 import express, { type Application } from 'express';
 import { registerAccountRoutes } from './routes/accounts';
 import { registerAdjustmentRoutes } from './routes/adjustments';

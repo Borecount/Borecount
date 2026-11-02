@@ -6,11 +6,11 @@ import {
   type CreditGrant,
   InvariantViolationError,
   ReconRunNotFoundError,
-} from '@luxledger/core/application';
-import type { UnknownRecord } from '@luxledger/core/base';
-import type { TransactionMetadata } from '@luxledger/core/transaction';
-import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@luxledger/fastify-routes';
-import { createContractHarness } from '@luxledger/http/test/harness';
+} from '@borecount/core/application';
+import type { UnknownRecord } from '@borecount/core/base';
+import type { TransactionMetadata } from '@borecount/core/transaction';
+import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@borecount/fastify-routes';
+import { createContractHarness } from '@borecount/http/test/harness';
 import express, { type Application } from 'express';
 import Fastify, { type FastifyInstance } from 'fastify';
 import httpMocks from 'node-mocks-http';

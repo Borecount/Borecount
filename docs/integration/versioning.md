@@ -1,12 +1,12 @@
 # Versioning, Migrations, and Publication
 
-LuxLedger publishes every public package and the OpenAPI contract as one
+Borecount publishes every public package and the OpenAPI contract as one
 coordinated semantic version. The complete version, breaking-change,
 deprecation, npm tag, provenance, and release checklist policy lives in the
 [release policy](../governance/release-policy.md).
 
-The current coordinated release is `0.5.0`; see its
-[release notes](../releases/0.5.0.md) and the repository [changelog](../../CHANGELOG.md).
+The current coordinated release is `0.6.0`; see its
+[release notes](../releases/0.6.0.md) and the repository [changelog](../../CHANGELOG.md).
 
 ## Migration policy
 
@@ -43,7 +43,7 @@ sufficient.
 
 1. Read every intervening release note and the changelog.
 2. Back up PostgreSQL and verify the backup can be restored.
-3. Upgrade the complete `@luxledger/*` set and commit the lockfile.
+3. Upgrade the complete `@borecount/*` set and commit the lockfile.
 4. Apply new migrations in numeric order; never run down migrations.
 5. Run application smoke tests and ledger reconciliation before resuming writes.
 

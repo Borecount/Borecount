@@ -21,44 +21,44 @@
       },
     },
     "packages/core": {
-      "name": "@luxledger/core",
-      "version": "0.3.0",
+      "name": "@borecount/core",
+      "version": "0.6.0",
     },
     "packages/express-routes": {
-      "name": "@luxledger/express-routes",
-      "version": "0.3.0",
+      "name": "@borecount/express-routes",
+      "version": "0.6.0",
       "dependencies": {
-        "@luxledger/core": "^0.3.0",
-        "@luxledger/http": "^0.3.0",
+        "@borecount/core": "^0.6.0",
+        "@borecount/http": "^0.6.0",
         "ajv": "^8.17.1",
         "ajv-formats": "^3.0.1",
         "express": "^5.1.0",
       },
     },
     "packages/fastify-routes": {
-      "name": "@luxledger/fastify-routes",
-      "version": "0.3.0",
+      "name": "@borecount/fastify-routes",
+      "version": "0.6.0",
       "dependencies": {
-        "@luxledger/core": "^0.3.0",
-        "@luxledger/http": "^0.3.0",
+        "@borecount/core": "^0.6.0",
+        "@borecount/http": "^0.6.0",
         "fastify": "^5.10.0",
       },
     },
     "packages/http": {
-      "name": "@luxledger/http",
-      "version": "0.3.0",
+      "name": "@borecount/http",
+      "version": "0.6.0",
       "dependencies": {
-        "@luxledger/core": "^0.3.0",
+        "@borecount/core": "^0.6.0",
       },
       "devDependencies": {
         "ajv": "^8.17.1",
       },
     },
     "packages/postgres-adapter": {
-      "name": "@luxledger/postgres-adapter",
-      "version": "0.3.0",
+      "name": "@borecount/postgres-adapter",
+      "version": "0.6.0",
       "dependencies": {
-        "@luxledger/core": "^0.3.0",
+        "@borecount/core": "^0.6.0",
         "drizzle-orm": "^0.45.2",
         "postgres": "^3.4.8",
         "safe-stable-stringify": "^2.5.0",
@@ -83,6 +83,16 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.4.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-trzCqM7x+Gn832zZHgr28JoYagQNX4CZkUZhMUac2YxvvyDRLJDrb5m9IA7CaZLlX6lTQmADVfLEKP1et1Ma4Q=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.4.4", "", { "os": "win32", "cpu": "x64" }, "sha512-gnOHKVPFAAPrpoPt2t+Q6FZ7RPry/FDV3GcpU53P3PtLNnQjBmKyN2Vh/JtqXet+H4pme8CC76rScwdjDcT1/A=="],
+
+    "@borecount/core": ["@borecount/core@workspace:packages/core"],
+
+    "@borecount/express-routes": ["@borecount/express-routes@workspace:packages/express-routes"],
+
+    "@borecount/fastify-routes": ["@borecount/fastify-routes@workspace:packages/fastify-routes"],
+
+    "@borecount/http": ["@borecount/http@workspace:packages/http"],
+
+    "@borecount/postgres-adapter": ["@borecount/postgres-adapter@workspace:packages/postgres-adapter"],
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.10.2", "", {}, "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="],
 
@@ -153,16 +163,6 @@
     "@fastify/merge-json-schemas": ["@fastify/merge-json-schemas@0.2.1", "", { "dependencies": { "dequal": "^2.0.3" } }, "sha512-OA3KGBCy6KtIvLf8DINC5880o5iBlDX4SxzLQS8HorJAbqluzLRn80UXU0bxZn7UOFhFgpRJDasfwn9nG4FG4A=="],
 
     "@fastify/proxy-addr": ["@fastify/proxy-addr@5.1.0", "", { "dependencies": { "@fastify/forwarded": "^3.0.0", "ipaddr.js": "^2.1.0" } }, "sha512-INS+6gh91cLUjB+PVHfu1UqcB76Sqtpyp7bnL+FYojhjygvOPA9ctiD/JDKsyD9Xgu4hUhCSJBPig/w7duNajw=="],
-
-    "@luxledger/core": ["@luxledger/core@workspace:packages/core"],
-
-    "@luxledger/express-routes": ["@luxledger/express-routes@workspace:packages/express-routes"],
-
-    "@luxledger/fastify-routes": ["@luxledger/fastify-routes@workspace:packages/fastify-routes"],
-
-    "@luxledger/http": ["@luxledger/http@workspace:packages/http"],
-
-    "@luxledger/postgres-adapter": ["@luxledger/postgres-adapter@workspace:packages/postgres-adapter"],
 
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
 

@@ -1,5 +1,5 @@
-import type { UnknownRecord } from '@luxledger/core/base';
-import { parseCursorQuery, parseLimitQuery } from '@luxledger/http/query/pagination';
+import type { UnknownRecord } from '@borecount/core/base';
+import { parseCursorQuery, parseLimitQuery } from '@borecount/http/query/pagination';
 
 export type ResolvedPaginationQuery = {
   limit: number;

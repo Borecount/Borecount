@@ -1,4 +1,4 @@
-import { LedgerEntity } from '@luxledger/core';
+import { LedgerEntity } from '@borecount/core';
 import type * as schema from '../schema';
 
 export const toLedgerEntity = (row: typeof schema.ledgers.$inferSelect): LedgerEntity =>

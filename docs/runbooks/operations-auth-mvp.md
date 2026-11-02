@@ -266,8 +266,8 @@ Operational add-on checks:
    - Known-good API key -> `POST /v1/auth/token`.
    - Known-good bearer token -> protected endpoint call.
 3. Inspect metrics/logs:
-   - `luxledger_auth_failures_total`
-   - `luxledger_token_issuance_failures_total`
+   - `borecount_auth_failures_total`
+   - `borecount_token_issuance_failures_total`
    - Request logs with `requestId`, `tenantId`, `apiKeyId`, `route`.
 4. Decide mitigation:
    - Config regression: rollback to last known-good JWT config.

@@ -77,7 +77,7 @@ def main() -> int:
     log_file = tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",
-        prefix="luxledger-qa-",
+        prefix="borecount-qa-",
         suffix=".log",
         delete=False,
     )

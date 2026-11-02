@@ -1,5 +1,5 @@
-import type { ApplicationServices, apiKeyListFilter, WhereFor } from '@luxledger/core/application';
-import { apiKeyFilterFields, readWhereParameter } from '@luxledger/http';
+import type { ApplicationServices, apiKeyListFilter, WhereFor } from '@borecount/core/application';
+import { apiKeyFilterFields, readWhereParameter } from '@borecount/http';
 import {
   type CreateApiKeyRequest,
   type CreateApiKeyResponse,
@@ -7,9 +7,9 @@ import {
   type ListApiKeysResponse,
   listApiKeysQuerySchema,
   type RevokeApiKeyParams,
-} from '@luxledger/http/contracts';
-import { toApiKeyContract } from '@luxledger/http/mappers';
-import { parseUuidParam } from '@luxledger/http/validation-utils';
+} from '@borecount/http/contracts';
+import { toApiKeyContract } from '@borecount/http/mappers';
+import { parseUuidParam } from '@borecount/http/validation-utils';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
 import { parsePaginationQuery } from '../query/pagination';

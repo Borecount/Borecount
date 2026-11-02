@@ -1,5 +1,5 @@
-import type { ReconMatchCriterion, ReconRecord, ReconRule, ReconStrategy } from '@luxledger/core';
-import type { ReconResult, ReconRun } from '@luxledger/core/application';
+import type { ReconMatchCriterion, ReconRecord, ReconRule, ReconStrategy } from '@borecount/core';
+import type { ReconResult, ReconRun } from '@borecount/core/application';
 import type * as schema from '../schema';
 
 type ReconRecordRow = typeof schema.reconRecords.$inferSelect;

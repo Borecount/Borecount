@@ -1,12 +1,12 @@
-import { type ApiKeyEntity, ApiKeyRole } from '@luxledger/core';
+import { type ApiKeyEntity, ApiKeyRole } from '@borecount/core';
 import type {
   ApiKeyRepository,
   BootstrapAdminRepositoryInput,
   BootstrapAdminResult,
   PaginatedResult,
   PaginationQuery,
-} from '@luxledger/core/application';
-import { apiKeyListFilter } from '@luxledger/core/application';
+} from '@borecount/core/application';
+import { apiKeyListFilter } from '@borecount/core/application';
 import { and, eq, getTableColumns, sql } from 'drizzle-orm';
 import type { DbClient } from '../client';
 import { exactTimestamp } from '../exact-timestamp';
