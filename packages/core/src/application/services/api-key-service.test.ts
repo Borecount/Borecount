@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { ApiKeyEntity, ApiKeyRole } from '@luxledger/core';
-import type { ApiKeyRepository } from '@luxledger/core/application';
+import type { ApiKeyRepository, PaginatedResult } from '@luxledger/core/application';
 import {
   ApiKeyService,
   type BootstrapAdminRepositoryInput,
@@ -72,10 +72,9 @@ class InMemoryApiKeyRepository implements ApiKeyRepository {
     return key;
   }
 
-  public async list(query: {
-    tenantId: string;
-    limit: number;
-  }): Promise<{ data: ApiKeyEntity[]; nextCursor: null }> {
+  public async list(
+    query: Parameters<ApiKeyRepository['list']>[0],
+  ): Promise<PaginatedResult<ApiKeyEntity>> {
     return {
       data: [...this.keys.values()]
         .filter((key) => key.tenantId === query.tenantId)
