@@ -27,7 +27,7 @@ release and produce a documented replacement before removal. Security or ledger
 correctness issues may require immediate removal; the release notes must explain
 the exception and mitigation.
 
-The pre-customer `0.6.0` Borecount rename is a direct cutover: no old-name
+The `0.6.0` Borecount rename is a direct cutover: no old-name
 aliases, dual publishing, deprecation notices or compatibility window are
 required. This exception does not authorize deleting old published artifacts.
 
