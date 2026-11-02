@@ -8,6 +8,9 @@ test('public API includes shared HTTP contracts and primitives', () => {
   expect(keys).toContain('createApiKeyBodySchema');
   expect(keys).toContain('createLedgerBodySchema');
   expect(keys).toContain('entriesPageResponseSchema');
+  expect(keys).toContain('holdsPageResponseSchema');
+  expect(keys).toContain('toHoldSummaryResponse');
+  expect(keys).toContain('holdFilterFields');
   expect(keys).toContain('ApiKeyRole');
   expect(keys).toContain('mapDomainErrorToHttp');
 });

@@ -385,6 +385,11 @@ const createServices = (repository: InMemoryLedgerRepository) => ({
     create: (input) => repository.createHold(input),
     commit: (input) => repository.commitHold(input),
     void: (input) => repository.voidHold(input),
+    findById: async () => null,
+    list: async () => ({ data: [], nextCursor: null }),
+    listEntries: async () => ({ data: [], nextCursor: null }),
+    listCaptures: async () => ({ data: [], nextCursor: null }),
+    listCreditAllocations: async () => ({ data: [], nextCursor: null }),
   }),
   ledgers: new LedgerService({
     create: (input) => repository.createLedger(input),

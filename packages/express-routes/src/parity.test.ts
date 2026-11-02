@@ -4,6 +4,7 @@ import {
   type ApiKeyService,
   type ApplicationServices,
   type CreditGrant,
+  HoldNotFoundError,
   InvariantViolationError,
   ReconRunNotFoundError,
 } from '@borecount/core/application';
@@ -22,6 +23,9 @@ type RequestResult = {
 };
 
 const tenantId = '11111111-1111-4111-8111-111111111111';
+const holdId = '00000000-0000-4000-8000-000000000410';
+const unknownHoldId = '00000000-0000-4000-8000-000000000411';
+const emptyHoldId = '00000000-0000-4000-8000-000000000418';
 const listObservations = new Map<string, unknown[]>();
 
 const observeList = (endpoint: string, input: unknown): void => {
@@ -143,6 +147,96 @@ class FakeLedgerService {
   public async listEntries(query: unknown) {
     observeList('entries', query);
     return { data: [], nextCursor: null };
+  }
+
+  private holdSummary() {
+    return {
+      id: holdId,
+      ledgerId: '00000000-0000-4000-8000-000000000001',
+      reference: 'hold-parity',
+      currency: 'USD',
+      description: null,
+      state: 'HELD' as const,
+      originalAmountMinor: 125n,
+      remainingAmountMinor: 75n,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      appliedAt: null,
+      voidedAt: null,
+    };
+  }
+
+  public async getHoldById(_tenantId: string, requestedHoldId: string) {
+    if (requestedHoldId !== holdId) throw new HoldNotFoundError(requestedHoldId);
+    return this.holdSummary();
+  }
+
+  public async listHolds(query: unknown) {
+    observeList('holds', query);
+    return { data: [this.holdSummary()], nextCursor: null };
+  }
+
+  public async listHoldEntries(query: unknown) {
+    observeList('hold-entries', query);
+    const requestedHoldId = (query as { holdId?: string }).holdId;
+    if (requestedHoldId === unknownHoldId) {
+      throw new HoldNotFoundError(unknownHoldId);
+    }
+    if (requestedHoldId === emptyHoldId) return { data: [], nextCursor: null };
+    return {
+      data: [
+        {
+          id: '00000000-0000-4000-8000-000000000412',
+          accountId: '00000000-0000-4000-8000-000000000413',
+          signedAmountMinor: -125n,
+          currency: 'USD',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+      nextCursor: null,
+    };
+  }
+
+  public async listHoldCaptures(query: unknown) {
+    observeList('hold-captures', query);
+    const requestedHoldId = (query as { holdId?: string }).holdId;
+    if (requestedHoldId === unknownHoldId) {
+      throw new HoldNotFoundError(unknownHoldId);
+    }
+    if (requestedHoldId === emptyHoldId) return { data: [], nextCursor: null };
+    return {
+      data: [
+        {
+          id: '00000000-0000-4000-8000-000000000414',
+          reference: 'hold-capture-1',
+          amountMinor: 50n,
+          currency: 'USD',
+          createdAt: new Date('2026-01-02T00:00:00.000Z'),
+        },
+      ],
+      nextCursor: null,
+    };
+  }
+
+  public async listHoldCreditAllocations(query: unknown) {
+    observeList('hold-credit-allocations', query);
+    const requestedHoldId = (query as { holdId?: string }).holdId;
+    if (requestedHoldId === unknownHoldId) {
+      throw new HoldNotFoundError(unknownHoldId);
+    }
+    if (requestedHoldId === emptyHoldId) return { data: [], nextCursor: null };
+    return {
+      data: [
+        {
+          id: '00000000-0000-4000-8000-000000000415',
+          holdEntryId: '00000000-0000-4000-8000-000000000412',
+          accountId: '00000000-0000-4000-8000-000000000413',
+          grantId: '00000000-0000-4000-8000-000000000416',
+          amountMinor: 25n,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+      nextCursor: null,
+    };
   }
 
   public async listHistory(query: unknown) {
@@ -389,7 +483,24 @@ describe('express adapter parity with fastify adapter', () => {
       },
       apiKeys: apiKeyService,
       balances: fakeLedgerService,
-      holds: fakeLedgerService,
+      holds: {
+        getById: (currentTenantId: string, requestedHoldId: string) =>
+          fakeLedgerService.getHoldById(currentTenantId, requestedHoldId),
+        list: (query: unknown) => fakeLedgerService.listHolds(query),
+        listEntries: (query: unknown) => fakeLedgerService.listHoldEntries(query),
+        listCaptures: (query: unknown) => fakeLedgerService.listHoldCaptures(query),
+        listCreditAllocations: (query: unknown) =>
+          fakeLedgerService.listHoldCreditAllocations(query),
+        create: async () => ({ holdId, created: true, state: 'HELD', remainingAmountMinor: 75n }),
+        commit: async () => ({
+          holdId,
+          state: 'APPLIED',
+          remainingAmountMinor: 0n,
+          transactionId: '00000000-0000-4000-8000-000000000417',
+          created: true,
+        }),
+        void: async () => ({ holdId, state: 'VOIDED', remainingAmountMinor: 0n, voided: true }),
+      },
       ledgers: {
         list: (query: unknown) => fakeLedgerService.listLedgers(query),
       },
@@ -1063,6 +1174,10 @@ describe('express adapter parity with fastify adapter', () => {
               url: '/v1/accounts/00000000-0000-4000-8000-000000000101/credit-statement?from=2026-01-01T00%3A00%3A00.000Z&as_of=2026-01-02T00%3A00%3A00.000Z&grant_id=invalid',
             },
             { method: 'POST' as const, url: '/v1/holds', payload: {} },
+            { method: 'GET' as const, url: '/v1/holds/not-a-uuid' },
+            { method: 'GET' as const, url: '/v1/holds/not-a-uuid/entries' },
+            { method: 'GET' as const, url: '/v1/holds/not-a-uuid/captures' },
+            { method: 'GET' as const, url: '/v1/holds/not-a-uuid/credit-allocations' },
             {
               method: 'POST' as const,
               url: '/v1/holds/not-a-uuid/void',
@@ -1319,6 +1434,49 @@ describe('express adapter parity with fastify adapter', () => {
           where: { postedMinor: { gte: 25n } },
         },
       },
+      {
+        endpoint: 'holds',
+        path: `/v1/holds?limit=7&cursor=opaque&where=${encodeURIComponent(JSON.stringify({ state: { eq: 'HELD' }, account_id: { eq: id } }))}`,
+        expected: {
+          tenantId,
+          limit: 7,
+          cursor: 'opaque',
+          where: { state: { eq: 'HELD' }, accountId: { eq: id } },
+        },
+      },
+      {
+        endpoint: 'hold-entries',
+        path: `/v1/holds/${holdId}/entries?limit=7&cursor=opaque&${where('signed_amount_minor', 'gte', '-25')}`,
+        expected: {
+          tenantId,
+          holdId,
+          limit: 7,
+          cursor: 'opaque',
+          where: { signedAmountMinor: { gte: -25n } },
+        },
+      },
+      {
+        endpoint: 'hold-captures',
+        path: `/v1/holds/${holdId}/captures?limit=7&cursor=opaque&${where('amount_minor', 'gte', '25')}`,
+        expected: {
+          tenantId,
+          holdId,
+          limit: 7,
+          cursor: 'opaque',
+          where: { amountMinor: { gte: 25n } },
+        },
+      },
+      {
+        endpoint: 'hold-credit-allocations',
+        path: `/v1/holds/${holdId}/credit-allocations?limit=7&cursor=opaque&${where('created_at', 'gte', date)}`,
+        expected: {
+          tenantId,
+          holdId,
+          limit: 7,
+          cursor: 'opaque',
+          where: { createdAt: { gte: new Date(date) } },
+        },
+      },
     ];
 
     for (const { endpoint, path, expected } of cases) {
@@ -1349,6 +1507,11 @@ describe('express adapter parity with fastify adapter', () => {
       privateField,
       `where=${encodeURIComponent(JSON.stringify({ key_hash: { eq: 'sensitive-hash' } }))}`,
       `where=${encodeURIComponent(JSON.stringify({ candidate_transaction_ids: { eq: ['id'] } }))}`,
+      `where=${encodeURIComponent(JSON.stringify({ unknown_field: { eq: 'x' } }))}`,
+      `where=${encodeURIComponent(JSON.stringify({ id: { eq: 'not-a-uuid' } }))}`,
+      `where=${encodeURIComponent(JSON.stringify({ created_at: { gt: 'not-a-date' } }))}`,
+      `where=${encodeURIComponent(JSON.stringify({ amount_minor: { eq: '1.5' } }))}`,
+      `where=${encodeURIComponent(JSON.stringify({ state: { unsupported: 'HELD' } }))}`,
       'where=%7Bbad',
       'where=%7B%7D&where=%7B%7D',
       `where=${'x'.repeat(8193)}`,
@@ -1404,6 +1567,34 @@ describe('express adapter parity with fastify adapter', () => {
       }
     }
 
+    const holdDefaultPagePaths = [
+      ['/v1/holds', 'holds'],
+      [`/v1/holds/${holdId}/entries`, 'hold-entries'],
+      [`/v1/holds/${holdId}/captures`, 'hold-captures'],
+      [`/v1/holds/${holdId}/credit-allocations`, 'hold-credit-allocations'],
+    ] as const;
+    for (const [path, endpoint] of holdDefaultPagePaths) {
+      for (const request of [requestFastify, requestExpress]) {
+        listObservations.clear();
+        const response = await request('GET', path);
+        expect(response.status).toBe(200);
+        const observation = listObservations.get(endpoint)?.[0] as Record<string, unknown>;
+        expect(observation).toMatchObject({
+          tenantId,
+          limit: 50,
+          cursor: undefined,
+          where: undefined,
+        });
+        if (endpoint !== 'holds') expect(observation.holdId).toBe(holdId);
+      }
+      for (const request of [requestFastify, requestExpress]) {
+        listObservations.clear();
+        const response = await request('GET', `${path}?limit=201`);
+        expect(response.status).toBe(400);
+        expect(listObservations.has(endpoint)).toBeFalse();
+      }
+    }
+
     const mixedPrecisionWhere = `where=${encodeURIComponent(
       JSON.stringify({
         created_at: {
@@ -1431,6 +1622,107 @@ describe('express adapter parity with fastify adapter', () => {
       const invalid = await request('GET', invalidRunPath);
       expect(invalid.status).toBe(400);
       expect(listObservations.has('reconciliation-results')).toBeFalse();
+    }
+  });
+
+  it('serializes hold summaries and child reads consistently, and safely handles missing parents', async () => {
+    const requests = [
+      {
+        path: `/v1/holds/${holdId}`,
+        expected: {
+          id: holdId,
+          ledger_id: '00000000-0000-4000-8000-000000000001',
+          reference: 'hold-parity',
+          currency: 'USD',
+          description: null,
+          state: 'HELD',
+          original_amount_minor: '125',
+          remaining_amount_minor: '75',
+          created_at: '2026-01-01T00:00:00.000Z',
+          applied_at: null,
+          voided_at: null,
+        },
+      },
+      {
+        path: `/v1/holds/${holdId}/entries`,
+        expected: {
+          data: [
+            {
+              id: '00000000-0000-4000-8000-000000000412',
+              account_id: '00000000-0000-4000-8000-000000000413',
+              signed_amount_minor: '-125',
+              currency: 'USD',
+              created_at: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          next_cursor: null,
+        },
+      },
+      {
+        path: `/v1/holds/${holdId}/captures`,
+        expected: {
+          data: [
+            {
+              id: '00000000-0000-4000-8000-000000000414',
+              reference: 'hold-capture-1',
+              amount_minor: '50',
+              currency: 'USD',
+              created_at: '2026-01-02T00:00:00.000Z',
+            },
+          ],
+          next_cursor: null,
+        },
+      },
+      {
+        path: `/v1/holds/${holdId}/credit-allocations`,
+        expected: {
+          data: [
+            {
+              id: '00000000-0000-4000-8000-000000000415',
+              hold_entry_id: '00000000-0000-4000-8000-000000000412',
+              account_id: '00000000-0000-4000-8000-000000000413',
+              grant_id: '00000000-0000-4000-8000-000000000416',
+              amount_minor: '25',
+              created_at: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          next_cursor: null,
+        },
+      },
+    ];
+    for (const { path, expected } of requests) {
+      const [fastifyResponse, expressResponse] = await Promise.all([
+        requestFastify('GET', path),
+        requestExpress('GET', path),
+      ]);
+      expect(fastifyResponse.status).toBe(200);
+      expect(expressResponse.status).toBe(200);
+      expect(fastifyResponse.json).toEqual(expected);
+      expect(expressResponse.json).toEqual(expected);
+    }
+
+    for (const request of [requestFastify, requestExpress]) {
+      for (const path of [
+        `/v1/holds/${unknownHoldId}`,
+        `/v1/holds/${unknownHoldId}/entries`,
+        `/v1/holds/${unknownHoldId}/captures`,
+        `/v1/holds/${unknownHoldId}/credit-allocations`,
+      ]) {
+        const response = await request('GET', path);
+        expect(response.status).toBe(404);
+        expect(response.json).toMatchObject({ error: 'HOLD_NOT_FOUND' });
+        expect(JSON.stringify(response.json)).not.toContain('database');
+      }
+
+      for (const path of [
+        `/v1/holds/${emptyHoldId}/entries`,
+        `/v1/holds/${emptyHoldId}/captures`,
+        `/v1/holds/${emptyHoldId}/credit-allocations`,
+      ]) {
+        const response = await request('GET', path);
+        expect(response.status).toBe(200);
+        expect(response.json).toEqual({ data: [], next_cursor: null });
+      }
     }
   });
 

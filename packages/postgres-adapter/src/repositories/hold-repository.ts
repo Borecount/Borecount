@@ -23,12 +23,18 @@ import {
   allocateGrantCapacityForHold,
   attachReservedGrantConsumption,
 } from './grant-hold-allocation';
+import { DrizzleHoldReadRepository } from './hold-read-repository';
 import { totalDebit, validatePosting } from './posting-validation';
 
 type HoldRow = typeof schema.holds.$inferSelect;
 
-export class DrizzleHoldRepository implements HoldApplicationRepository {
-  public constructor(private readonly client: DbClient) {}
+export class DrizzleHoldRepository
+  extends DrizzleHoldReadRepository
+  implements HoldApplicationRepository
+{
+  public constructor(private readonly client: DbClient) {
+    super(client);
+  }
 
   public async create(input: CreateHoldInput): Promise<CreateHoldResult> {
     return this.client.runTenantTx(input.tenantId, 'create hold', async (tx) => {

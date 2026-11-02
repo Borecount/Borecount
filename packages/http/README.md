@@ -63,4 +63,8 @@ Paginated list endpoints accept `limit` (default 50, maximum 200) and an opaque 
 `{ data, next_cursor }`. Reconciliation results can be fetched from
 `GET /v1/reconciliation/runs/{id}/results` with typed `where` filters.
 
+Hold reads use `GET /v1/holds` and `GET /v1/holds/{id}`. The nested
+`/entries`, `/captures`, and `/credit-allocations` routes return independently paginated lists;
+all hold list routes use typed `where` filters and the shared cursor and limit contract.
+
 Before production use, cross-check this README against the OpenAPI shipped with the installed package version and review the [documentation publication checklist](../../docs/integration/versioning.md#documentation-publication-checklist).

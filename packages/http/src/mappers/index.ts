@@ -3,6 +3,7 @@ export * from './adjustments';
 export * from './api-keys';
 export * from './credit-grants';
 export * from './entries';
+export * from './holds';
 export * from './ledgers';
 export * from './pagination';
 export * from './reconciliation';

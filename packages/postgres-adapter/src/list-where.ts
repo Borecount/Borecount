@@ -17,12 +17,15 @@ import {
   lt,
   lte,
   ne,
-  type SQL,
+  SQL,
 } from 'drizzle-orm';
+
+const compare = (operator: typeof eq, column: AnyColumn | SQL, value: unknown): SQL =>
+  column instanceof SQL ? operator(column, value) : operator(column, value);
 
 /** Column maps come from the existing schema; operation policy supplies exclusions. */
 export const listWhereSql = <Policy extends ListFilterPolicy>(
-  columns: Record<keyof WhereFor<Policy>, AnyColumn>,
+  columns: Record<keyof WhereFor<Policy>, AnyColumn | SQL>,
   policy: Policy,
   where: WhereFor<NoInfer<Policy>> | undefined,
 ): SQL | undefined => {
@@ -34,29 +37,33 @@ export const listWhereSql = <Policy extends ListFilterPolicy>(
     if (!Object.hasOwn(columns, field)) {
       throw new InvariantViolationError(`Invalid where field: ${field}`);
     }
-    const column = (columns as Record<string, AnyColumn>)[field];
+    const column = (columns as Record<string, AnyColumn | SQL>)[field];
     for (const [operator, value] of Object.entries(filter)) {
       switch (operator) {
         case 'eq':
-          clauses.push(value === null ? isNull(column) : eq(column, value));
+          clauses.push(value === null ? isNull(column) : compare(eq, column, value));
           break;
         case 'ne':
-          clauses.push(value === null ? isNotNull(column) : ne(column, value));
+          clauses.push(value === null ? isNotNull(column) : compare(ne, column, value));
           break;
         case 'in':
-          clauses.push(inArray(column, value as unknown[]));
+          clauses.push(
+            column instanceof SQL
+              ? inArray(column, value as unknown[])
+              : inArray(column, value as unknown[]),
+          );
           break;
         case 'gt':
-          clauses.push(gt(column, value));
+          clauses.push(compare(gt, column, value));
           break;
         case 'gte':
-          clauses.push(gte(column, value));
+          clauses.push(compare(gte, column, value));
           break;
         case 'lt':
-          clauses.push(lt(column, value));
+          clauses.push(compare(lt, column, value));
           break;
         case 'lte':
-          clauses.push(lte(column, value));
+          clauses.push(compare(lte, column, value));
           break;
       }
     }

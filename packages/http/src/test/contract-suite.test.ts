@@ -23,6 +23,18 @@ import {
   creditGrantResponseSchema,
   creditLotStatementResponseSchema,
   entriesPageResponseSchema,
+  holdCaptureResponseSchema,
+  holdCapturesPageResponseSchema,
+  holdCreditAllocationResponseSchema,
+  holdCreditAllocationsPageResponseSchema,
+  holdEntriesPageResponseSchema,
+  holdEntryResponseSchema,
+  holdSummaryResponseSchema,
+  holdsPageResponseSchema,
+  listHoldCapturesQuerySchema,
+  listHoldCreditAllocationsQuerySchema,
+  listHoldEntriesQuerySchema,
+  listHoldsQuerySchema,
   refundCreditGrantBodySchema,
   refundCreditGrantResponseSchema,
   transactionEntryRequestSchema,
@@ -37,6 +49,10 @@ import {
   creditGrantFilterFields,
   creditLineageFilterFields,
   entryFilterFields,
+  holdCaptureFilterFields,
+  holdCreditAllocationFilterFields,
+  holdEntryFilterFields,
+  holdSummaryFilterFields,
   ledgerFilterFields,
   reconResultListFilterFields,
   reconRuleFilterFields,
@@ -116,6 +132,24 @@ describe('framework-agnostic contract suite', () => {
               type: 'string',
               nullable: true,
             }),
+        },
+        {
+          name: 'hold read schemas expose the shared paginated summaries and child records',
+          assert: () => {
+            expect(holdsPageResponseSchema.properties.data.items).toEqual(
+              holdSummaryResponseSchema,
+            );
+            expect(holdEntriesPageResponseSchema.properties.data.items).toEqual(
+              holdEntryResponseSchema,
+            );
+            expect(holdCapturesPageResponseSchema.properties.data.items).toEqual(
+              holdCaptureResponseSchema,
+            );
+            expect(holdCreditAllocationsPageResponseSchema.properties.data.items).toEqual(
+              holdCreditAllocationResponseSchema,
+            );
+            expect(holdSummaryResponseSchema.properties).not.toHaveProperty('entries');
+          },
         },
         {
           name: 'api key payload requires name and role',
@@ -430,6 +464,13 @@ describe('framework-agnostic contract suite', () => {
       '/v1/transactions/{id}/credit-allocations': ['CreditLineageWhere', creditLineageFilterFields],
       '/v1/accounts/{id}/credit-lots': ['CreditGrantsWhere', creditGrantFilterFields],
       '/v1/accounts/{id}/balance-history': ['BalanceHistoryWhere', balanceHistoryFilterFields],
+      '/v1/holds': ['HoldsWhere', holdSummaryFilterFields],
+      '/v1/holds/{id}/entries': ['HoldEntriesWhere', holdEntryFilterFields],
+      '/v1/holds/{id}/captures': ['HoldCapturesWhere', holdCaptureFilterFields],
+      '/v1/holds/{id}/credit-allocations': [
+        'HoldCreditAllocationsWhere',
+        holdCreditAllocationFilterFields,
+      ],
     };
     for (const [path, [schema, fields]] of Object.entries(routes)) {
       const parameters = document.paths?.[path]?.get?.parameters ?? [];
@@ -508,6 +549,74 @@ describe('framework-agnostic contract suite', () => {
         },
       },
     });
+
+    expect(document.components?.schemas?.HoldSummary).toEqual(holdSummaryResponseSchema);
+    expect(document.components?.schemas?.HoldEntry).toEqual(holdEntryResponseSchema);
+    expect(document.components?.schemas?.HoldCapture).toEqual(holdCaptureResponseSchema);
+    expect(document.components?.schemas?.HoldCreditAllocation).toEqual(
+      holdCreditAllocationResponseSchema,
+    );
+    for (const [path, response] of [
+      ['/v1/holds', 'HoldsPage'],
+      ['/v1/holds/{id}/entries', 'HoldEntriesPage'],
+      ['/v1/holds/{id}/captures', 'HoldCapturesPage'],
+      ['/v1/holds/{id}/credit-allocations', 'HoldCreditAllocationsPage'],
+    ]) {
+      expect(document.paths?.[path]?.get?.responses?.['200']).toMatchObject({
+        content: { 'application/json': { schema: { $ref: `#/components/schemas/${response}` } } },
+      });
+    }
+    expect(document.paths?.['/v1/holds/{id}']?.get?.responses?.['200']).toMatchObject({
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/HoldSummary' } } },
+    });
+    const holdListContracts = [
+      ['/v1/holds', listHoldsQuerySchema, false],
+      ['/v1/holds/{id}/entries', listHoldEntriesQuerySchema, true],
+      ['/v1/holds/{id}/captures', listHoldCapturesQuerySchema, true],
+      ['/v1/holds/{id}/credit-allocations', listHoldCreditAllocationsQuerySchema, true],
+    ] as const;
+    for (const [path, querySchema, hasParentId] of holdListContracts) {
+      const operation = document.paths?.[path]?.get;
+      const parameters = operation?.parameters ?? [];
+      expect(querySchema.properties.limit).toEqual({
+        type: 'integer',
+        minimum: 1,
+        maximum: 200,
+        default: 50,
+      });
+      expect(querySchema.properties.cursor).toEqual({ type: 'string', minLength: 1 });
+      expect(querySchema.properties.where.maxLength).toBe(8192);
+      expect(parameters).toContainEqual({ $ref: '#/components/parameters/Limit' });
+      expect(parameters).toContainEqual({ $ref: '#/components/parameters/Cursor' });
+      if (hasParentId) {
+        expect(parameters).toContainEqual({
+          in: 'path',
+          name: 'id',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        });
+      }
+      expect(Object.keys(operation?.responses ?? {}).sort()).toEqual(
+        hasParentId ? ['200', '400', '401', '404'] : ['200', '400', '401'],
+      );
+      expect(operation?.responses?.['400']).toEqual({
+        $ref: '#/components/responses/BadRequestError',
+      });
+      expect(operation?.responses?.['401']).toEqual({
+        $ref: '#/components/responses/UnauthorizedError',
+      });
+      if (hasParentId) {
+        expect(operation?.responses?.['404']).toEqual({
+          $ref: '#/components/responses/NotFoundError',
+        });
+      }
+    }
+    expect(Object.keys(document.paths?.['/v1/holds/{id}']?.get?.responses ?? {}).sort()).toEqual([
+      '200',
+      '400',
+      '401',
+      '404',
+    ]);
     expect(resultsOperation?.responses?.['404']).toEqual({
       $ref: '#/components/responses/NotFoundError',
     });

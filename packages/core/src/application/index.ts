@@ -8,6 +8,22 @@ export { reconRuleListFilter } from '../reconciliation';
 export { transactionListFilter } from '../transaction/list-filter';
 export * from './available-balance';
 export * from './errors';
+export type {
+  HoldCapture,
+  HoldCapturesQuery,
+  HoldCreditAllocation,
+  HoldCreditAllocationsQuery,
+  HoldEntriesQuery,
+  HoldEntry,
+  HoldListQuery,
+  HoldSummary,
+} from './hold-reads';
+export {
+  holdCaptureListFilter,
+  holdCreditAllocationListFilter,
+  holdEntryListFilter,
+  holdListFilter,
+} from './hold-reads';
 export * from './list-filters';
 export * from './pagination-query';
 export * from './repositories.interface';

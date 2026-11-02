@@ -108,7 +108,15 @@ const keys = await services.apiKeys.listApiKeys(adminActor, { limit: 25, where: 
 const results = await services.reconciliation.listResults({
   tenantId, runId, limit: 25, where: { status: { eq: 'conflict' } },
 });
+const holds = await services.holds.list({
+  tenantId, limit: 25, where: { state: { eq: 'HELD' }, accountId: { eq: 'account-1' } },
+});
+const entries = await services.holds.listEntries({ tenantId, holdId, limit: 25 });
 ```
+
+Hold reads include `getById`, `list`, `listEntries`, `listCaptures`, and
+`listCreditAllocations`. Child lists require `holdId`; hold summaries can also be filtered by
+their associated `accountId`. Each list returns a page of its corresponding read model.
 
 All fields and operators are combined with AND. Supported operators are `eq`, `ne`, `in`
 (1–100 non-null values), plus `gt`, `gte`, `lt`, `lte` for dates and numbers (including
@@ -159,6 +167,10 @@ when following `nextCursor`; consume every page instead of assuming the first pa
 | creditGrants.list, creditGrants.listLots | creditGrantListFilter |
 | creditGrants.listLineageByGrant, creditGrants.listLineageByTransaction | creditLineageListFilter |
 | balances.listHistory | balanceHistoryListFilter |
+| holds.list | holdListFilter |
+| holds.listEntries | holdEntryListFilter |
+| holds.listCaptures | holdCaptureListFilter |
+| holds.listCreditAllocations | holdCreditAllocationListFilter |
 
 Policies and `WhereFor` are exported from `@borecount/core/application`. Entity policies
 are also exported from their domain entry points, such as `@borecount/core/transaction`.

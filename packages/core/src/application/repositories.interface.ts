@@ -9,6 +9,16 @@ import type { ledgerListFilter } from '../ledger/list-filter';
 import type { ReconRule, reconRuleListFilter } from '../reconciliation';
 import type { TransactionEntity } from '../transaction/entity';
 import type {
+  HoldCapture,
+  HoldCapturesQuery,
+  HoldCreditAllocation,
+  HoldCreditAllocationsQuery,
+  HoldEntriesQuery,
+  HoldEntry,
+  HoldListQuery,
+  HoldSummary,
+} from './hold-reads';
+import type {
   AccountPaginationQuery,
   AccountStatement,
   AccountStatementQuery,
@@ -134,6 +144,13 @@ export interface HoldApplicationRepository {
   create(input: CreateHoldInput): Promise<CreateHoldResult>;
   commit(input: CommitHoldInput): Promise<CommitHoldResult>;
   void(input: VoidHoldInput): Promise<VoidHoldResult>;
+  findById(tenantId: string, holdId: string): Promise<HoldSummary | null>;
+  list(query: HoldListQuery): Promise<PaginatedResult<HoldSummary>>;
+  listEntries(query: HoldEntriesQuery): Promise<PaginatedResult<HoldEntry>>;
+  listCaptures(query: HoldCapturesQuery): Promise<PaginatedResult<HoldCapture>>;
+  listCreditAllocations(
+    query: HoldCreditAllocationsQuery,
+  ): Promise<PaginatedResult<HoldCreditAllocation>>;
 }
 
 export interface BalanceApplicationRepository {
