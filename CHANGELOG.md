@@ -6,6 +6,25 @@ are linked from each entry.
 
 ## [Unreleased]
 
+Upgrade notice: the required `HoldApplicationRepository` read methods introduced in
+`0.7.0` are a breaking extension for custom persistence adapters; see the release
+notes and implement the new methods before upgrading.
+
+## [0.7.0] - 2026-11-02
+
+### Added
+
+- Public tenant-scoped hold lookup and filtered listing, including terminal holds and exact-reference recovery.
+- Bounded lists of original hold entries, successful captures and original credit allocations.
+- Shared HTTP DTOs, OpenAPI and Fastify/Express routes with uniform typed `where` filters and scoped opaque cursors.
+
+### Changed
+
+- **Breaking for custom adapters:** `HoldApplicationRepository` now requires `findById`, `list`, `listEntries`, `listCaptures` and `listCreditAllocations`. Existing create/commit/void commands are unchanged.
+- All five public packages and OpenAPI advance together to `0.7.0`. No database schema or migration changes from `0.6.0`.
+
+See [the 0.7.0 release notes](docs/releases/0.7.0.md).
+
 ## [0.6.0] - 2026-11-02
 
 ### Changed
@@ -78,6 +97,7 @@ See [the 0.2.1 release notes](docs/releases/0.2.1.md).
 See [the 0.2.0 release notes](docs/releases/0.2.0.md).
 
 [Unreleased]: https://github.com/Borecount/Borecount/tree/main
+[0.7.0]: docs/releases/0.7.0.md
 [0.6.0]: docs/releases/0.6.0.md
 [0.4.0]: docs/releases/0.4.0.md
 [0.3.0]: docs/releases/0.3.0.md

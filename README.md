@@ -1,7 +1,7 @@
 # Borecount
 
 Reusable double-entry ledger packages, previously named LuxLedger. The coordinated
-`0.6.0` release uses `@borecount/*`; see the [release notes](docs/releases/0.6.0.md).
+`0.7.0` release uses `@borecount/*`; see the [release notes](docs/releases/0.7.0.md).
 Financial core infrastructure: double-entry ledger domain packages, transport contracts, and persistence adapters.
 
 ## Local setup
