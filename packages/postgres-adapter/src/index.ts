@@ -4,4 +4,5 @@ export * from './drizzle-config';
 export * from './repositories';
 export * from './repository-types';
 export * from './schema';
+export * from './tenant-provisioning';
 export * from './unit-of-work';

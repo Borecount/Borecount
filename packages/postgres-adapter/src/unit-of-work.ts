@@ -1,52 +1,23 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { isDomainError } from '@borecount/core';
-import type { ApplicationUnitOfWorkContext } from '@borecount/core/application';
 import { InvariantViolationError, RepositoryError } from '@borecount/core/application';
-import type { TenantId, UnitOfWork } from '@borecount/core/base';
-import { createApplicationServices } from './application-services';
-import type { DbClient, DrizzleDatabase } from './client';
+import type { TenantId } from '@borecount/core/base';
+import type { DbClient } from './client';
+import {
+  type AdapterUnitOfWork,
+  createUnitOfWorkContext,
+  type UnitOfWorkContext,
+} from './unit-of-work/context';
+
+export type { AdapterUnitOfWork, UnitOfWorkContext } from './unit-of-work/context';
 
 const NESTED_UNIT_OF_WORK_MESSAGE = 'Nested unit of work is not supported';
-const TENANT_MISMATCH_MESSAGE = 'Unit of work tenant does not match operation tenant';
-const UNSCOPED_OPERATION_MESSAGE = 'Unscoped operation is not allowed in a tenant unit of work';
 
 class UnitOfWorkCallbackFailure extends Error {
   public constructor(public readonly original: unknown) {
     super('Unit of work callback failed');
   }
 }
-
-const createTransactionClient = <THostSchema extends Record<string, unknown>>(
-  client: DbClient<THostSchema>,
-  transaction: DrizzleDatabase<THostSchema>,
-  tenantId: string,
-): DbClient => {
-  // The combined transaction always contains the complete Borecount schema.
-  // Repositories receive only the narrower package-owned schema view.
-  const ledgerTransaction = transaction as unknown as DrizzleDatabase;
-  return {
-    sql: client.sql,
-    execute: (operation, action) => client.execute(operation, () => action(ledgerTransaction)),
-    runTx: async () => {
-      throw new InvariantViolationError(UNSCOPED_OPERATION_MESSAGE);
-    },
-    runTenantTx: async (operationTenantId, _operation, action) => {
-      if (operationTenantId !== tenantId) {
-        throw new InvariantViolationError(TENANT_MISMATCH_MESSAGE);
-      }
-      return client.execute(_operation, () => action(ledgerTransaction));
-    },
-  };
-};
-
-export interface UnitOfWorkContext<
-  THostSchema extends Record<string, unknown> = Record<never, never>,
-> extends ApplicationUnitOfWorkContext {
-  readonly tx: DrizzleDatabase<THostSchema>;
-}
-
-export type AdapterUnitOfWork<THostSchema extends Record<string, unknown> = Record<never, never>> =
-  UnitOfWork<UnitOfWorkContext<THostSchema>>;
 
 export class PostgresUnitOfWork<THostSchema extends Record<string, unknown> = Record<never, never>>
   implements AdapterUnitOfWork<THostSchema>
@@ -66,17 +37,8 @@ export class PostgresUnitOfWork<THostSchema extends Record<string, unknown> = Re
     return this.active
       .run(true, () =>
         this.client.runTenantTx(tenantId.value, 'run tenant unit of work', async (transaction) => {
-          const transactionClient = createTransactionClient(
-            this.client,
-            transaction,
-            tenantId.value,
-          );
           try {
-            return await work({
-              tenantId,
-              services: createApplicationServices(transactionClient),
-              tx: transaction,
-            });
+            return await work(createUnitOfWorkContext(this.client, transaction, tenantId));
           } catch (error) {
             if (isDomainError(error)) throw error;
             throw new UnitOfWorkCallbackFailure(error);

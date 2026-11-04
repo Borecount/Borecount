@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { generateApiKey, hashApiKey } from '../../api-key/credentials';
 import type { ApiKeyEntity } from '../../api-key/entity';
 import { ApiKeyRole } from '../../api-key/entity';
 import { apiKeyListFilter } from '../../api-key/list-filter';
@@ -16,12 +16,6 @@ import type {
   PaginatedResult,
   PaginationQuery,
 } from '../types';
-
-const API_KEY_PREFIX = 'llk_';
-const API_KEY_BYTES = 32;
-
-const hashApiKey = (apiKey: string): string =>
-  createHash('sha256').update(apiKey, 'utf8').digest('hex');
 
 export class ApiKeyService {
   private readonly repository: ApiKeyRepository;
@@ -58,7 +52,7 @@ export class ApiKeyService {
     assertNonEmpty(input.name, 'name is required');
     this.assertRole(input.role);
 
-    const apiKey = `${API_KEY_PREFIX}${randomBytes(API_KEY_BYTES).toString('hex')}`;
+    const apiKey = generateApiKey();
     const created = await this.repository.create({
       tenantId: input.tenantId,
       name: input.name.trim(),
