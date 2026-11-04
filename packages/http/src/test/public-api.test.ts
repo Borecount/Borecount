@@ -14,3 +14,13 @@ test('public API includes shared HTTP contracts and primitives', () => {
   expect(keys).toContain('ApiKeyRole');
   expect(keys).toContain('mapDomainErrorToHttp');
 });
+
+// Compile the host extension through both supported public entry points.
+test('public callback types support framework-neutral host context', () => {
+  const options: publicApi.LedgerAdapterOptions<{ principal: string }> = {
+    authorizeAdjustment: ({ request }) => ({ actorId: request.principal }),
+  };
+  const subpathOptions: import('../route-core').LedgerAdapterOptions<{ principal: string }> =
+    options;
+  expect(subpathOptions.authorizeAdjustment).toBe(options.authorizeAdjustment);
+});

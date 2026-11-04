@@ -1,105 +1,86 @@
-# Trusted actor authorization for adjustments
+# Adjustment authorization
 
-Credit and debit adjustments change a ledger balance. The host application owns authentication,
-tenant scoping, and authorization for each direction. The route adapters validate and transport the
-request; they do not supply authentication, role based access control, or a callback API for host
-policy.
+The host owns authentication, tenant scoping, and authorization for credit and debit adjustments.
+Both route adapters accept an optional `authorizeAdjustment` callback for host policy. Core and HTTP
+define no authentication or RBAC policy.
 
-## Required policy
+## Callback behavior
 
-- Authenticate every request and resolve its tenant from trusted credentials. Scope every request to
-  that tenant; never take tenant identity from the body or infer it from a resource identifier.
-- Explicitly authorize the requested `credit` or `debit` direction on every request, including an
-  idempotent retry.
-- Require the request's opaque `actor_id` claim to exactly equal the host-resolved
-  `effectiveActorId`. On mismatch, return `403 FORBIDDEN` without calling an application service;
-  do not silently replace or rewrite the submitted actor.
-- A service principal may assert an opaque/on-behalf-of actor only when host policy explicitly allows
-  that assertion. Keep the authenticating service identity distinct from the effective actor.
-- Treat `attributes` as caller supplied, untrusted metadata. They do not prove identity or
-  authorization. If verified attribution is needed, the host owns and adds reserved attribution
-  fields; reject caller attempts to override those fields and use stable metadata across retries.
-- Missing or invalid authentication returns `401`. Unexpected host authorization failures return a
-  redacted `500`; do not expose internal details.
+The host must authenticate every request and populate `tenantId`, `apiKeyId`, and `apiKeyRole` before
+the adapter handler runs. When configured, the adapter validates the body and checks those
+context fields first, then awaits `authorizeAdjustment` on every request, including idempotent retries.
+The callback receives the framework request, direction, trusted request context, and validated body
+as `Readonly<CreateAdjustmentRequest>`. Do not mutate the request or body in the callback.
 
-The adapter remains responsible for request shape validation. For example, invalid `actor_id` shape
-is an adapter `400 INVALID_INPUT`, not an authorization decision. A host guard that inspects the body
-should first check it is a record and that actor text is nonblank, using
-`isRecord` and `isNonEmptyTrimmed` from the public `@borecount/http/validation-utils` export. Do not
-duplicate the adapter's broader body validation in host middleware.
+Return the trusted effective actor as `{ actorId }`. The adapter requires an exact match with the
+body's opaque `actor_id`; a missing, empty, or mismatched runtime result returns `403 FORBIDDEN`, and
+the application service is not called. The adapter does not rewrite the body actor. Throw
+`UnauthorizedError` or `ForbiddenError` for expected host denials; unexpected callback errors are
+redacted as `500 INTERNAL_ERROR`.
 
-## Fastify wiring
+The callback is optional for compatibility with existing trusted service callers. If omitted, the
+adapter performs no host authorization or actor verification beyond its normal request validation
+and authentication-context presence check. Only omit it when the authenticated caller is trusted to
+assert adjustment actors.
 
-Install authentication before this hook and register the adapter after it. Match the resolved route
-template (not the raw URL) so equivalent URLs cannot bypass the guard. Catch host guard failures here
-and map them explicitly to the adapter's safe HTTP error payload; do not let them fall through to a
-route-specific error handler.
+## Example
 
 ```ts
-const adjustmentPaths = new Set([
-  '/v1/adjustments/credit',
-  '/v1/adjustments/debit',
-]);
+import { registerLedgerAdapter } from '@borecount/fastify-routes';
+import { ForbiddenError } from '@borecount/core/application';
 
-server.addHook('preValidation', (request, reply, done) => {
-  const path = request.routeOptions.url;
-  if (request.method !== 'POST' || !path || !adjustmentPaths.has(path)) {
-    done();
-    return;
-  }
-  void authorizeAdjustment(request, path).then(
-    () => done(),
-    (error: unknown) => {
-      const { statusCode, ...payload } = toHttpErrorPayload(error);
-      reply.code(statusCode).send(payload);
-    },
-  );
+registerLedgerAdapter(server, applicationServices, {
+  authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, apiKeyRole, body }) => {
+    const principal = request.authenticatedPrincipal;
+    if (!principal || principal.tenantId !== tenantId || principal.apiKeyId !== apiKeyId) {
+      throw new ForbiddenError('Adjustment is not authorized');
+    }
+    if (!principal.allowedDirections.includes(direction)) {
+      throw new ForbiddenError('Adjustment is not authorized');
+    }
+
+    // Resolve the effective actor under host policy, including any delegation rules.
+    const actorId = await resolveEffectiveActor(principal, body.actor_id, apiKeyRole);
+    if (actorId !== body.actor_id) {
+      throw new ForbiddenError('Adjustment is not authorized');
+    }
+    return { actorId };
+  },
 });
-
-registerLedgerAdapter(server, applicationServices);
 ```
 
-`authorizeAdjustment` is an asynchronous host-owned function. Import `toHttpErrorPayload` from
-`@borecount/http/errors`; throw `UnauthorizedError` or `ForbiddenError` from
-`@borecount/core/application` for expected failures. Unknown failures are redacted automatically.
-The resolved route template is available during `preValidation`, after authentication and body parsing.
-Use the callback hook as shown: call `done()` only on success and never after sending a rejection.
-The parity fixture verifies that a rejected asynchronous policy cannot continue into a ledger handler.
+The example's `authenticatedPrincipal` and `resolveEffectiveActor` belong to the host. For Express,
+pass the same option as the third argument to `registerLedgerAdapter(app, applicationServices,
+options)`; the callback request is the adapter's `RequestWithContext`. Authentication middleware and
+JSON parsing must run before adapter routes.
 
-## Express wiring
+Keep the authenticating service identity distinct from the effective actor. A service principal may
+assert an opaque/on-behalf-of actor only when host policy explicitly permits it. The adapter preserves the validated command and audit attributes. `attributes` remain caller supplied, untrusted metadata:
+they do not establish identity, the callback does not inject or reserve attribution fields, and the
+host must reject forged reserved claims if its own policy uses such fields. Keep metadata stable on
+retries.
 
-Ensure JSON parsing and authentication run first. Mount an exact-path guard before registering the
-adapter; call `next()` only after authorization succeeds. Map host errors explicitly to the same
-safe status and error shape, and do not forward internal error details.
+Invalid actor shape returns `400 INVALID_INPUT` before the callback runs. The callback receives a
+validated body and should focus on host authorization without duplicating schema validation.
 
-```ts
-app.use(express.json());
-app.use(authenticateRequest);
-app.post(
-  ['/v1/adjustments/credit', '/v1/adjustments/debit'],
-  authorizeAdjustmentMiddleware,
-);
-registerLedgerAdapter(app, applicationServices);
-```
+The public callback types are available from `@borecount/http/route-core`:
+`AdjustmentAuthorizationContext<Request>`, `AdjustmentAuthorizationHook<Request>`, and
+`LedgerAdapterOptions<Request>`. Each framework adapter also exports its framework-bound
+`LedgerAdapterOptions` type.
 
-The middleware and Fastify hook should enforce the same policy. They must not implement ledger rules,
-modify the request actor, or treat caller-controlled `attributes` as verified host attribution.
+## Verification and demo
 
-## Test and demo notes
-
-The shared adapter parity coverage lives in
+Shared adapter parity coverage is in
 [`packages/express-routes/src/parity.test.ts`](../../packages/express-routes/src/parity.test.ts).
-The executable host fixture carries a principal with `tenantId`, `apiKeyId`, `apiKeyRole`,
-`effectiveActorId`, and `allowedDirections`. Tests cover missing authentication/tenant, direction
-denial, spoofed actors, malformed claims, attempted tenant overrides, authorized service and delegated
-actors, reauthorization after revocation, and redacted host errors. They assert that denied requests
-never reach application services and check the exact actor, attributes, and trusted tenant forwarded.
+It exercises authenticated host principals, tenant/API-key context, allowed directions, actor
+matching, retries, and denied requests without service calls.
 
 The reference demo is maintained in the separate
 [Borecount-demo repository](https://github.com/Borecount/Borecount-demo). Its `finance-demo-operator`
-is a simulated demo actor, not an authenticated user identity. The demo host needs its own follow-up
-to resolve and authorize its effective actor under this policy; this repository's documentation does
-not claim that external host has been changed.
+is a simulated demo actor, not an authenticated user identity. The demo host requires a separate
+follow-up to configure actor authorization; this repository does not claim that the external host
+has been updated.
 
-This integration pattern preserves the existing request body contract and stored data shape. It adds
-authorization at the host boundary and does not introduce a production callback API or core policy.
+This callback adds host policy at the adapter boundary. It does not add core RBAC, change the request
+body contract, modify stored data, or automatically resolve an actor when the host has not configured
+the callback.

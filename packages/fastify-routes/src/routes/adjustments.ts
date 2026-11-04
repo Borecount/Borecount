@@ -1,16 +1,24 @@
-import type { AdjustmentService } from '@borecount/core/application';
+import {
+  type AdjustmentService,
+  ForbiddenError,
+  UnauthorizedError,
+} from '@borecount/core/application';
 import {
   adjustmentResponseSchema,
   type CreateAdjustmentRequest,
   createAdjustmentBodySchema,
 } from '@borecount/http/contracts';
 import { toAdjustmentResponse } from '@borecount/http/mappers';
-import type { FastifyInstance } from 'fastify';
+import type { AdjustmentAuthorizationHook } from '@borecount/http/route-core';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
 import { BaseRoute } from '../routing/base-route';
 
 export class AdjustmentRoutes extends BaseRoute {
-  public constructor(private readonly adjustments: AdjustmentService) {
+  public constructor(
+    private readonly adjustments: AdjustmentService,
+    private readonly authorizeAdjustment?: AdjustmentAuthorizationHook<FastifyRequest>,
+  ) {
     super();
   }
 
@@ -31,8 +39,26 @@ export class AdjustmentRoutes extends BaseRoute {
         async (request, reply) =>
           this.handle(reply, async () => {
             const body = request.body;
+            const { tenantId, apiKeyId, apiKeyRole } = request;
+            if (!tenantId || !apiKeyId || !apiKeyRole) {
+              throw new UnauthorizedError('Bearer token is required');
+            }
+            const actorId = body.actor_id;
+            if (this.authorizeAdjustment) {
+              const actor = await this.authorizeAdjustment({
+                request,
+                direction,
+                tenantId,
+                apiKeyId,
+                apiKeyRole,
+                body,
+              });
+              if (!actor || actor.actorId !== actorId) {
+                throw new ForbiddenError('Actor claim conflicts with trusted context');
+              }
+            }
             const result = await this.adjustments[direction]({
-              tenantId: request.tenantId as string,
+              tenantId,
               ledgerId: body.ledger_id,
               accountId: body.account_id,
               offsetAccountId: body.offset_account_id,
@@ -40,7 +66,7 @@ export class AdjustmentRoutes extends BaseRoute {
               amountMinor: BigInt(body.amount_minor),
               description: body.description,
               reasonCode: body.reason_code,
-              actorId: body.actor_id,
+              actorId,
               attributes: body.attributes,
             });
             return reply.status(result.created ? 201 : 200).send(toAdjustmentResponse(result));

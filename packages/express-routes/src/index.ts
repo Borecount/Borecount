@@ -1,4 +1,5 @@
 import type { ApplicationServices } from '@borecount/core/application';
+import type { LedgerAdapterOptions as HttpLedgerAdapterOptions } from '@borecount/http/route-core';
 import express, { type Application } from 'express';
 import { registerAccountRoutes } from './routes/accounts';
 import { registerAdjustmentRoutes } from './routes/adjustments';
@@ -9,6 +10,7 @@ import { registerHoldRoutes } from './routes/holds';
 import { registerLedgerRoutes } from './routes/ledgers';
 import { registerReconciliationRoutes } from './routes/reconciliation';
 import { registerTransactionRoutes } from './routes/transactions';
+import type { RequestWithContext } from './types';
 
 export type { RequestContext, RequestWithContext } from './types';
 
@@ -19,14 +21,20 @@ const ensureJsonMiddleware = (app: Application): void => {
   }
 };
 
-export const registerLedgerAdapter = (app: Application, services: ApplicationServices): void => {
+export type LedgerAdapterOptions = HttpLedgerAdapterOptions<RequestWithContext>;
+
+export const registerLedgerAdapter = (
+  app: Application,
+  services: ApplicationServices,
+  options: LedgerAdapterOptions = {},
+): void => {
   ensureJsonMiddleware(app);
 
   registerLedgerRoutes(app, services);
   registerTransactionRoutes(app, services);
   registerAccountRoutes(app, services);
   registerCreditGrantRoutes(app, services);
-  registerAdjustmentRoutes(app, services);
+  registerAdjustmentRoutes(app, services, options.authorizeAdjustment);
   registerHoldRoutes(app, services);
   registerReconciliationRoutes(app, services);
   registerEntryRoutes(app, services);
