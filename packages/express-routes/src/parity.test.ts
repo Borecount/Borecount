@@ -3,15 +3,20 @@ import {
   ApiKeyRole,
   type ApiKeyService,
   type ApplicationServices,
+  type CreateAdjustmentInput,
   type CreditGrant,
+  ForbiddenError,
   HoldNotFoundError,
   InvariantViolationError,
   ReconRunNotFoundError,
+  UnauthorizedError,
 } from '@borecount/core/application';
 import type { UnknownRecord } from '@borecount/core/base';
 import type { TransactionMetadata } from '@borecount/core/transaction';
 import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@borecount/fastify-routes';
+import { toHttpErrorPayload } from '@borecount/http/errors';
 import { createContractHarness } from '@borecount/http/test/harness';
+import { isNonEmptyTrimmed, isRecord } from '@borecount/http/validation-utils';
 import express, { type Application } from 'express';
 import Fastify, { type FastifyInstance } from 'fastify';
 import httpMocks from 'node-mocks-http';
@@ -1886,6 +1891,268 @@ describe('express adapter parity with fastify adapter', () => {
       }
     } finally {
       await server.close();
+    }
+  });
+});
+
+// Host-owned integration example; this policy is deliberately outside production adapters.
+describe('host adjustment authorization parity', () => {
+  type Principal = {
+    tenantId: string;
+    apiKeyId: string;
+    apiKeyRole: ApiKeyRole;
+    effectiveActorId: string;
+    allowedDirections: readonly ('credit' | 'debit')[];
+  };
+  const servicePrincipal: Principal = {
+    tenantId,
+    apiKeyId: 'service-key-1',
+    apiKeyRole: ApiKeyRole.SERVICE,
+    effectiveActorId: 'service:billing',
+    allowedDirections: ['credit', 'debit'],
+  };
+  const paths = ['/v1/adjustments/credit', '/v1/adjustments/debit'] as const;
+
+  const createHosts = (resolvePrincipal: () => Promise<Principal | undefined>) => {
+    const calls: [
+      { direction: string; input: CreateAdjustmentInput }[],
+      { direction: string; input: CreateAdjustmentInput }[],
+    ] = [[], []];
+    const makeServices = (observed: (typeof calls)[number]) => {
+      const post = (direction: string) => async (input: CreateAdjustmentInput) => {
+        observed.push({ direction, input });
+        return { transactionId: '00000000-0000-4000-8000-000000000906', created: true };
+      };
+      return {
+        adjustments: { credit: post('credit'), debit: post('debit') },
+      } as unknown as ApplicationServices;
+    };
+    const authorize = async (body: unknown, direction: string): Promise<Principal> => {
+      // The resolver represents host authentication and delegation checks, never body/header claims.
+      const principal = await resolvePrincipal();
+      if (!principal?.tenantId || !principal.apiKeyId || !principal.apiKeyRole) {
+        throw new UnauthorizedError('Bearer token is required');
+      }
+      if (!principal.allowedDirections.some((allowed) => allowed === direction)) {
+        throw new ForbiddenError('Adjustment is not permitted');
+      }
+      if (!isNonEmptyTrimmed(principal.effectiveActorId)) {
+        throw new ForbiddenError('Trusted actor is required');
+      }
+      // Malformed actor claims remain the responsibility of the shared request schema.
+      if (isRecord(body) && isNonEmptyTrimmed(body.actor_id)) {
+        if (body.actor_id !== principal.effectiveActorId) {
+          throw new ForbiddenError('Actor claim conflicts with trusted context');
+        }
+      }
+      return principal;
+    };
+    const server = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
+    server.decorateRequest('tenantId');
+    server.decorateRequest('apiKeyId');
+    server.decorateRequest('apiKeyRole');
+    server.addHook('preValidation', (request, reply, done) => {
+      const path = request.routeOptions.url;
+      if (request.method !== 'POST' || !path || !paths.some((candidate) => candidate === path)) {
+        done();
+        return;
+      }
+      void authorize(request.body, path.endsWith('/credit') ? 'credit' : 'debit').then(
+        (principal) => {
+          request.tenantId = principal.tenantId;
+          request.apiKeyId = principal.apiKeyId;
+          request.apiKeyRole = principal.apiKeyRole;
+          done();
+        },
+        (error: unknown) => {
+          const { statusCode, ...payload } = toHttpErrorPayload(error);
+          reply.status(statusCode).send(payload);
+        },
+      );
+    });
+    registerFastifyLedgerAdapter(server, makeServices(calls[0]));
+    const app = express();
+    app.use(express.json());
+    app.post([...paths], async (request, response, next) => {
+      try {
+        const principal = await authorize(
+          request.body,
+          request.path.replace(/\/$/, '').toLowerCase().endsWith('/credit') ? 'credit' : 'debit',
+        );
+        Object.assign(request, {
+          tenantId: principal.tenantId,
+          apiKeyId: principal.apiKeyId,
+          apiKeyRole: principal.apiKeyRole,
+        });
+        next();
+      } catch (error) {
+        const { statusCode, ...payload } = toHttpErrorPayload(error);
+        response.status(statusCode).json(payload);
+      }
+    });
+    registerExpressLedgerAdapter(app, makeServices(calls[1]));
+
+    const request = async (path: string, body: unknown) => {
+      const fastify = await server.inject({ method: 'POST', url: path, payload: body as object });
+      const req = httpMocks.createRequest({ method: 'POST', url: path, body: body as object });
+      const res = httpMocks.createResponse({
+        eventEmitter: (await import('node:events')).EventEmitter,
+      });
+      await new Promise<void>((resolve, reject) => {
+        res.on('finish', resolve);
+        app(req, res, (error?: unknown) => (error ? reject(error) : resolve()));
+      });
+      const actual = { status: fastify.statusCode, json: fastify.json() };
+      expect({ status: res.statusCode, json: res._getJSONData() }).toEqual(actual);
+      expect(calls[1]).toEqual(calls[0]);
+      return actual;
+    };
+    return { request, calls, close: () => server.close() };
+  };
+
+  for (const direction of ['credit', 'debit'] as const) {
+    const path = `/v1/adjustments/${direction}`;
+    it.each([
+      ['missing authentication', undefined, adjustmentPayload, 401, 'UNAUTHORIZED'],
+      [
+        'missing tenant',
+        { ...servicePrincipal, tenantId: '' },
+        adjustmentPayload,
+        401,
+        'UNAUTHORIZED',
+      ],
+      [
+        'SERVICE without permission',
+        { ...servicePrincipal, allowedDirections: [] },
+        adjustmentPayload,
+        403,
+        'FORBIDDEN',
+      ],
+      [
+        'ADMIN without permission',
+        { ...servicePrincipal, apiKeyRole: ApiKeyRole.ADMIN, allowedDirections: [] },
+        adjustmentPayload,
+        403,
+        'FORBIDDEN',
+      ],
+      [
+        'opposite direction only',
+        { ...servicePrincipal, allowedDirections: [direction === 'credit' ? 'debit' : 'credit'] },
+        adjustmentPayload,
+        403,
+        'FORBIDDEN',
+      ],
+      ['spoofed actor', servicePrincipal, adjustmentPayload, 403, 'FORBIDDEN'],
+      [
+        'unauthorized delegation',
+        servicePrincipal,
+        { ...adjustmentPayload, actor_id: 'opaque:on-behalf-of:42' },
+        403,
+        'FORBIDDEN',
+      ],
+      [
+        'no trusted actor',
+        { ...servicePrincipal, effectiveActorId: '' },
+        adjustmentPayload,
+        403,
+        'FORBIDDEN',
+      ],
+      [
+        'malformed actor',
+        servicePrincipal,
+        { ...adjustmentPayload, actor_id: ' ' },
+        400,
+        'INVALID_INPUT',
+      ],
+      [
+        'body tenant override',
+        servicePrincipal,
+        {
+          ...adjustmentPayload,
+          actor_id: servicePrincipal.effectiveActorId,
+          tenant_id: 'other-tenant',
+        },
+        400,
+        'INVALID_INPUT',
+      ],
+    ] as const)(`${direction}: rejects %s before invoking the service`, async (_name, principal, payload, status, error) => {
+      const hosts = createHosts(async () => principal);
+      try {
+        expect(await hosts.request(path, payload)).toMatchObject({ status, json: { error } });
+        expect(hosts.calls).toEqual([[], []]);
+      } finally {
+        await hosts.close();
+      }
+    });
+
+    it.each([
+      'service:billing',
+      'opaque:on-behalf-of:42',
+    ])(`${direction}: accepts authorized actor %s`, async (actorId) => {
+      // The host resolver explicitly permits delegation before returning an effective actor.
+      const principal = {
+        ...servicePrincipal,
+        tenantId: '22222222-2222-4222-8222-222222222222',
+        effectiveActorId: actorId,
+      };
+      const hosts = createHosts(async () => principal);
+      const attributes = { ticket: 'T-1', asserted_user: 'unverified-caller-metadata' };
+      try {
+        expect(
+          await hosts.request(path, { ...adjustmentPayload, actor_id: actorId, attributes }),
+        ).toMatchObject({ status: 201 });
+        expect(hosts.calls[0]).toEqual([
+          {
+            direction,
+            input: {
+              tenantId: principal.tenantId,
+              ledgerId: adjustmentPayload.ledger_id,
+              accountId: adjustmentPayload.account_id,
+              offsetAccountId: adjustmentPayload.offset_account_id,
+              reference: adjustmentPayload.reference,
+              amountMinor: 25n,
+              description: adjustmentPayload.description,
+              reasonCode: adjustmentPayload.reason_code,
+              actorId,
+              attributes,
+            },
+          },
+        ]);
+      } finally {
+        await hosts.close();
+      }
+    });
+
+    it(`${direction}: reauthorizes retries after permission revocation`, async () => {
+      let principal: Principal = servicePrincipal;
+      const hosts = createHosts(async () => principal);
+      const payload = { ...adjustmentPayload, actor_id: principal.effectiveActorId };
+      try {
+        expect(await hosts.request(path, payload)).toMatchObject({ status: 201 });
+        principal = { ...principal, allowedDirections: [] };
+        expect(await hosts.request(path, payload)).toMatchObject({
+          status: 403,
+          json: { error: 'FORBIDDEN' },
+        });
+        expect(hosts.calls[0]).toHaveLength(1);
+      } finally {
+        await hosts.close();
+      }
+    });
+  }
+
+  it('redacts unexpected host policy failures', async () => {
+    const hosts = createHosts(async () => {
+      throw new Error('private authentication backend detail');
+    });
+    try {
+      expect(await hosts.request(paths[0], adjustmentPayload)).toEqual({
+        status: 500,
+        json: { error: 'INTERNAL_ERROR', message: 'Internal server error' },
+      });
+      expect(hosts.calls).toEqual([[], []]);
+    } finally {
+      await hosts.close();
     }
   });
 });

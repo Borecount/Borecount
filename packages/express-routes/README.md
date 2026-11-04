@@ -9,18 +9,12 @@ import express from 'express';
 import { registerLedgerAdapter } from '@borecount/express-routes';
 
 const app = express();
-registerLedgerAdapter(app, {
-  ledgerService,
-  apiKeyService,
-});
+registerLedgerAdapter(app, applicationServices);
 ```
 
 ## Expected dependencies
 
-- `ledgerService` (`LedgerService`)
-- `apiKeyService` (`ApiKeyService`)
-
-Both are from `@borecount/core/application`.
+`registerLedgerAdapter` expects `ApplicationServices` from `@borecount/core/application`.
 
 ## Request context requirements
 
@@ -46,6 +40,8 @@ This package reads no environment variables. Authentication, JWT, rate limiting,
   Route registration ensures JSON middleware exists for request body parsing.
 
 The complete and versioned route surface is defined by [`@borecount/http` OpenAPI](../http/openapi/openapi.yaml). See the repository [integration guide](../../docs/integration/README.md) before composing the adapter in a host application.
+
+For host authentication and per-request credit/debit authorization, follow the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md). Register guards with `app.post` for the exact adjustment paths after JSON parsing and authentication, before `registerLedgerAdapter`.
 
 Ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
 

@@ -7,10 +7,7 @@ Fastify route registration package for Borecount HTTP routes.
 ```ts
 import { registerLedgerAdapter } from '@borecount/fastify-routes';
 
-registerLedgerAdapter(server, {
-  ledgerService,
-  apiKeyService,
-});
+registerLedgerAdapter(server, applicationServices);
 ```
 
 `server` must be a `FastifyInstance` that already has request auth context decorators used by the app (`tenantId`, `apiKeyId`, `apiKeyRole`).
@@ -19,12 +16,7 @@ This package reads no environment variables. Authentication, JWT, rate limiting,
 
 ## Expected dependencies
 
-`registerLedgerAdapter` expects:
-
-- `ledgerService` (`LedgerService`) for ledger/account/transaction/entry route handlers.
-- `apiKeyService` (`ApiKeyService`) for admin API key route handlers.
-
-Both are application services from `@borecount/core/application`.
+`registerLedgerAdapter` expects `ApplicationServices` from `@borecount/core/application`.
 
 ## Supported route families
 
@@ -41,3 +33,5 @@ The complete and versioned route surface, including bulk posting, reversal/corre
 Ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
 
 Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
+
+For host authentication and per-request credit/debit authorization, follow the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md). Match `POST` requests by `request.routeOptions.url` in a global `preValidation` hook and handle host guard errors explicitly.

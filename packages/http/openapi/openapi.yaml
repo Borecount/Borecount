@@ -1372,7 +1372,7 @@ paths:
   /v1/adjustments/credit:
     post:
       summary: Post a credit adjustment to an account
-      description: Posts a balanced adjustment with immutable actor and reason audit data. Idempotent by tenant reference; a changed payload conflicts. The credit leg cannot target a grant-enabled account; issue a credit grant instead.
+      description: Posts a balanced adjustment with immutable actor and reason audit data. The host authorizes the operation and validates the opaque actor claim against trusted context; conflicting actor claims are forbidden. SERVICE credentials alone do not verify end-user identity. Idempotent by tenant reference; a changed payload conflicts. The credit leg cannot target a grant-enabled account; issue a credit grant instead.
       requestBody:
         required: true
         content:
@@ -1398,12 +1398,14 @@ paths:
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
   /v1/adjustments/debit:
     post:
       summary: Post a debit adjustment to an account
-      description: Posts a balanced adjustment with immutable actor and reason audit data. Idempotent by tenant reference; a changed payload conflicts. The credit leg cannot target a grant-enabled account; issue a credit grant instead.
+      description: Posts a balanced adjustment with immutable actor and reason audit data. The host authorizes the operation and validates the opaque actor claim against trusted context; conflicting actor claims are forbidden. SERVICE credentials alone do not verify end-user identity. Idempotent by tenant reference; a changed payload conflicts. The credit leg cannot target a grant-enabled account; issue a credit grant instead.
       requestBody:
         required: true
         content:
@@ -1429,6 +1431,8 @@ paths:
           $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
   /v1/credit-grants/{id}/allocations:
@@ -1703,11 +1707,14 @@ components:
         amount_minor: { type: string, pattern: '^[1-9][0-9]*$' }
         description: { type: string, pattern: '^(?=.*\S).+$' }
         reason_code: { type: string, pattern: '^(?=.*\S).+$' }
-        actor_id: { type: string, pattern: '^(?=.*\S).+$' }
+        actor_id:
+          type: string
+          pattern: '^(?=.*\S).+$'
+          description: Opaque actor claim. The host must authorize the operation and validate this claim against trusted context; it is not proof of authenticated user identity.
         attributes:
           type: object
           additionalProperties: true
-          description: Optional caller-defined JSON object stored with the adjustment audit record.
+          description: Optional caller-defined audit metadata, not verified identity or authorization evidence. Hosts must protect any reserved attribution fields.
     Adjustment:
       type: object
       additionalProperties: false

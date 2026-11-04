@@ -37,6 +37,10 @@ Create a ledger, create two same-currency accounts, post one balanced transactio
 
 Before production use, review [invariants](../product/invariants.md), [limitations](../product/limitations.md), [operations runbooks](../runbooks/operations-auth-mvp.md), and [versioning](./versioning.md).
 
+For credit and debit adjustments, the host must authenticate and authorize each request using the
+[trusted actor integration pattern](./adjustment-authorization.md). The route adapters validate the
+request contract; they do not provide host authentication or direction-level authorization.
+
 ## Troubleshooting
 
 ### Reference already exists with a different payload

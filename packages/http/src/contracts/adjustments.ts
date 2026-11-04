@@ -24,11 +24,16 @@ export const createAdjustmentBodySchema = {
     amount_minor: { type: 'string', pattern: '^[1-9][0-9]*$' },
     description: NonEmptyTrimmedStringSchema,
     reason_code: NonEmptyTrimmedStringSchema,
-    actor_id: NonEmptyTrimmedStringSchema,
+    actor_id: {
+      ...NonEmptyTrimmedStringSchema,
+      description:
+        'Opaque actor claim. The host must authorize the operation and validate this claim against trusted context; it is not proof of authenticated user identity.',
+    },
     attributes: {
       type: 'object',
       additionalProperties: true,
-      description: 'Optional caller-defined JSON object stored with the adjustment audit record.',
+      description:
+        'Optional caller-defined audit metadata, not verified identity or authorization evidence. Hosts must protect any reserved attribution fields.',
     },
   },
 } as const;
