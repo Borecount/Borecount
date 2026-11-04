@@ -19,7 +19,10 @@ export const registerLedgerAdapter = (
   services: ApplicationServices,
   options: LedgerAdapterOptions = {},
 ): void => {
-  if (options.requireAdjustmentAuthorization && typeof options.authorizeAdjustment !== 'function') {
+  if (
+    options.requireAdjustmentAuthorization !== false &&
+    typeof options.authorizeAdjustment !== 'function'
+  ) {
     throw new Error(
       'authorizeAdjustment is required when requireAdjustmentAuthorization is enabled',
     );
