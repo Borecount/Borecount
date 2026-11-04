@@ -7,6 +7,7 @@ export { entryListFilter } from '../entry/list-filter';
 export { ledgerListFilter } from '../ledger/list-filter';
 export { reconRuleListFilter } from '../reconciliation';
 export {
+  type BootstrapInitialAdminInput,
   type ProvisionTenantInput,
   type ProvisionTenantResult,
   TenantProvisioningService,

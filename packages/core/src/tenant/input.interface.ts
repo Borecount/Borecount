@@ -9,3 +9,5 @@ export interface ProvisionTenantInput {
   /** Generate once with generateApiKey and retain securely before the first attempt. */
   rawApiKey: string;
 }
+
+export type BootstrapInitialAdminInput = Omit<ProvisionTenantInput, 'tenantId' | 'role'>;

@@ -78,6 +78,13 @@ const result = await unitOfWork.run(new TenantId(command.tenantId), async ({ pro
 // Deliver command.rawApiKey securely; result.key contains metadata, never a stored raw secret.
 ```
 
+For first-run bootstrap, use `createTenantProvisioningService(client).bootstrapInitialAdmin(input)`.
+It accepts the same generated `llk_` credential format, assigns a tenant UUID, and returns a
+provisioning result when it creates the initial ADMIN credential. It returns `null` when any API
+key already exists, including revoked keys. Retain the generated raw key securely before calling
+it and deliver that value only when the result is non-null. This global operation must run through
+the base adapter client; it is rejected inside a tenant unit of work.
+
 The tenant ID must be a canonical lowercase UUID. Names are trimmed. An identical command
 returns `created: false` and the existing active credential. Concurrent attempts for the same
 tenant serialize. Existing tenants are accepted only when the tenant name and an active
@@ -95,8 +102,11 @@ If a host exposes administrative HTTP provisioning, it owns authentication, auth
 validation, rate limits and safe error/secret mapping. Borecount adds no public tenant-create
 route. Both ADMIN and SERVICE initial roles are tenant-scoped; neither grants authority over
 other tenants. Later credentials and revocation use the existing API-key service contracts.
-`bootstrapInitialAdmin` retains its empty-key-store behavior. Demo adoption is a separate
-host change after a package release containing this API.
+Bootstrap moved from `ApiKeyService.bootstrapInitialAdmin` to
+`TenantProvisioningService.bootstrapInitialAdmin`. The old API-key service method and its
+repository port are removed. Hosts should migrate to the provisioning service and handle its
+`null` result for an already-initialized key store. Demo adoption is a separate host change after
+a package release containing this API.
 
 ### Credit-grant allocation locking
 
