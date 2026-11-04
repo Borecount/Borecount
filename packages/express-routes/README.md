@@ -10,7 +10,6 @@ import { registerLedgerAdapter } from '@borecount/express-routes';
 
 const app = express();
 registerLedgerAdapter(app, applicationServices, {
-  requireAdjustmentAuthorization: true,
   authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, apiKeyRole, body }) => {
     const actorId = await resolveEffectiveActor({
       principal: request.authenticatedPrincipal,
@@ -54,7 +53,7 @@ This package reads no environment variables. Authentication, JWT, rate limiting,
 
 The complete and versioned route surface is defined by [`@borecount/http` OpenAPI](../http/openapi/openapi.yaml). See the repository [integration guide](../../docs/integration/README.md) before composing the adapter in a host application.
 
-Pass host policy in the third argument, `LedgerAdapterOptions`. When supplied, `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. The flag `requireAdjustmentAuthorization` defaults to `true`: a missing or invalid callback fails registration synchronously, including when options are omitted. Existing trusted-service hosts must add a callback or explicitly opt out with `requireAdjustmentAuthorization: false`; without a callback, that mode does not authorize direction or verify the actor claim. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).
+Pass host policy in the third argument, `LedgerAdapterOptions`. `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. For an explicitly trusted service integration, pass `{ authorizeAdjustment: false }`; schema validation and auth-context checks still apply, but the adapter does not authorize direction or verify the actor claim. Missing, `undefined`, `null`, or another invalid option value fails registration synchronously. Existing hosts must add a callback or explicitly opt out before upgrading. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).
 
 Ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
 

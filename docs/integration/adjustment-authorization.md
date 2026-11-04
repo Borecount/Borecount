@@ -1,8 +1,8 @@
 # Adjustment authorization
 
 The host owns authentication, tenant scoping, and authorization for credit and debit adjustments.
-Both route adapters require an `authorizeAdjustment` callback for host policy by default. Core and HTTP
-define no authentication or RBAC policy.
+Both route adapters require an explicit `authorizeAdjustment` option. Core and HTTP define no
+authentication or RBAC policy.
 
 ## Callback behavior
 
@@ -21,17 +21,11 @@ the application service is not called. The adapter does not rewrite the body act
 `UnauthorizedError` or `ForbiddenError` for expected host denials; unexpected callback errors are
 redacted as `500 INTERNAL_ERROR`.
 
-`requireAdjustmentAuthorization` defaults to `true`. Registration fails synchronously with a clear
-`Error` if `authorizeAdjustment` is missing or is not a function, including when the options argument
-is omitted. This prevents accidental omission of host authorization.
-
-For an explicitly trusted service integration, opt out with `{ requireAdjustmentAuthorization: false }`.
-Without a callback, that mode performs no operation authorization or actor verification beyond request
-validation and authentication-context presence checks. If a callback is supplied with `false`, it still
-runs normally; the flag only controls whether its presence is required.
-
-Existing hosts that registered the adapter without a callback must add one or explicitly set `false`
-before upgrading. This is an intentional change to registration behavior.
+Pass the host policy function as `authorizeAdjustment`. To explicitly bypass operation authorization
+and actor verification for a trusted service integration, pass `{ authorizeAdjustment: false }`.
+Schema validation and authentication-context checks still apply in that mode. Missing, `undefined`,
+`null`, or any other invalid option value throws a clear `Error` synchronously during registration.
+Existing hosts must add a callback or explicitly opt out with `false` before upgrading.
 
 ## Example
 
@@ -60,7 +54,6 @@ server.decorateRequest('authenticatedPrincipal');
 // authenticate a request.
 
 registerLedgerAdapter(server, applicationServices, {
-  requireAdjustmentAuthorization: true,
   authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, body }) => {
     const principal = request.authenticatedPrincipal;
     if (!principal || principal.tenantId !== tenantId || principal.apiKeyId !== apiKeyId) {
@@ -78,6 +71,12 @@ registerLedgerAdapter(server, applicationServices, {
     return { actorId };
   },
 });
+```
+
+For an explicitly trusted service caller that owns actor authorization, opt out with:
+
+```ts
+registerLedgerAdapter(server, applicationServices, { authorizeAdjustment: false });
 ```
 
 `HostPrincipal` and its effective actor resolution belong to the host. A host that supports delegation

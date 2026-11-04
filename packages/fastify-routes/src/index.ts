@@ -17,20 +17,19 @@ export type LedgerAdapterOptions = HttpLedgerAdapterOptions<FastifyRequest>;
 export const registerLedgerAdapter = (
   server: FastifyInstance,
   services: ApplicationServices,
-  options: LedgerAdapterOptions = {},
+  options?: LedgerAdapterOptions,
 ): void => {
-  if (
-    options.requireAdjustmentAuthorization !== false &&
-    typeof options.authorizeAdjustment !== 'function'
-  ) {
-    throw new Error(
-      'authorizeAdjustment is required when requireAdjustmentAuthorization is enabled',
-    );
+  const authorizeAdjustment = options?.authorizeAdjustment;
+  if (authorizeAdjustment !== false && typeof authorizeAdjustment !== 'function') {
+    throw new Error('authorizeAdjustment must be a function or explicitly false');
   }
   new LedgerRoutes(services.ledgers, services.transactions, services.balances).register(server);
   new AccountsRoutes(services.accounts, services.balances, services.statements).register(server);
   new CreditGrantRoutes(services.creditGrants).register(server);
-  new AdjustmentRoutes(services.adjustments, options.authorizeAdjustment).register(server);
+  new AdjustmentRoutes(
+    services.adjustments,
+    authorizeAdjustment === false ? undefined : authorizeAdjustment,
+  ).register(server);
   new TransactionsRoutes(services.transactions).register(server);
   new HoldsRoutes(services.holds).register(server);
   new EntriesListRoute(services.transactions).register(server);

@@ -58,7 +58,7 @@ const fastifyOperations = (): string[] => {
       }
     }
   });
-  registerFastifyLedgerAdapter(server, services, { requireAdjustmentAuthorization: false });
+  registerFastifyLedgerAdapter(server, services, { authorizeAdjustment: false });
   return operations.sort();
 };
 
@@ -72,7 +72,7 @@ const expressOperations = (): string[] => {
     };
   }
   registerExpressLedgerAdapter(recorder as unknown as Application, services, {
-    requireAdjustmentAuthorization: false,
+    authorizeAdjustment: false,
   });
   return operations.sort();
 };

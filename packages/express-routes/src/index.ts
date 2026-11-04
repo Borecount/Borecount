@@ -26,15 +26,11 @@ export type LedgerAdapterOptions = HttpLedgerAdapterOptions<RequestWithContext>;
 export const registerLedgerAdapter = (
   app: Application,
   services: ApplicationServices,
-  options: LedgerAdapterOptions = {},
+  options?: LedgerAdapterOptions,
 ): void => {
-  if (
-    options.requireAdjustmentAuthorization !== false &&
-    typeof options.authorizeAdjustment !== 'function'
-  ) {
-    throw new Error(
-      'authorizeAdjustment is required when requireAdjustmentAuthorization is enabled',
-    );
+  const authorizeAdjustment = options?.authorizeAdjustment;
+  if (authorizeAdjustment !== false && typeof authorizeAdjustment !== 'function') {
+    throw new Error('authorizeAdjustment must be a function or explicitly false');
   }
   ensureJsonMiddleware(app);
 
@@ -42,7 +38,11 @@ export const registerLedgerAdapter = (
   registerTransactionRoutes(app, services);
   registerAccountRoutes(app, services);
   registerCreditGrantRoutes(app, services);
-  registerAdjustmentRoutes(app, services, options.authorizeAdjustment);
+  registerAdjustmentRoutes(
+    app,
+    services,
+    authorizeAdjustment === false ? undefined : authorizeAdjustment,
+  );
   registerHoldRoutes(app, services);
   registerReconciliationRoutes(app, services);
   registerEntryRoutes(app, services);

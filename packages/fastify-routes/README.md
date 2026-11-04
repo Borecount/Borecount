@@ -8,7 +8,6 @@ Fastify route registration package for Borecount HTTP routes.
 import { registerLedgerAdapter } from '@borecount/fastify-routes';
 
 registerLedgerAdapter(server, applicationServices, {
-  requireAdjustmentAuthorization: true,
   authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, apiKeyRole, body }) => {
     const actorId = await resolveEffectiveActor({
       principal: request.authenticatedPrincipal,
@@ -47,4 +46,4 @@ Ledger, API key, and reconciliation matching-rule list routes accept `limit` (de
 
 Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
 
-Pass host policy in the third argument, `LedgerAdapterOptions`. When supplied, `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. The flag `requireAdjustmentAuthorization` defaults to `true`: a missing or invalid callback fails registration synchronously, including when options are omitted. Existing trusted-service hosts must add a callback or explicitly opt out with `requireAdjustmentAuthorization: false`; without a callback, that mode does not authorize direction or verify the actor claim. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).
+Pass host policy in the third argument, `LedgerAdapterOptions`. `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. For an explicitly trusted service integration, pass `{ authorizeAdjustment: false }`; schema validation and auth-context checks still apply, but the adapter does not authorize direction or verify the actor claim. Missing, `undefined`, `null`, or another invalid option value fails registration synchronously. Existing hosts must add a callback or explicitly opt out before upgrading. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).
