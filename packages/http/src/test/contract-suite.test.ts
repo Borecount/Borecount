@@ -408,14 +408,21 @@ describe('framework-agnostic contract suite', () => {
           'application/json': { schema: { $ref: `#/components/schemas/${requestSchema}` } },
         },
       });
+      const authorizationResponses = path.startsWith('/v1/adjustments/') ? ['403'] : [];
       expect(Object.keys(operation?.responses ?? {}).sort()).toEqual([
         '200',
         '201',
         '400',
         '401',
+        ...authorizationResponses,
         '404',
         '409',
       ]);
+      for (const status of authorizationResponses) {
+        expect(operation?.responses?.[status]).toEqual({
+          $ref: '#/components/responses/ForbiddenError',
+        });
+      }
       for (const status of ['200', '201']) {
         expect(operation?.responses?.[status]).toEqual({
           description: status === '201' ? expect.any(String) : 'Identical retry',
