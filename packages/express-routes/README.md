@@ -9,7 +9,19 @@ import express from 'express';
 import { registerLedgerAdapter } from '@borecount/express-routes';
 
 const app = express();
-registerLedgerAdapter(app, applicationServices);
+registerLedgerAdapter(app, applicationServices, {
+  authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, apiKeyRole, body }) => {
+    const actorId = await resolveEffectiveActor({
+      principal: request.authenticatedPrincipal,
+      direction,
+      tenantId,
+      apiKeyId,
+      apiKeyRole,
+      claimedActorId: body.actor_id,
+    });
+    return { actorId };
+  },
+});
 ```
 
 ## Expected dependencies
@@ -35,13 +47,13 @@ This package reads no environment variables. Authentication, JWT, rate limiting,
 - Error serialization:
   Express errors are translated through the same domain-error shape (`{ error, message }`) used by Fastify.
 - Middleware ordering:
-  Express host must register auth middleware before adapter routes. In Fastify, hook ordering provides this via `onRequest`.
+  The host must register authentication middleware before adapter routes.
 - JSON parsing:
   Route registration ensures JSON middleware exists for request body parsing.
 
 The complete and versioned route surface is defined by [`@borecount/http` OpenAPI](../http/openapi/openapi.yaml). See the repository [integration guide](../../docs/integration/README.md) before composing the adapter in a host application.
 
-For host authentication and per-request credit/debit authorization, follow the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md). Register guards with `app.post` for the exact adjustment paths after JSON parsing and authentication, before `registerLedgerAdapter`.
+The third argument is optional `LedgerAdapterOptions`. When supplied, `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. If omitted, the adapter does not authorize direction or verify the actor claim. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).
 
 Ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
 

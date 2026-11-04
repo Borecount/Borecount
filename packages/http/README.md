@@ -25,6 +25,13 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
 - `@borecount/http/errors`: schema and response contracts
 - `@borecount/http/errors`: error mapping
 - `@borecount/http/route-specs`: default route error response specs
+- `@borecount/http/route-core`: `AdjustmentAuthorizationContext<Request>`,
+  `AdjustmentAuthorizationHook<Request>`, and `LedgerAdapterOptions<Request>` for host-owned
+  adjustment authorization callbacks
+
+The framework adapters also export `LedgerAdapterOptions` bound to their request type. See the
+[trusted actor integration guide](../../docs/integration/adjustment-authorization.md) for callback
+timing, result matching, and the compatibility behavior when the callback is omitted.
 
 ## Usage
 

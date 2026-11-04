@@ -1,9 +1,10 @@
-import type { ApplicationServices } from '@borecount/core/application';
+import { type ApplicationServices, ForbiddenError } from '@borecount/core/application';
 import {
   type CreateAdjustmentRequest,
   createAdjustmentBodySchema,
 } from '@borecount/http/contracts';
 import { toAdjustmentResponse } from '@borecount/http/mappers';
+import type { AdjustmentAuthorizationHook } from '@borecount/http/route-core';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
 import { requireContext } from '../request/context';
@@ -13,6 +14,7 @@ import type { RequestWithContext } from '../types';
 export const registerAdjustmentRoutes = (
   app: Application,
   services: Pick<ApplicationServices, 'adjustments'>,
+  authorizeAdjustment?: AdjustmentAuthorizationHook<RequestWithContext>,
 ): void => {
   for (const [path, direction] of [
     ['/v1/adjustments/credit', 'credit'],
@@ -25,7 +27,21 @@ export const registerAdjustmentRoutes = (
           sendInvalidInput(res, 'Invalid request body');
           return;
         }
-        const { tenantId } = requireContext(req);
+        const { tenantId, apiKeyId, apiKeyRole } = requireContext(req);
+        const actorId = body.actor_id;
+        if (authorizeAdjustment) {
+          const actor = await authorizeAdjustment({
+            request: req,
+            direction,
+            tenantId,
+            apiKeyId,
+            apiKeyRole,
+            body,
+          });
+          if (!actor || actor.actorId !== actorId) {
+            throw new ForbiddenError('Actor claim conflicts with trusted context');
+          }
+        }
         const result = await services.adjustments[direction]({
           tenantId,
           ledgerId: body.ledger_id,
@@ -35,7 +51,7 @@ export const registerAdjustmentRoutes = (
           amountMinor: BigInt(body.amount_minor),
           description: body.description,
           reasonCode: body.reason_code,
-          actorId: body.actor_id,
+          actorId,
           attributes: body.attributes,
         });
         res.status(result.created ? 201 : 200).json(toAdjustmentResponse(result));

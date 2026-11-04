@@ -14,9 +14,8 @@ import {
 import type { UnknownRecord } from '@borecount/core/base';
 import type { TransactionMetadata } from '@borecount/core/transaction';
 import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@borecount/fastify-routes';
-import { toHttpErrorPayload } from '@borecount/http/errors';
+import type { AdjustmentAuthorizationHook } from '@borecount/http/route-core';
 import { createContractHarness } from '@borecount/http/test/harness';
-import { isNonEmptyTrimmed, isRecord } from '@borecount/http/validation-utils';
 import express, { type Application } from 'express';
 import Fastify, { type FastifyInstance } from 'fastify';
 import httpMocks from 'node-mocks-http';
@@ -1895,7 +1894,7 @@ describe('express adapter parity with fastify adapter', () => {
   });
 });
 
-// Host-owned integration example; this policy is deliberately outside production adapters.
+// Host authentication and policy use the public adapter callback API.
 describe('host adjustment authorization parity', () => {
   type Principal = {
     tenantId: string;
@@ -1913,11 +1912,27 @@ describe('host adjustment authorization parity', () => {
   };
   const paths = ['/v1/adjustments/credit', '/v1/adjustments/debit'] as const;
 
-  const createHosts = (resolvePrincipal: () => Promise<Principal | undefined>) => {
+  const createHosts = (
+    resolvePrincipal: () => Promise<Principal | undefined>,
+    override?: AdjustmentAuthorizationHook<object> | false,
+  ) => {
     const calls: [
       { direction: string; input: CreateAdjustmentInput }[],
       { direction: string; input: CreateAdjustmentInput }[],
     ] = [[], []];
+    const policyCalls: [unknown[], unknown[]] = [[], []];
+    const principals = new WeakMap<object, Principal>();
+    const authenticate = async (request: object) => {
+      const principal = await resolvePrincipal();
+      if (principal) {
+        principals.set(request, principal);
+        Object.assign(request, {
+          tenantId: principal.tenantId,
+          apiKeyId: principal.apiKeyId,
+          apiKeyRole: principal.apiKeyRole,
+        });
+      }
+    };
     const makeServices = (observed: (typeof calls)[number]) => {
       const post = (direction: string) => async (input: CreateAdjustmentInput) => {
         observed.push({ direction, input });
@@ -1927,70 +1942,38 @@ describe('host adjustment authorization parity', () => {
         adjustments: { credit: post('credit'), debit: post('debit') },
       } as unknown as ApplicationServices;
     };
-    const authorize = async (body: unknown, direction: string): Promise<Principal> => {
-      // The resolver represents host authentication and delegation checks, never body/header claims.
-      const principal = await resolvePrincipal();
-      if (!principal?.tenantId || !principal.apiKeyId || !principal.apiKeyRole) {
-        throw new UnauthorizedError('Bearer token is required');
-      }
-      if (!principal.allowedDirections.some((allowed) => allowed === direction)) {
-        throw new ForbiddenError('Adjustment is not permitted');
-      }
-      if (!isNonEmptyTrimmed(principal.effectiveActorId)) {
-        throw new ForbiddenError('Trusted actor is required');
-      }
-      // Malformed actor claims remain the responsibility of the shared request schema.
-      if (isRecord(body) && isNonEmptyTrimmed(body.actor_id)) {
-        if (body.actor_id !== principal.effectiveActorId) {
-          throw new ForbiddenError('Actor claim conflicts with trusted context');
-        }
-      }
-      return principal;
-    };
+    const makeOptions = (observed: unknown[]) => ({
+      authorizeAdjustment:
+        override === false
+          ? undefined
+          : (((context) => {
+              const { request, ...input } = context;
+              observed.push(input);
+              if (override) return override(context);
+              const principal = principals.get(request);
+              if (!principal) throw new UnauthorizedError('Bearer token is required');
+              if (!principal.allowedDirections.includes(context.direction)) {
+                throw new ForbiddenError('Adjustment is not permitted');
+              }
+              // The host authenticates the service and authorizes delegation before resolving this actor.
+              return { actorId: principal.effectiveActorId };
+            }) satisfies AdjustmentAuthorizationHook<object>),
+    });
     const server = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
     server.decorateRequest('tenantId');
     server.decorateRequest('apiKeyId');
     server.decorateRequest('apiKeyRole');
-    server.addHook('preValidation', (request, reply, done) => {
-      const path = request.routeOptions.url;
-      if (request.method !== 'POST' || !path || !paths.some((candidate) => candidate === path)) {
-        done();
-        return;
-      }
-      void authorize(request.body, path.endsWith('/credit') ? 'credit' : 'debit').then(
-        (principal) => {
-          request.tenantId = principal.tenantId;
-          request.apiKeyId = principal.apiKeyId;
-          request.apiKeyRole = principal.apiKeyRole;
-          done();
-        },
-        (error: unknown) => {
-          const { statusCode, ...payload } = toHttpErrorPayload(error);
-          reply.status(statusCode).send(payload);
-        },
-      );
+    server.addHook('onRequest', async (request) => {
+      await authenticate(request);
     });
-    registerFastifyLedgerAdapter(server, makeServices(calls[0]));
+    registerFastifyLedgerAdapter(server, makeServices(calls[0]), makeOptions(policyCalls[0]));
     const app = express();
     app.use(express.json());
-    app.post([...paths], async (request, response, next) => {
-      try {
-        const principal = await authorize(
-          request.body,
-          request.path.replace(/\/$/, '').toLowerCase().endsWith('/credit') ? 'credit' : 'debit',
-        );
-        Object.assign(request, {
-          tenantId: principal.tenantId,
-          apiKeyId: principal.apiKeyId,
-          apiKeyRole: principal.apiKeyRole,
-        });
-        next();
-      } catch (error) {
-        const { statusCode, ...payload } = toHttpErrorPayload(error);
-        response.status(statusCode).json(payload);
-      }
+    app.use(async (request, _response, next) => {
+      await authenticate(request);
+      next();
     });
-    registerExpressLedgerAdapter(app, makeServices(calls[1]));
+    registerExpressLedgerAdapter(app, makeServices(calls[1]), makeOptions(policyCalls[1]));
 
     const request = async (path: string, body: unknown) => {
       const fastify = await server.inject({ method: 'POST', url: path, payload: body as object });
@@ -2005,9 +1988,10 @@ describe('host adjustment authorization parity', () => {
       const actual = { status: fastify.statusCode, json: fastify.json() };
       expect({ status: res.statusCode, json: res._getJSONData() }).toEqual(actual);
       expect(calls[1]).toEqual(calls[0]);
+      expect(policyCalls[1]).toEqual(policyCalls[0]);
       return actual;
     };
-    return { request, calls, close: () => server.close() };
+    return { request, calls, policyCalls, close: () => server.close() };
   };
 
   for (const direction of ['credit', 'debit'] as const) {
@@ -2080,6 +2064,7 @@ describe('host adjustment authorization parity', () => {
       try {
         expect(await hosts.request(path, payload)).toMatchObject({ status, json: { error } });
         expect(hosts.calls).toEqual([[], []]);
+        if (status === 400 || status === 401) expect(hosts.policyCalls).toEqual([[], []]);
       } finally {
         await hosts.close();
       }
@@ -2101,6 +2086,15 @@ describe('host adjustment authorization parity', () => {
         expect(
           await hosts.request(path, { ...adjustmentPayload, actor_id: actorId, attributes }),
         ).toMatchObject({ status: 201 });
+        expect(hosts.policyCalls[0]).toEqual([
+          {
+            direction,
+            tenantId: principal.tenantId,
+            apiKeyId: principal.apiKeyId,
+            apiKeyRole: principal.apiKeyRole,
+            body: { ...adjustmentPayload, actor_id: actorId, attributes },
+          },
+        ]);
         expect(hosts.calls[0]).toEqual([
           {
             direction,
@@ -2141,10 +2135,64 @@ describe('host adjustment authorization parity', () => {
     });
   }
 
+  it('awaits asynchronous authorization before invoking a service', async () => {
+    const hosts = createHosts(
+      async () => servicePrincipal,
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        throw new ForbiddenError('Delegation is not permitted');
+      },
+    );
+    try {
+      expect(await hosts.request(paths[0], adjustmentPayload)).toMatchObject({
+        status: 403,
+        json: { error: 'FORBIDDEN' },
+      });
+      expect(hosts.calls).toEqual([[], []]);
+    } finally {
+      await hosts.close();
+    }
+  });
+
+  it.each([
+    undefined,
+    null,
+    {},
+    { actorId: '' },
+  ])('denies malformed callback result %j', async (result) => {
+    const hosts = createHosts(
+      async () => servicePrincipal,
+      () => result as { actorId: string },
+    );
+    try {
+      expect(await hosts.request(paths[0], adjustmentPayload)).toMatchObject({
+        status: 403,
+        json: { error: 'FORBIDDEN' },
+      });
+      expect(hosts.calls).toEqual([[], []]);
+    } finally {
+      await hosts.close();
+    }
+  });
+
+  it('preserves explicitly trusted caller behavior when the hook is omitted', async () => {
+    const hosts = createHosts(async () => servicePrincipal, false);
+    try {
+      expect(await hosts.request(paths[0], adjustmentPayload)).toMatchObject({ status: 201 });
+      expect(hosts.calls[0][0]?.input.actorId).toBe(adjustmentPayload.actor_id);
+      expect(hosts.policyCalls).toEqual([[], []]);
+    } finally {
+      await hosts.close();
+    }
+  });
+
   it('redacts unexpected host policy failures', async () => {
-    const hosts = createHosts(async () => {
-      throw new Error('private authentication backend detail');
-    });
+    const hosts = createHosts(
+      async () => servicePrincipal,
+      () => {
+        throw new Error('private authorization backend detail');
+      },
+    );
     try {
       expect(await hosts.request(paths[0], adjustmentPayload)).toEqual({
         status: 500,
