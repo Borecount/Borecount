@@ -22,12 +22,16 @@ export const registerAdjustmentRoutes = (
   ] as const) {
     app.post(path, async (req: RequestWithContext, res: Response) =>
       withDomainErrorHandling(res, async () => {
-        const body = validate<CreateAdjustmentRequest>(createAdjustmentBodySchema, req.body);
-        if (!body) {
+        const validatedBody = validate<CreateAdjustmentRequest>(
+          createAdjustmentBodySchema,
+          req.body,
+        );
+        if (!validatedBody) {
           sendInvalidInput(res, 'Invalid request body');
           return;
         }
         const { tenantId, apiKeyId, apiKeyRole } = requireContext(req);
+        const body = authorizeAdjustment ? structuredClone(validatedBody) : validatedBody;
         const actorId = body.actor_id;
         if (authorizeAdjustment) {
           const actor = await authorizeAdjustment({
@@ -36,7 +40,7 @@ export const registerAdjustmentRoutes = (
             tenantId,
             apiKeyId,
             apiKeyRole,
-            body,
+            body: structuredClone(body),
           });
           if (!actor || actor.actorId !== actorId) {
             throw new ForbiddenError('Actor claim conflicts with trusted context');

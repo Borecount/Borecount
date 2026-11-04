@@ -24,3 +24,22 @@ test('public callback types support framework-neutral host context', () => {
     options;
   expect(subpathOptions.authorizeAdjustment).toBe(options.authorizeAdjustment);
 });
+
+test('callback audit metadata is recursively readonly at the public type boundary', () => {
+  const options: publicApi.LedgerAdapterOptions<object> = {
+    requireAdjustmentAuthorization: true,
+    authorizeAdjustment: ({ body }) => {
+      if (body.attributes) {
+        // @ts-expect-error Audit object keys must remain readonly in host callbacks.
+        body.attributes.ticket = 'changed';
+        const nested = body.attributes.nested;
+        if (nested && typeof nested === 'object' && 'label' in nested) {
+          // @ts-expect-error Nested audit properties must also remain readonly.
+          nested.label = 'changed';
+        }
+      }
+      return { actorId: body.actor_id };
+    },
+  };
+  expect(options.requireAdjustmentAuthorization).toBe(true);
+});
