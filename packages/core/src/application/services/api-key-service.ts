@@ -9,8 +9,6 @@ import { validatePaginationQuery } from '../pagination-query';
 import type { ApiKeyRepository } from '../repositories.interface';
 import type {
   AuthContext,
-  BootstrapAdminInput,
-  BootstrapAdminResult,
   CreateApiKeyRequestInput,
   CreateApiKeyResult,
   PaginatedResult,
@@ -72,18 +70,6 @@ export class ApiKeyService {
     validatePaginationQuery(scopedQuery);
     validateListWhere(apiKeyListFilter, query.where);
     return this.repository.list(scopedQuery);
-  }
-
-  public async bootstrapInitialAdmin(input: BootstrapAdminInput): Promise<BootstrapAdminResult> {
-    assertNonEmpty(input.tenantName, 'tenantName is required');
-    assertNonEmpty(input.keyName, 'keyName is required');
-    assertNonEmpty(input.rawApiKey, 'rawApiKey is required');
-
-    return this.repository.bootstrapInitialAdmin({
-      tenantName: input.tenantName.trim(),
-      keyName: input.keyName.trim(),
-      keyHash: hashApiKey(input.rawApiKey),
-    });
   }
 
   public async revokeApiKey(actor: AuthContext, apiKeyId: string): Promise<void> {

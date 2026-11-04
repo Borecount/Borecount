@@ -1,8 +1,6 @@
-import { type ApiKeyEntity, ApiKeyRole } from '@borecount/core';
+import type { ApiKeyEntity, ApiKeyRole } from '@borecount/core';
 import type {
   ApiKeyRepository,
-  BootstrapAdminRepositoryInput,
-  BootstrapAdminResult,
   PaginatedResult,
   PaginationQuery,
 } from '@borecount/core/application';
@@ -17,43 +15,6 @@ import * as schema from '../schema';
 
 export class DrizzleApiKeyRepository implements ApiKeyRepository {
   public constructor(private readonly client: DbClient) {}
-
-  public async bootstrapInitialAdmin(
-    input: BootstrapAdminRepositoryInput,
-  ): Promise<BootstrapAdminResult> {
-    return this.client.runTx('bootstrap initial admin', async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('luxledger.bootstrap_admin'))`);
-
-      const [row] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.apiKeys)
-        .limit(1);
-      if ((row?.count ?? 0) > 0) {
-        return { created: false };
-      }
-
-      const [tenant] = await tx
-        .insert(schema.tenants)
-        .values({ name: input.tenantName })
-        .returning();
-
-      const [apiKey] = await tx
-        .insert(schema.apiKeys)
-        .values({
-          tenantId: tenant.id,
-          name: input.keyName,
-          role: ApiKeyRole.ADMIN,
-          keyHash: input.keyHash,
-        })
-        .returning({ id: schema.apiKeys.id });
-
-      return {
-        created: true,
-        tenantId: tenant.id,
-        apiKeyId: apiKey.id,
-      };
-    });
-  }
 
   public async findActiveByHash(keyHash: string): Promise<ApiKeyEntity | null> {
     return this.client.execute('find api key by hash', async (db) => {

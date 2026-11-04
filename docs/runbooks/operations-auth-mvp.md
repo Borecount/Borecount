@@ -28,21 +28,19 @@ For JWT key rotation details, use this runbook together with:
 2. Confirm required env vars are set:
    - `DATABASE_URL`
    - `JWT_SIGNING_KEY`
-3. Choose bootstrap-only secret inputs (do not commit):
+3. Choose bootstrap-only inputs (do not commit):
    - `BOOTSTRAP_TENANT_NAME` (example: `Acme`)
    - `BOOTSTRAP_ADMIN_KEY_NAME` (example: `Initial admin key`)
-   - `BOOTSTRAP_ADMIN_API_KEY` (recommended `llk_` prefix, example: `llk_acme_admin_seed_2026_05_07`)
+   - Generate `BOOTSTRAP_ADMIN_API_KEY` once with the package's `generateApiKey()` helper and retain it in the host's secret storage. It must use the `llk_` prefix and 64 lowercase hex characters.
 4. Ensure this is truly first bootstrap:
-   - The script only creates records when `api_keys` is empty.
+   - The host script must call `createTenantProvisioningService(client).bootstrapInitialAdmin(...)`.
+   - It creates records only when `api_keys` is empty, including revoked keys.
 
 ### Action
 
 1. From the runnable API repository, run bootstrap:
 
 ```sh
-BOOTSTRAP_TENANT_NAME="Acme" \
-BOOTSTRAP_ADMIN_KEY_NAME="Initial admin key" \
-BOOTSTRAP_ADMIN_API_KEY="llk_acme_admin_seed_2026_05_07" \
 bun run bootstrap:admin-key
 ```
 
@@ -56,14 +54,14 @@ bun run dev
 
 ```sh
 curl -sS -X POST http://127.0.0.1:3000/v1/auth/token \
-  -H "x-api-key: llk_acme_admin_seed_2026_05_07"
+  -H "x-api-key: $BOOTSTRAP_ADMIN_API_KEY"
 ```
 
 ### Post-check
 
 1. Bootstrap output must be one of:
-   - Created: JSON with `created: true`, `tenantId`, `apiKeyId`.
-   - Idempotent skip: `Bootstrap skipped: api_keys already contains records`.
+   - Created: `bootstrapInitialAdmin` returns a provisioning result with `created: true`, tenant ID, and API-key metadata. The host delivers the retained raw key securely.
+   - Skip: `bootstrapInitialAdmin` returns `null` because `api_keys` already contains a key.
 2. `POST /v1/auth/token` returns `200` with `access_token`, `token_type`, `expires_in`.
 3. Use returned bearer token to list keys and confirm one ADMIN key exists:
 
@@ -76,7 +74,7 @@ curl -sS http://127.0.0.1:3000/v1/admin/api-keys \
 ### Rollback / Recovery
 
 1. If bootstrap fails before any insert, fix env/config and rerun.
-2. If bootstrap created tenant/key but process failed later, rerunning is safe and will skip.
+2. If bootstrap created tenant/key but process failed later, rerunning is safe and returns `null`.
 3. If bootstrap key value is exposed, immediately perform API key rotation (section 2.4) and retire the exposed key.
 4. If database is left in an unknown partially-initialized state, restore from backup or manually inspect `tenants` + `api_keys` before retrying.
 

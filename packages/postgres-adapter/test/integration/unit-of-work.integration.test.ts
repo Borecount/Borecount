@@ -261,11 +261,11 @@ describe('PostgresUnitOfWork', () => {
     expect(contextTenantId).toBe(tenantId.value);
 
     await expect(
-      unitOfWork.run(tenantId, ({ services }) =>
-        services.apiKeys.bootstrapInitialAdmin({
+      unitOfWork.run(tenantId, ({ provisioning }) =>
+        provisioning.bootstrapInitialAdmin({
           tenantName: 'Not tenant scoped',
           keyName: 'Admin',
-          rawApiKey: 'not-used',
+          rawApiKey: 'llk_0000000000000000000000000000000000000000000000000000000000000000',
         }),
       ),
     ).rejects.toThrow('Unscoped operation is not allowed in a tenant unit of work');

@@ -524,24 +524,6 @@ export interface CreateApiKeyResult {
   key: ApiKeyEntity;
 }
 
-export interface BootstrapAdminInput {
-  tenantName: string;
-  keyName: string;
-  rawApiKey: string;
-}
-
-export interface BootstrapAdminRepositoryInput {
-  tenantName: string;
-  keyName: string;
-  keyHash: string;
-}
-
-export interface BootstrapAdminResult {
-  created: boolean;
-  tenantId?: string;
-  apiKeyId?: string;
-}
-
 export type {
   ReconMatchCriterion,
   ReconRecord,

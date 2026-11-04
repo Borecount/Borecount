@@ -3,8 +3,6 @@ import { ApiKeyEntity, ApiKeyRole } from '@borecount/core';
 import type { ApiKeyRepository, PaginatedResult } from '@borecount/core/application';
 import {
   ApiKeyService,
-  type BootstrapAdminRepositoryInput,
-  type BootstrapAdminResult,
   ForbiddenError,
   InvariantViolationError,
   UnauthorizedError,
@@ -19,23 +17,6 @@ class InMemoryApiKeyRepository implements ApiKeyRepository {
     for (const key of seed) {
       this.keys.set(key.id, key);
     }
-  }
-
-  public async bootstrapInitialAdmin(
-    input: BootstrapAdminRepositoryInput,
-  ): Promise<BootstrapAdminResult> {
-    if (this.keys.size > 0) {
-      return { created: false };
-    }
-
-    const tenantId = `tenant-${input.tenantName.toLowerCase().replaceAll(/\s+/g, '-')}`;
-    const created = await this.create({
-      tenantId,
-      name: input.keyName,
-      role: ApiKeyRole.ADMIN,
-      keyHash: input.keyHash,
-    });
-    return { created: true, tenantId, apiKeyId: created.id };
   }
 
   public async findActiveByHash(keyHash: string): Promise<ApiKeyEntity | null> {
@@ -188,31 +169,6 @@ describe('ApiKeyService', () => {
         role: ApiKeyRole.SERVICE,
       }),
     ).rejects.toBeInstanceOf(InvariantViolationError);
-  });
-
-  it('bootstrapInitialAdmin creates first admin key when key store is empty', async () => {
-    const emptyRepository = new InMemoryApiKeyRepository([]);
-    const bootstrapService = new ApiKeyService(emptyRepository);
-
-    const result = await bootstrapService.bootstrapInitialAdmin({
-      tenantName: 'Bootstrap Tenant',
-      keyName: 'Initial admin',
-      rawApiKey: 'llk_bootstrap_admin',
-    });
-
-    expect(result.created).toBeTrue();
-    expect(result.tenantId).toBeDefined();
-    expect(result.apiKeyId).toBeDefined();
-  });
-
-  it('bootstrapInitialAdmin skips when at least one key already exists', async () => {
-    const result = await service.bootstrapInitialAdmin({
-      tenantName: 'Ignored',
-      keyName: 'Ignored',
-      rawApiKey: 'llk_ignored',
-    });
-
-    expect(result).toEqual({ created: false });
   });
 
   it('assertAccessTokenIsActive rejects revoked key', async () => {

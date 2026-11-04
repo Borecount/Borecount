@@ -29,8 +29,6 @@ import type {
   BalanceAtQuery,
   BalanceHistoryQuery,
   BalanceSnapshotEvent,
-  BootstrapAdminRepositoryInput,
-  BootstrapAdminResult,
   BulkCreateTransactionInput,
   BulkCreateTransactionResult,
   CommitHoldInput,
@@ -114,7 +112,6 @@ export interface LedgerRepository {
 }
 
 export interface ApiKeyRepository {
-  bootstrapInitialAdmin(input: BootstrapAdminRepositoryInput): Promise<BootstrapAdminResult>;
   findActiveByHash(keyHash: string): Promise<ApiKeyEntity | null>;
   findById(apiKeyId: string): Promise<ApiKeyEntity | null>;
   create(input: CreateApiKeyInput): Promise<ApiKeyEntity>;

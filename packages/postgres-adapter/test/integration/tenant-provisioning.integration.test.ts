@@ -12,9 +12,10 @@ import {
   createDbClient,
   createTenantProvisioningService,
   createUnitOfWork,
+  type DbClient,
   tenants,
 } from '@borecount/postgres-adapter';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import {
   createRepositoryTestClient,
   createRepositoryTestDatabase,
@@ -27,6 +28,7 @@ const client = createRepositoryTestClient();
 const db = createRepositoryTestDatabase(client);
 const unitOfWork = createUnitOfWork(client);
 const apiKeyService = createApiKeyService(client);
+const provisioner = createTenantProvisioningService(client);
 
 const input = (
   tenantId: string,
@@ -53,6 +55,80 @@ const runProvisioning = async (request: ReturnType<typeof input>) =>
 const findTenant = async (tenantId: string) => {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
   return tenant ?? null;
+};
+
+const waitForBootstrapLockWaiter = async (client: DbClient): Promise<void> => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const waiting = await client.runTx('check bootstrap lock waiter', async (tx) => {
+      const rows = await tx.execute(sql<{ waiting: boolean }>`
+        select exists (
+          select 1 from pg_locks
+          where locktype = 'advisory' and mode = 'ExclusiveLock' and not granted
+        ) as waiting
+      `);
+      return rows[0]?.waiting ?? false;
+    });
+    if (waiting) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Bootstrap did not wait for the provisioning transaction lock');
+};
+
+const runBootstrapProvisioningRace = async (rollback: boolean) => {
+  const raceClient = createDbClient({ databaseUrl, max: 3 });
+  const raceUnitOfWork = createUnitOfWork(raceClient);
+  const raceProvisioner = createTenantProvisioningService(raceClient);
+  const request = input(
+    rollback ? '12121212-1212-4121-8121-121212121212' : '13131313-1313-4131-8131-131313131313',
+  );
+  let signalProvisioned!: () => void;
+  let releaseProvisioning!: () => void;
+  const provisioned = new Promise<void>((resolve) => {
+    signalProvisioned = resolve;
+  });
+  const holdTransaction = new Promise<void>((resolve) => {
+    releaseProvisioning = resolve;
+  });
+  const provisioning = raceUnitOfWork.run(
+    new TenantId(request.tenantId),
+    async ({ provisioning: service }) => {
+      const result = await service.provisionTenant(request);
+      signalProvisioned();
+      await holdTransaction;
+      if (rollback) throw new Error('rollback provisioning after coordinated wait');
+      return result;
+    },
+  );
+
+  let bootstrap: ReturnType<typeof raceProvisioner.bootstrapInitialAdmin> | undefined;
+  let waitFailed = false;
+  let waitError: unknown;
+  try {
+    await Promise.race([
+      provisioned,
+      provisioning.then(() => {
+        throw new Error('Provisioning completed before reaching the transaction barrier');
+      }),
+    ]);
+    bootstrap = raceProvisioner.bootstrapInitialAdmin({
+      tenantName: 'Concurrent bootstrap',
+      keyName: 'Concurrent bootstrap admin',
+      rawApiKey: generateApiKey(),
+    });
+    await waitForBootstrapLockWaiter(raceClient);
+  } catch (error) {
+    waitFailed = true;
+    waitError = error;
+  } finally {
+    releaseProvisioning();
+  }
+
+  const [provisioningResult] = await Promise.allSettled([provisioning]);
+  const bootstrapResult = bootstrap ? (await Promise.allSettled([bootstrap]))[0] : undefined;
+  await raceClient.sql.end({ timeout: 5 });
+  if (waitFailed) throw waitError;
+  if (!bootstrapResult) throw new Error('Bootstrap did not start');
+  return { provisioningResult, bootstrapResult, request };
 };
 
 describe('tenant provisioning integration', () => {
@@ -120,23 +196,91 @@ describe('tenant provisioning integration', () => {
 
   it('supports provisioning alongside bootstrap-created tenants and preserves bootstrap no-op behavior', async () => {
     const bootstrapRawApiKey = generateApiKey();
-    const bootstrap = await apiKeyService.bootstrapInitialAdmin({
+    const bootstrap = await provisioner.bootstrapInitialAdmin({
       tenantName: 'Bootstrap Tenant',
       keyName: 'Bootstrap admin',
       rawApiKey: bootstrapRawApiKey,
     });
     const next = input('55555555-5555-4555-8555-555555555555');
 
-    expect(bootstrap.created).toBe(true);
+    expect(bootstrap?.created).toBe(true);
     expect((await runProvisioning(next)).created).toBe(true);
     expect(
-      await apiKeyService.bootstrapInitialAdmin({
+      await provisioner.bootstrapInitialAdmin({
         tenantName: 'Ignored',
         keyName: 'Ignored',
         rawApiKey: generateApiKey(),
       }),
-    ).toEqual({ created: false });
+    ).toBeNull();
     expect(await db.select().from(tenants)).toHaveLength(2);
+  });
+
+  it('serializes concurrent bootstrap calls so only one tenant is created', async () => {
+    const concurrentClient = createDbClient({ databaseUrl, max: 2 });
+    const concurrentProvisioner = createTenantProvisioningService(concurrentClient);
+    try {
+      const results = await Promise.all([
+        concurrentProvisioner.bootstrapInitialAdmin({
+          tenantName: 'Bootstrap A',
+          keyName: 'Admin A',
+          rawApiKey: generateApiKey(),
+        }),
+        concurrentProvisioner.bootstrapInitialAdmin({
+          tenantName: 'Bootstrap B',
+          keyName: 'Admin B',
+          rawApiKey: generateApiKey(),
+        }),
+      ]);
+
+      expect(results.filter((result) => result?.created)).toHaveLength(1);
+      expect(results.filter((result) => result === null)).toHaveLength(1);
+      expect(await db.select().from(tenants)).toHaveLength(1);
+      expect(await db.select().from(apiKeys)).toHaveLength(1);
+    } finally {
+      await concurrentClient.sql.end({ timeout: 5 });
+    }
+  });
+
+  it('does not bootstrap when the only existing credential is revoked', async () => {
+    const existing = input('14141414-1414-4141-8141-141414141414');
+    const provisioned = await runProvisioning(existing);
+    await unitOfWork.run(new TenantId(existing.tenantId), async ({ services }) => {
+      await services.apiKeys.revokeApiKey(
+        { apiKeyId: provisioned.key.id, tenantId: existing.tenantId, role: ApiKeyRole.ADMIN },
+        provisioned.key.id,
+      );
+    });
+
+    expect(
+      await provisioner.bootstrapInitialAdmin({
+        tenantName: 'Must be skipped',
+        keyName: 'Another admin',
+        rawApiKey: generateApiKey(),
+      }),
+    ).toBeNull();
+    expect(await db.select().from(tenants)).toHaveLength(1);
+    expect(await db.select().from(apiKeys)).toHaveLength(1);
+  });
+
+  it('holds the bootstrap lock through the outer UOW commit, then bootstrap skips', async () => {
+    const { provisioningResult, bootstrapResult, request } =
+      await runBootstrapProvisioningRace(false);
+
+    expect(provisioningResult.status).toBe('fulfilled');
+    expect(bootstrapResult).toEqual({ status: 'fulfilled', value: null });
+    expect(await findTenant(request.tenantId)).not.toBeNull();
+    expect(await db.select().from(tenants)).toHaveLength(1);
+  });
+
+  it('releases the bootstrap lock on UOW rollback so bootstrap can create its initial admin', async () => {
+    const { provisioningResult, bootstrapResult, request } =
+      await runBootstrapProvisioningRace(true);
+
+    expect(provisioningResult.status).toBe('rejected');
+    expect(bootstrapResult).toMatchObject({ status: 'fulfilled', value: { created: true } });
+    expect(await findTenant(request.tenantId)).toBeNull();
+    expect(await db.select().from(tenants)).toHaveLength(1);
+    expect(await db.select().from(apiKeys)).toHaveLength(1);
   });
 
   it('rolls tenant creation back when a credential uniqueness constraint fails', async () => {

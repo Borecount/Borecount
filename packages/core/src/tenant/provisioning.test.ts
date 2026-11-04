@@ -48,6 +48,14 @@ class InMemoryProvisioningTransaction implements TenantProvisioningTransaction {
     }
   }
 
+  public async runBootstrap<T>(
+    id: string,
+    work: (store: TenantProvisioningStore) => Promise<T>,
+  ): Promise<T | null> {
+    if ([...this.keys.values()].some((keys) => keys.length > 0)) return null;
+    return this.run(id, work);
+  }
+
   public revoke(id: string, keyId: string): void {
     this.keys.set(
       id,
@@ -114,6 +122,65 @@ describe('TenantProvisioningService', () => {
     expect(transaction.credentials(tenantId)).toHaveLength(1);
   });
 
+  it('bootstraps an ADMIN tenant through the shared generated-key workflow', async () => {
+    const transaction = new InMemoryProvisioningTransaction();
+    const service = new TenantProvisioningService(transaction);
+    const rawApiKey = generateApiKey();
+
+    const result = await service.bootstrapInitialAdmin({
+      tenantName: 'Bootstrap Tenant',
+      keyName: 'Bootstrap admin',
+      rawApiKey,
+    });
+
+    expect(result?.created).toBe(true);
+    if (!result) throw new Error('Bootstrap unexpectedly skipped');
+    expect(result?.tenantId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(result?.key.role).toBe(ApiKeyRole.ADMIN);
+    expect(result?.key.keyHash).toBe(
+      new Bun.CryptoHasher('sha256').update(rawApiKey).digest('hex'),
+    );
+    expect(transaction.tenantName(result.tenantId)).toBe('Bootstrap Tenant');
+  });
+
+  it('skips bootstrap when any tenant already has an API key', async () => {
+    const transaction = new InMemoryProvisioningTransaction();
+    const service = new TenantProvisioningService(transaction);
+    await service.provisionTenant(input());
+
+    const result = await service.bootstrapInitialAdmin({
+      tenantName: 'Ignored',
+      keyName: 'Ignored admin',
+      rawApiKey: generateApiKey(),
+    });
+
+    expect(result).toBeNull();
+    expect(transaction.credentials(tenantId)).toHaveLength(1);
+  });
+
+  it('rejects invalid bootstrap credentials before starting a transaction', async () => {
+    let transactionCalls = 0;
+    const transaction: TenantProvisioningTransaction = {
+      run: async () => {
+        transactionCalls += 1;
+        throw new Error('normal transaction should not be opened');
+      },
+      runBootstrap: async () => {
+        transactionCalls += 1;
+        throw new Error('bootstrap transaction should not be opened');
+      },
+    };
+
+    await expect(
+      new TenantProvisioningService(transaction).bootstrapInitialAdmin({
+        tenantName: 'Bootstrap Tenant',
+        keyName: 'Bootstrap admin',
+        rawApiKey: 'not-generated',
+      }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
+    expect(transactionCalls).toBe(0);
+  });
+
   it('normalizes tenant and key names consistently for retries', async () => {
     const transaction = new InMemoryProvisioningTransaction();
     const service = new TenantProvisioningService(transaction);
@@ -172,6 +239,10 @@ describe('TenantProvisioningService', () => {
     let transactionCalls = 0;
     const transaction: TenantProvisioningTransaction = {
       run: async () => {
+        transactionCalls += 1;
+        throw new Error('transaction should not be opened');
+      },
+      runBootstrap: async () => {
         transactionCalls += 1;
         throw new Error('transaction should not be opened');
       },
