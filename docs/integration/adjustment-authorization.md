@@ -7,10 +7,13 @@ define no authentication or RBAC policy.
 ## Callback behavior
 
 The host must authenticate every request and populate `tenantId`, `apiKeyId`, and `apiKeyRole` before
-the adapter handler runs. When configured, the adapter validates the body and checks those
-context fields first, then awaits `authorizeAdjustment` on every request, including idempotent retries.
-The callback receives the framework request, direction, trusted request context, and validated body
-as `Readonly<CreateAdjustmentRequest>`. Do not mutate the request or body in the callback.
+the adapter handler runs. When configured, the adapter validates the body and checks those context
+fields first, then awaits `authorizeAdjustment` on every request, including idempotent retries. The
+callback receives the framework request, direction, trusted request context, and a detached snapshot
+of the validated body. Its type is recursively readonly; at runtime it is a separate `structuredClone`
+copy, not a frozen object. The adapter also keeps a separate command snapshot for the service, so
+mutations through `context.body` or `request.body` cannot alter the posted command or its attributes.
+Still, do not mutate the callback body or raw request body.
 
 Return the trusted effective actor as `{ actorId }`. The adapter requires an exact match with the
 body's opaque `actor_id`; a missing, empty, or mismatched runtime result returns `403 FORBIDDEN`, and
@@ -18,19 +21,42 @@ the application service is not called. The adapter does not rewrite the body act
 `UnauthorizedError` or `ForbiddenError` for expected host denials; unexpected callback errors are
 redacted as `500 INTERNAL_ERROR`.
 
-The callback is optional for compatibility with existing trusted service callers. If omitted, the
-adapter performs no host authorization or actor verification beyond its normal request validation
-and authentication-context presence check. Only omit it when the authenticated caller is trusted to
-assert adjustment actors.
+`requireAdjustmentAuthorization: true` makes registration fail synchronously with a clear `Error`
+when `authorizeAdjustment` is missing or is not a function. Use it for new host installations. The
+requirement flag defaults to `false`; omitting the callback preserves compatibility with existing
+trusted service callers. In that mode the adapter performs no host authorization or actor
+verification beyond normal request validation and authentication-context presence checks. There is
+no logger or global warning; host observability remains the host's responsibility.
 
 ## Example
 
 ```ts
 import { registerLedgerAdapter } from '@borecount/fastify-routes';
 import { ForbiddenError } from '@borecount/core/application';
+import type { FastifyInstance } from 'fastify';
+
+declare const server: FastifyInstance;
+
+type HostPrincipal = {
+  tenantId: string;
+  apiKeyId: string;
+  allowedDirections: readonly ('credit' | 'debit')[];
+  effectiveActorId: string;
+};
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    authenticatedPrincipal?: HostPrincipal;
+  }
+}
+
+server.decorateRequest('authenticatedPrincipal');
+// Authentication must populate the principal for each request. Typing and decoration do not
+// authenticate a request.
 
 registerLedgerAdapter(server, applicationServices, {
-  authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, apiKeyRole, body }) => {
+  requireAdjustmentAuthorization: true,
+  authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, body }) => {
     const principal = request.authenticatedPrincipal;
     if (!principal || principal.tenantId !== tenantId || principal.apiKeyId !== apiKeyId) {
       throw new ForbiddenError('Adjustment is not authorized');
@@ -39,8 +65,8 @@ registerLedgerAdapter(server, applicationServices, {
       throw new ForbiddenError('Adjustment is not authorized');
     }
 
-    // Resolve the effective actor under host policy, including any delegation rules.
-    const actorId = await resolveEffectiveActor(principal, body.actor_id, apiKeyRole);
+    // Delegation and on-behalf-of rules remain host policy.
+    const actorId = principal.effectiveActorId;
     if (actorId !== body.actor_id) {
       throw new ForbiddenError('Adjustment is not authorized');
     }
@@ -49,10 +75,11 @@ registerLedgerAdapter(server, applicationServices, {
 });
 ```
 
-The example's `authenticatedPrincipal` and `resolveEffectiveActor` belong to the host. For Express,
-pass the same option as the third argument to `registerLedgerAdapter(app, applicationServices,
-options)`; the callback request is the adapter's `RequestWithContext`. Authentication middleware and
-JSON parsing must run before adapter routes.
+`HostPrincipal` and its effective actor resolution belong to the host. A host that supports delegation
+must resolve the effective actor under its own policy. For Express, pass the same options as the third
+argument to `registerLedgerAdapter(app, applicationServices, options)`; the callback request is the
+adapter's `RequestWithContext`. Authentication middleware and JSON parsing must run before adapter
+routes.
 
 Keep the authenticating service identity distinct from the effective actor. A service principal may
 assert an opaque/on-behalf-of actor only when host policy explicitly permits it. The adapter preserves the validated command and audit attributes. `attributes` remain caller supplied, untrusted metadata:
@@ -65,8 +92,9 @@ validated body and should focus on host authorization without duplicating schema
 
 The public callback types are available from `@borecount/http/route-core`:
 `AdjustmentAuthorizationContext<Request>`, `AdjustmentAuthorizationHook<Request>`, and
-`LedgerAdapterOptions<Request>`. Each framework adapter also exports its framework-bound
-`LedgerAdapterOptions` type.
+`LedgerAdapterOptions<Request>`. The callback body uses a private recursively readonly type mapping;
+there is no separately exported `DeepReadonly` type. Each framework adapter also exports its
+framework-bound `LedgerAdapterOptions` type.
 
 ## Verification and demo
 

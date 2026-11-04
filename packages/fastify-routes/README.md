@@ -8,6 +8,7 @@ Fastify route registration package for Borecount HTTP routes.
 import { registerLedgerAdapter } from '@borecount/fastify-routes';
 
 registerLedgerAdapter(server, applicationServices, {
+  requireAdjustmentAuthorization: true,
   authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, apiKeyRole, body }) => {
     const actorId = await resolveEffectiveActor({
       principal: request.authenticatedPrincipal,
@@ -46,4 +47,4 @@ Ledger, API key, and reconciliation matching-rule list routes accept `limit` (de
 
 Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
 
-The third argument is optional `LedgerAdapterOptions`. When supplied, `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. If omitted, the adapter does not authorize direction or verify the actor claim. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).
+The third argument is optional `LedgerAdapterOptions`. When supplied, `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. Set `requireAdjustmentAuthorization: true` to fail registration synchronously if the callback is missing or invalid; this is recommended for new host installations. The flag defaults to `false` for compatibility, so omission does not authorize direction or verify the actor claim. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).

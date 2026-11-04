@@ -38,7 +38,7 @@ export class AdjustmentRoutes extends BaseRoute {
         },
         async (request, reply) =>
           this.handle(reply, async () => {
-            const body = request.body;
+            const body = this.authorizeAdjustment ? structuredClone(request.body) : request.body;
             const { tenantId, apiKeyId, apiKeyRole } = request;
             if (!tenantId || !apiKeyId || !apiKeyRole) {
               throw new UnauthorizedError('Bearer token is required');
@@ -51,7 +51,7 @@ export class AdjustmentRoutes extends BaseRoute {
                 tenantId,
                 apiKeyId,
                 apiKeyRole,
-                body,
+                body: structuredClone(body),
               });
               if (!actor || actor.actorId !== actorId) {
                 throw new ForbiddenError('Actor claim conflicts with trusted context');

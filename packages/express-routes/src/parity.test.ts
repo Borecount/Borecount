@@ -1943,6 +1943,7 @@ describe('host adjustment authorization parity', () => {
       } as unknown as ApplicationServices;
     };
     const makeOptions = (observed: unknown[]) => ({
+      requireAdjustmentAuthorization: override !== false,
       authorizeAdjustment:
         override === false
           ? undefined
@@ -2134,6 +2135,74 @@ describe('host adjustment authorization parity', () => {
       }
     });
   }
+
+  it.each([
+    undefined,
+    null,
+    'invalid',
+  ])('rejects registration with callback %j in required mode', async (callback) => {
+    const server = Fastify();
+    try {
+      const expected =
+        'authorizeAdjustment is required when requireAdjustmentAuthorization is enabled';
+      expect(() =>
+        registerFastifyLedgerAdapter(server, {} as ApplicationServices, {
+          requireAdjustmentAuthorization: true,
+          authorizeAdjustment: callback as unknown as AdjustmentAuthorizationHook<object>,
+        }),
+      ).toThrow(expected);
+      expect(() =>
+        registerExpressLedgerAdapter(express(), {} as ApplicationServices, {
+          requireAdjustmentAuthorization: true,
+          authorizeAdjustment: callback as unknown as AdjustmentAuthorizationHook<object>,
+        }),
+      ).toThrow(expected);
+      expect(server.hasRoute({ method: 'POST', url: paths[0] })).toBe(false);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('isolates posted fields and nested audit metadata from callback and raw request mutations', async () => {
+    const hosts = createHosts(
+      async () => servicePrincipal,
+      ({ body, request }) => {
+        type MutableBody = {
+          actor_id: string;
+          amount_minor: string;
+          attributes: { nested: { label: string }; values: string[] };
+        };
+        // Exercise untyped JavaScript hosts as well as callers circumventing readonly types.
+        const copy = body as unknown as MutableBody;
+        copy.actor_id = 'spoofed-copy';
+        copy.amount_minor = '999';
+        copy.attributes.nested.label = 'changed-copy';
+        copy.attributes.values.push('changed-copy');
+        const raw = (request as { body: MutableBody }).body;
+        raw.actor_id = 'spoofed-request';
+        raw.amount_minor = '888';
+        raw.attributes.nested.label = 'changed-request';
+        raw.attributes.values.push('changed-request');
+        return { actorId: servicePrincipal.effectiveActorId };
+      },
+    );
+    try {
+      expect(
+        await hosts.request(paths[0], {
+          ...adjustmentPayload,
+          actor_id: servicePrincipal.effectiveActorId,
+          attributes: { nested: { label: 'original' }, values: ['original'] },
+        }),
+      ).toMatchObject({ status: 201 });
+      expect(hosts.calls[0][0]?.input).toMatchObject({
+        actorId: servicePrincipal.effectiveActorId,
+        amountMinor: 25n,
+        attributes: { nested: { label: 'original' }, values: ['original'] },
+      });
+    } finally {
+      await hosts.close();
+    }
+  });
 
   it('awaits asynchronous authorization before invoking a service', async () => {
     const hosts = createHosts(

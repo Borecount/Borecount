@@ -1,3 +1,4 @@
+import type { JsonPrimitive } from '@borecount/core/base';
 import type { ApiKeyRole, CreateAdjustmentRequest } from './contracts';
 
 export type ErrorResponder<ReturnType = unknown> = (error: unknown) => ReturnType;
@@ -34,6 +35,11 @@ export abstract class BaseEntityRouteCore<TEntity, TDto> {
   }
 }
 
+type ReadonlyJsonValue = JsonPrimitive | ReadonlyJsonObject | readonly ReadonlyJsonValue[];
+interface ReadonlyJsonObject {
+  readonly [key: string]: ReadonlyJsonValue;
+}
+
 /** Host policy input after request validation and authentication-context checks. */
 export type AdjustmentAuthorizationContext<Request> = {
   readonly request: Request;
@@ -41,7 +47,9 @@ export type AdjustmentAuthorizationContext<Request> = {
   readonly tenantId: string;
   readonly apiKeyId: string;
   readonly apiKeyRole: ApiKeyRole;
-  readonly body: Readonly<CreateAdjustmentRequest>;
+  readonly body: Readonly<Omit<CreateAdjustmentRequest, 'attributes'>> & {
+    readonly attributes?: ReadonlyJsonObject;
+  };
 };
 
 /** Return the trusted effective actor, or throw a safe application error to deny. */
@@ -50,6 +58,8 @@ export type AdjustmentAuthorizationHook<Request> = (
 ) => { readonly actorId: string } | Promise<{ readonly actorId: string }>;
 
 export type LedgerAdapterOptions<Request> = {
+  /** Fail registration without authorizeAdjustment. Recommended for new hosts. */
+  requireAdjustmentAuthorization?: boolean;
   /** Omit only when the authenticated caller is trusted to assert adjustment actors. */
   authorizeAdjustment?: AdjustmentAuthorizationHook<Request>;
 };
