@@ -58,8 +58,8 @@ export type AdjustmentAuthorizationHook<Request> = (
 ) => { readonly actorId: string } | Promise<{ readonly actorId: string }>;
 
 export type LedgerAdapterOptions<Request> = {
-  /** Fail registration without authorizeAdjustment. Recommended for new hosts. */
+  /** Defaults to true. Set false only for callers trusted to assert adjustment actors. */
   requireAdjustmentAuthorization?: boolean;
-  /** Omit only when the authenticated caller is trusted to assert adjustment actors. */
+  /** Required unless requireAdjustmentAuthorization is explicitly false. */
   authorizeAdjustment?: AdjustmentAuthorizationHook<Request>;
 };

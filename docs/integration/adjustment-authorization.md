@@ -1,7 +1,7 @@
 # Adjustment authorization
 
 The host owns authentication, tenant scoping, and authorization for credit and debit adjustments.
-Both route adapters accept an optional `authorizeAdjustment` callback for host policy. Core and HTTP
+Both route adapters require an `authorizeAdjustment` callback for host policy by default. Core and HTTP
 define no authentication or RBAC policy.
 
 ## Callback behavior
@@ -21,12 +21,17 @@ the application service is not called. The adapter does not rewrite the body act
 `UnauthorizedError` or `ForbiddenError` for expected host denials; unexpected callback errors are
 redacted as `500 INTERNAL_ERROR`.
 
-`requireAdjustmentAuthorization: true` makes registration fail synchronously with a clear `Error`
-when `authorizeAdjustment` is missing or is not a function. Use it for new host installations. The
-requirement flag defaults to `false`; omitting the callback preserves compatibility with existing
-trusted service callers. In that mode the adapter performs no host authorization or actor
-verification beyond normal request validation and authentication-context presence checks. There is
-no logger or global warning; host observability remains the host's responsibility.
+`requireAdjustmentAuthorization` defaults to `true`. Registration fails synchronously with a clear
+`Error` if `authorizeAdjustment` is missing or is not a function, including when the options argument
+is omitted. This prevents accidental omission of host authorization.
+
+For an explicitly trusted service integration, opt out with `{ requireAdjustmentAuthorization: false }`.
+Without a callback, that mode performs no operation authorization or actor verification beyond request
+validation and authentication-context presence checks. If a callback is supplied with `false`, it still
+runs normally; the flag only controls whether its presence is required.
+
+Existing hosts that registered the adapter without a callback must add one or explicitly set `false`
+before upgrading. This is an intentional change to registration behavior.
 
 ## Example
 

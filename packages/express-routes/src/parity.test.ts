@@ -579,7 +579,9 @@ describe('express adapter parity with fastify adapter', () => {
       (request as { apiKeyId?: string }).apiKeyId = '00000000-0000-4000-8000-000000000001';
       (request as { apiKeyRole?: ApiKeyRole }).apiKeyRole = ApiKeyRole.ADMIN;
     });
-    registerFastifyLedgerAdapter(fastifyServer, services);
+    registerFastifyLedgerAdapter(fastifyServer, services, {
+      requireAdjustmentAuthorization: false,
+    });
 
     expressApp = express();
     expressApp.use(express.json());
@@ -589,7 +591,7 @@ describe('express adapter parity with fastify adapter', () => {
       (req as { apiKeyRole?: ApiKeyRole }).apiKeyRole = ApiKeyRole.ADMIN;
       next();
     });
-    registerExpressLedgerAdapter(expressApp, services);
+    registerExpressLedgerAdapter(expressApp, services, { requireAdjustmentAuthorization: false });
   });
 
   afterAll(async () => {
@@ -1857,7 +1859,9 @@ describe('express adapter parity with fastify adapter', () => {
     server.decorateRequest('tenantId');
     server.decorateRequest('apiKeyId');
     server.decorateRequest('apiKeyRole');
-    registerFastifyLedgerAdapter(server, {} as ApplicationServices);
+    registerFastifyLedgerAdapter(server, {} as ApplicationServices, {
+      requireAdjustmentAuthorization: false,
+    });
 
     try {
       for (const [method, url, payload, message] of [
@@ -1915,6 +1919,7 @@ describe('host adjustment authorization parity', () => {
   const createHosts = (
     resolvePrincipal: () => Promise<Principal | undefined>,
     override?: AdjustmentAuthorizationHook<object> | false,
+    requirement?: boolean,
   ) => {
     const calls: [
       { direction: string; input: CreateAdjustmentInput }[],
@@ -1943,7 +1948,7 @@ describe('host adjustment authorization parity', () => {
       } as unknown as ApplicationServices;
     };
     const makeOptions = (observed: unknown[]) => ({
-      requireAdjustmentAuthorization: override !== false,
+      requireAdjustmentAuthorization: override === false ? false : requirement,
       authorizeAdjustment:
         override === false
           ? undefined
@@ -2136,6 +2141,29 @@ describe('host adjustment authorization parity', () => {
     });
   }
 
+  it('requires authorization when the options or requirement flag are omitted', async () => {
+    const server = Fastify();
+    try {
+      const expected =
+        'authorizeAdjustment is required when requireAdjustmentAuthorization is enabled';
+      expect(() => registerFastifyLedgerAdapter(server, {} as ApplicationServices)).toThrow(
+        expected,
+      );
+      expect(() => registerExpressLedgerAdapter(express(), {} as ApplicationServices)).toThrow(
+        expected,
+      );
+      expect(() => registerFastifyLedgerAdapter(server, {} as ApplicationServices, {})).toThrow(
+        expected,
+      );
+      expect(() => registerExpressLedgerAdapter(express(), {} as ApplicationServices, {})).toThrow(
+        expected,
+      );
+      expect(server.hasRoute({ method: 'POST', url: paths[0] })).toBe(false);
+    } finally {
+      await server.close();
+    }
+  });
+
   it.each([
     undefined,
     null,
@@ -2239,6 +2267,23 @@ describe('host adjustment authorization parity', () => {
         json: { error: 'FORBIDDEN' },
       });
       expect(hosts.calls).toEqual([[], []]);
+    } finally {
+      await hosts.close();
+    }
+  });
+
+  it('still invokes a supplied callback when the requirement is explicitly false', async () => {
+    const hosts = createHosts(
+      async () => servicePrincipal,
+      () => {
+        throw new ForbiddenError('Adjustment is not permitted');
+      },
+      false,
+    );
+    try {
+      expect(await hosts.request(paths[0], adjustmentPayload)).toMatchObject({ status: 403 });
+      expect(hosts.calls).toEqual([[], []]);
+      expect(hosts.policyCalls[0]).toHaveLength(1);
     } finally {
       await hosts.close();
     }
