@@ -29,12 +29,14 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
   `AdjustmentAuthorizationHook<Request>`, and `LedgerAdapterOptions<Request>` for host-owned
   adjustment authorization callbacks
 
-`LedgerAdapterOptions` includes `requireAdjustmentAuthorization`; setting it to `true` requires a
-valid `authorizeAdjustment` callback and makes adapter registration fail synchronously otherwise.
-The default is `true`; omitting the callback fails adapter registration. Trusted-service hosts can explicitly opt out with `false`. The framework adapters also export `LedgerAdapterOptions`
-bound to their request type. See the
+`LedgerAdapterOptions` requires the `authorizeAdjustment` property: provide the callback, or use
+`false` to explicitly bypass host authorization and actor verification. The callback runs after
+validation and auth-context checks; `false` preserves both checks. Missing, `undefined`, `null`, or
+another invalid value makes adapter registration fail synchronously. The registration options
+argument itself is optional only so the adapter can report that error. The framework adapters also
+export `LedgerAdapterOptions` bound to their request type. See the
 [trusted actor integration guide](../../docs/integration/adjustment-authorization.md) for callback
-timing, detached body snapshots, result matching, and the explicit trusted-service opt-out when the callback is omitted.
+timing, detached body snapshots, result matching, and the explicit trusted-service opt-out.
 
 ## Usage
 

@@ -14,7 +14,7 @@ import {
 import type { UnknownRecord } from '@borecount/core/base';
 import type { TransactionMetadata } from '@borecount/core/transaction';
 import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@borecount/fastify-routes';
-import type { AdjustmentAuthorizationHook } from '@borecount/http/route-core';
+import type { AdjustmentAuthorizationHook, LedgerAdapterOptions } from '@borecount/http/route-core';
 import { createContractHarness } from '@borecount/http/test/harness';
 import express, { type Application } from 'express';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -580,7 +580,7 @@ describe('express adapter parity with fastify adapter', () => {
       (request as { apiKeyRole?: ApiKeyRole }).apiKeyRole = ApiKeyRole.ADMIN;
     });
     registerFastifyLedgerAdapter(fastifyServer, services, {
-      requireAdjustmentAuthorization: false,
+      authorizeAdjustment: false,
     });
 
     expressApp = express();
@@ -591,7 +591,7 @@ describe('express adapter parity with fastify adapter', () => {
       (req as { apiKeyRole?: ApiKeyRole }).apiKeyRole = ApiKeyRole.ADMIN;
       next();
     });
-    registerExpressLedgerAdapter(expressApp, services, { requireAdjustmentAuthorization: false });
+    registerExpressLedgerAdapter(expressApp, services, { authorizeAdjustment: false });
   });
 
   afterAll(async () => {
@@ -1860,7 +1860,7 @@ describe('express adapter parity with fastify adapter', () => {
     server.decorateRequest('apiKeyId');
     server.decorateRequest('apiKeyRole');
     registerFastifyLedgerAdapter(server, {} as ApplicationServices, {
-      requireAdjustmentAuthorization: false,
+      authorizeAdjustment: false,
     });
 
     try {
@@ -1919,7 +1919,6 @@ describe('host adjustment authorization parity', () => {
   const createHosts = (
     resolvePrincipal: () => Promise<Principal | undefined>,
     override?: AdjustmentAuthorizationHook<object> | false,
-    requirement?: boolean,
   ) => {
     const calls: [
       { direction: string; input: CreateAdjustmentInput }[],
@@ -1947,11 +1946,10 @@ describe('host adjustment authorization parity', () => {
         adjustments: { credit: post('credit'), debit: post('debit') },
       } as unknown as ApplicationServices;
     };
-    const makeOptions = (observed: unknown[]) => ({
-      requireAdjustmentAuthorization: override === false ? false : requirement,
+    const makeOptions = (observed: unknown[]): LedgerAdapterOptions<object> => ({
       authorizeAdjustment:
         override === false
-          ? undefined
+          ? false
           : (((context) => {
               const { request, ...input } = context;
               observed.push(input);
@@ -2141,23 +2139,30 @@ describe('host adjustment authorization parity', () => {
     });
   }
 
-  it('requires authorization when the options or requirement flag are omitted', async () => {
+  it('requires an explicit callback or false when registering', async () => {
     const server = Fastify();
     try {
-      const expected =
-        'authorizeAdjustment is required when requireAdjustmentAuthorization is enabled';
+      const expected = 'authorizeAdjustment must be a function or explicitly false';
       expect(() => registerFastifyLedgerAdapter(server, {} as ApplicationServices)).toThrow(
         expected,
       );
       expect(() => registerExpressLedgerAdapter(express(), {} as ApplicationServices)).toThrow(
         expected,
       );
-      expect(() => registerFastifyLedgerAdapter(server, {} as ApplicationServices, {})).toThrow(
-        expected,
-      );
-      expect(() => registerExpressLedgerAdapter(express(), {} as ApplicationServices, {})).toThrow(
-        expected,
-      );
+      expect(() =>
+        registerFastifyLedgerAdapter(
+          server,
+          {} as ApplicationServices,
+          {} as LedgerAdapterOptions<object>,
+        ),
+      ).toThrow(expected);
+      expect(() =>
+        registerExpressLedgerAdapter(
+          express(),
+          {} as ApplicationServices,
+          {} as LedgerAdapterOptions<object>,
+        ),
+      ).toThrow(expected);
       expect(server.hasRoute({ method: 'POST', url: paths[0] })).toBe(false);
     } finally {
       await server.close();
@@ -2168,20 +2173,20 @@ describe('host adjustment authorization parity', () => {
     undefined,
     null,
     'invalid',
-  ])('rejects registration with callback %j in required mode', async (callback) => {
+    true,
+    0,
+    '',
+  ])('rejects registration with invalid callback %j', async (callback) => {
     const server = Fastify();
     try {
-      const expected =
-        'authorizeAdjustment is required when requireAdjustmentAuthorization is enabled';
+      const expected = 'authorizeAdjustment must be a function or explicitly false';
       expect(() =>
         registerFastifyLedgerAdapter(server, {} as ApplicationServices, {
-          requireAdjustmentAuthorization: true,
           authorizeAdjustment: callback as unknown as AdjustmentAuthorizationHook<object>,
         }),
       ).toThrow(expected);
       expect(() =>
         registerExpressLedgerAdapter(express(), {} as ApplicationServices, {
-          requireAdjustmentAuthorization: true,
           authorizeAdjustment: callback as unknown as AdjustmentAuthorizationHook<object>,
         }),
       ).toThrow(expected);
@@ -2272,24 +2277,7 @@ describe('host adjustment authorization parity', () => {
     }
   });
 
-  it('still invokes a supplied callback when the requirement is explicitly false', async () => {
-    const hosts = createHosts(
-      async () => servicePrincipal,
-      () => {
-        throw new ForbiddenError('Adjustment is not permitted');
-      },
-      false,
-    );
-    try {
-      expect(await hosts.request(paths[0], adjustmentPayload)).toMatchObject({ status: 403 });
-      expect(hosts.calls).toEqual([[], []]);
-      expect(hosts.policyCalls[0]).toHaveLength(1);
-    } finally {
-      await hosts.close();
-    }
-  });
-
-  it('preserves explicitly trusted caller behavior when the hook is omitted', async () => {
+  it('skips authorization only with an explicit false callback', async () => {
     const hosts = createHosts(async () => servicePrincipal, false);
     try {
       expect(await hosts.request(paths[0], adjustmentPayload)).toMatchObject({ status: 201 });
