@@ -45,6 +45,59 @@ The callback's Drizzle `tx` and tenant-scoped services share one transaction and
 
 Hosts must preserve the documented account/grant lock order when doing their own locking before ledger calls. The unit of work does not retry transactions or provide distributed transaction/outbox delivery.
 
+## Host-invoked tenant provisioning
+
+Use `createTenantProvisioningService(client).provisionTenant(input)` to create a tenant and
+its initial credential in one transaction, including in a nonempty database. For atomic host
+session/outbox rows or ledger seeding, use `provisioning` inside the existing unit of work:
+
+```ts
+import { randomUUID } from 'node:crypto';
+import { TenantId } from '@borecount/core';
+import { ApiKeyRole, generateApiKey } from '@borecount/core/application';
+import { createDbClient, createUnitOfWork } from '@borecount/postgres-adapter';
+import { onboardingSessions } from './db/schema';
+
+const client = createDbClient({ hostSchema: { onboardingSessions } });
+const unitOfWork = createUnitOfWork(client);
+// Generate once and durably retain this command in trusted host storage before execution.
+const command = {
+  tenantId: randomUUID(),
+  tenantName: 'Example tenant',
+  keyName: 'Initial service credential',
+  role: ApiKeyRole.SERVICE,
+  rawApiKey: generateApiKey(),
+};
+
+const result = await unitOfWork.run(new TenantId(command.tenantId), async ({ provisioning, tx }) => {
+  const provisioned = await provisioning.provisionTenant(command);
+  await tx.insert(onboardingSessions).values({ tenantId: command.tenantId })
+    .onConflictDoNothing(); // Host table uniqueness makes this row retry-safe too.
+  return provisioned;
+});
+// Deliver command.rawApiKey securely; result.key contains metadata, never a stored raw secret.
+```
+
+The tenant ID must be a canonical lowercase UUID. Names are trimmed. An identical command
+returns `created: false` and the existing active credential. Concurrent attempts for the same
+tenant serialize. Existing tenants are accepted only when the tenant name and an active
+credential match the command; mismatches conflict without adding keys or changing a tenant.
+Matching uses current state, without storing a separate provisioning command history. A revoked credential cannot be restored by replay. The host must retain
+the same ID and raw credential across failures, including an unknown commit outcome; do not
+regenerate them on retry. If that credential is lost, use an existing tenant ADMIN credential
+and normal key creation/revocation for recovery. This API cannot reveal stored secrets or
+replace credentials on an existing tenant. A credential collision rolls back the new tenant.
+Host callbacks and seeding must also be retry-safe and must propagate failures to roll back.
+
+This is a trusted host capability, separate from tenant-facing `ApplicationServices`. Hosts
+own signup, identity, business authorization, secret storage and private session lifecycle.
+If a host exposes administrative HTTP provisioning, it owns authentication, authorization,
+validation, rate limits and safe error/secret mapping. Borecount adds no public tenant-create
+route. Both ADMIN and SERVICE initial roles are tenant-scoped; neither grants authority over
+other tenants. Later credentials and revocation use the existing API-key service contracts.
+`bootstrapInitialAdmin` retains its empty-key-store behavior. Demo adoption is a separate
+host change after a package release containing this API.
+
 ### Credit-grant allocation locking
 
 Mutations that touch grant-enabled accounts lock those account rows in account-ID order before locking grants or writing ledger history. Ordinary accounts are not pre-locked; their balance projection is updated atomically in account-ID order, and PostgreSQL takes the row lock for the duration of that update and transaction. Holds read the immutable grant capability without a row lock and reject grant-enabled accounts. Grant issuance never converts an existing account or scans its history. Transaction posting groups inserted entries by account and processes accounts in account-ID order. For each grant-enabled account it performs one `SELECT ... FOR UPDATE` of the account's grants, ordered by `expires_at ASC NULLS LAST, created_at ASC, id ASC`. A grant-enabled account with debit entries loads one latest immutable capacity version per grant and updates that in-memory projection after every allocation so later entries in the same transaction observe earlier allocations. Each new lineage row appends its next cumulative version in the same transaction; versions are rebuildable from authoritative ledger entries and lineage and cannot be updated or deleted. Reversals load the original transaction lineage once per grant-enabled account and copy each original entry's exact grant split.

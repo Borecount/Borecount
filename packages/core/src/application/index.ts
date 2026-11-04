@@ -1,10 +1,18 @@
 export { AccountSide } from '../account/entity';
 export { accountListFilter } from '../account/list-filter';
+export { generateApiKey } from '../api-key/credentials';
 export { ApiKeyRole } from '../api-key/entity';
 export { apiKeyListFilter } from '../api-key/list-filter';
 export { entryListFilter } from '../entry/list-filter';
 export { ledgerListFilter } from '../ledger/list-filter';
 export { reconRuleListFilter } from '../reconciliation';
+export {
+  type ProvisionTenantInput,
+  type ProvisionTenantResult,
+  TenantProvisioningService,
+  type TenantProvisioningStore,
+  type TenantProvisioningTransaction,
+} from '../tenant';
 export { transactionListFilter } from '../transaction/list-filter';
 export * from './available-balance';
 export * from './errors';

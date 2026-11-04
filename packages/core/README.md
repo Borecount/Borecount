@@ -197,3 +197,14 @@ HTTP adapters expose pagination as `limit`/`cursor` and serialize typed filters 
 
 Reconciliation result pages use `reconResultListFilter`; candidate ID arrays are excluded
 from filtering. Existing reconciliation run responses and reports are unchanged.
+
+## Tenant provisioning
+
+`@borecount/core/tenant` owns `TenantProvisioningService`, its transaction/store ports and
+input/result contracts. `@borecount/core/application` re-exports these contracts for application
+composition and exposes `generateApiKey`. Generate and securely retain the credential once,
+then pass a stable tenant UUID, tenant/key names and explicit ADMIN or SERVICE role to
+`provisionTenant`. Core validates roles and exact retry identity; the persistence transaction
+port owns serialization and atomic rollback. The capability is reserved for trusted hosts,
+separate from tenant-facing application services. See the [adapter provisioning example](../postgres-adapter/README.md#host-invoked-tenant-provisioning)
+for host composition, recovery and administrative HTTP ownership.

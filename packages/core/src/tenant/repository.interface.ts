@@ -1,6 +1,14 @@
-import type { TenantEntity } from './entity';
-import type { CreateTenantInput } from './input.interface';
+import type { ApiKeyEntity } from '../api-key/entity';
+import type { CreateApiKeyInput } from '../api-key/input.interface';
 
-export interface TenantRepository {
-  create(input: CreateTenantInput): Promise<TenantEntity>;
+export interface TenantProvisioningStore {
+  findTenantName(): Promise<string | null>;
+  insertTenant(name: string): Promise<void>;
+  findCredential(keyHash: string): Promise<ApiKeyEntity | null>;
+  insertCredential(input: CreateApiKeyInput): Promise<ApiKeyEntity>;
+}
+
+export interface TenantProvisioningTransaction {
+  /** Serialize attempts for this tenant and roll back all writes if work throws. */
+  run<T>(tenantId: string, work: (store: TenantProvisioningStore) => Promise<T>): Promise<T>;
 }
