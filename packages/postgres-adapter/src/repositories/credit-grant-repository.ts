@@ -20,6 +20,7 @@ import {
   type RefundCreditGrantInput,
   type ReverseCreditGrantInput,
 } from '@borecount/core/application';
+import { generateUuidV7 } from '@borecount/core/base';
 import {
   AccountNotFoundError,
   CreditGrantConflictError,
@@ -32,7 +33,6 @@ import { exactTimestamp } from '../exact-timestamp';
 import { listWhereScope, listWhereSql } from '../list-where';
 import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
-import { generateUuidV7 } from '../uuid-v7';
 import { lockGrantEnabledAccountsForMutation } from './account-mutation-lock';
 import { DrizzleTransactionRepository } from './transaction-repository';
 
@@ -133,7 +133,7 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
         )
         .limit(1);
       await this.assertFundingAccountInTx(input, account, fundingAccount);
-      const id = generateUuidV7();
+      const id = generateUuidV7(new Date());
       const posted = await this.transactions.postCreditGrantInTx(tx, {
         tenantId: input.tenantId,
         ledgerId: input.ledgerId,

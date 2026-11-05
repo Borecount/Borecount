@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { ApiKeyEntity, ApiKeyRole } from '@borecount/core';
 import { generateApiKey } from '@borecount/core/application';
+import { isUuidV7 } from '../base/uuid';
 import { InvariantViolationError } from '../errors';
 import {
   type ProvisionTenantInput,
@@ -9,7 +10,7 @@ import {
   type TenantProvisioningTransaction,
 } from './index';
 
-const tenantId = '11111111-1111-4111-8111-111111111111';
+const tenantId = '11111111-1111-7111-8111-111111111111';
 
 class InMemoryProvisioningTransaction implements TenantProvisioningTransaction {
   private tenants = new Map<string, string>();
@@ -124,7 +125,8 @@ describe('TenantProvisioningService', () => {
 
   it('bootstraps an ADMIN tenant through the shared generated-key workflow', async () => {
     const transaction = new InMemoryProvisioningTransaction();
-    const service = new TenantProvisioningService(transaction);
+    const now = new Date('2026-11-05T12:00:00.000Z');
+    const service = new TenantProvisioningService(transaction, { now: () => now });
     const rawApiKey = generateApiKey();
 
     const result = await service.bootstrapInitialAdmin({
@@ -135,7 +137,10 @@ describe('TenantProvisioningService', () => {
 
     expect(result?.created).toBe(true);
     if (!result) throw new Error('Bootstrap unexpectedly skipped');
-    expect(result?.tenantId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(isUuidV7(result.tenantId)).toBe(true);
+    expect(Number.parseInt(result.tenantId.replaceAll('-', '').slice(0, 12), 16)).toBe(
+      now.getTime(),
+    );
     expect(result?.key.role).toBe(ApiKeyRole.ADMIN);
     expect(result?.key.keyHash).toBe(
       new Bun.CryptoHasher('sha256').update(rawApiKey).digest('hex'),
@@ -229,8 +234,10 @@ describe('TenantProvisioningService', () => {
   it.each([
     [
       'non-canonical tenant UUID',
-      { tenantId: '11111111-1111-4111-8abc-111111111111'.toUpperCase() },
+      { tenantId: '11111111-1111-7111-8abc-111111111111'.toUpperCase() },
     ],
+    ['UUIDv4 tenant ID', { tenantId: '11111111-1111-4111-8111-111111111111' }],
+    ['invalid UUID variant', { tenantId: '11111111-1111-7111-0111-111111111111' }],
     ['empty tenant name', { tenantName: '  ' }],
     ['empty key name', { keyName: '' }],
     ['invalid key format', { rawApiKey: 'not-generated' }],

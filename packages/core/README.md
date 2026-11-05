@@ -239,8 +239,15 @@ they are not an authentication or trust boundary for hostile code running inside
 
 `isUuid` and `UUID_PATTERN` from `@borecount/core/base` validate canonical PostgreSQL UUID
 text (case-insensitive hex groups, with no version or variant restriction). HTTP parameters,
-filters and persistence cursors share this predicate. The unused UUIDv7-only helper is removed.
+filters and persistence cursors share this predicate. Creation uses the separate UUIDv7 policy below.
 
 Core uses relative imports internally. Its ESM build shares modules between entry points using
 code splitting, so errors thrown by core retain the same class identity as exports from
 `@borecount/core/errors`. All generated chunks are included in the published package.
+
+New entity identifiers use UUIDv7. `generateUuidV7(now)` and `isUuidV7(value)` are available
+from `@borecount/core/base`; the generator takes an explicit `Date` and uses cryptographic
+randomness, without promising ordering within one millisecond or across clock regressions.
+Tenant provisioning requires a lowercase UUIDv7 retained by the host for retries; bootstrap
+uses its injected `Clock` to generate one. Existing-resource references and cursors continue
+to accept any canonical PostgreSQL UUID. Database-generated primary keys use `uuid_v7()`.

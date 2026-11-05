@@ -38,6 +38,8 @@ deepStrictEqual([application.MAX_PAGE_LIMIT, application.MAX_FILTER_IN_VALUES], 
 deepStrictEqual(contracts.MAX_PAGE_LIMIT, application.MAX_PAGE_LIMIT);
 // Split entry points must share constructors, not merely accept branded copies.
 strictEqual(core.Money, base.Money);
+const generatedId = base.generateUuidV7(new Date('2026-11-05T12:00:00.000Z'));
+strictEqual(base.isUuidV7(generatedId), true);
 strictEqual(core.AccountId, base.AccountId);
 strictEqual(core.LedgerService, application.LedgerService);
 throws(() => new base.AccountId(''), coreErrors.InvalidIdError);

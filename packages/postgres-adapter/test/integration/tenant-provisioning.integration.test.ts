@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import { ApiKeyRole } from '@borecount/core';
 import { generateApiKey } from '@borecount/core/application';
-import { TenantId } from '@borecount/core/base';
+import { isUuidV7, TenantId } from '@borecount/core/base';
 import { ForbiddenError, InvariantViolationError } from '@borecount/core/errors';
 import {
   apiKeys,
@@ -76,7 +76,7 @@ const runBootstrapProvisioningRace = async (rollback: boolean) => {
   const raceUnitOfWork = createUnitOfWork(raceClient);
   const raceProvisioner = createTenantProvisioningService(raceClient);
   const request = input(
-    rollback ? '12121212-1212-4121-8121-121212121212' : '13131313-1313-4131-8131-131313131313',
+    rollback ? '12121212-1212-7121-8121-121212121212' : '13131313-1313-7131-8131-131313131313',
   );
   let signalProvisioned!: () => void;
   let releaseProvisioning!: () => void;
@@ -137,7 +137,7 @@ describe('tenant provisioning integration', () => {
     ApiKeyRole.ADMIN,
     ApiKeyRole.SERVICE,
   ])('provisions a %s credential atomically', async (role) => {
-    const request = input('11111111-1111-4111-8111-111111111111', { role });
+    const request = input('11111111-1111-7111-8111-111111111111', { role });
 
     const result = await runProvisioning(request);
 
@@ -145,6 +145,8 @@ describe('tenant provisioning integration', () => {
     expect(result.key.tenantId).toBe(request.tenantId);
     expect(result.key.role).toBe(role);
     expect(result.key.keyHash).not.toBe(request.rawApiKey);
+    expect(isUuidV7(result.tenantId)).toBe(true);
+    expect(isUuidV7(result.key.id)).toBe(true);
     expect(await findTenant(request.tenantId)).toMatchObject({ name: request.tenantName });
     expect(
       await db.select().from(apiKeys).where(eq(apiKeys.tenantId, request.tenantId)),
@@ -152,7 +154,7 @@ describe('tenant provisioning integration', () => {
   });
 
   it('supports exact retries and rejects changed name, role, or credential without adding keys', async () => {
-    const request = input('22222222-2222-4222-8222-222222222222');
+    const request = input('22222222-2222-7222-8222-222222222222');
     const first = await runProvisioning(request);
     const retry = await runProvisioning(request);
 
@@ -176,7 +178,7 @@ describe('tenant provisioning integration', () => {
   });
 
   it('rejects replay after revocation', async () => {
-    const request = input('33333333-3333-4333-8333-333333333333');
+    const request = input('33333333-3333-7333-8333-333333333333');
     const first = await runProvisioning(request);
 
     await unitOfWork.run(new TenantId(request.tenantId), async ({ services }) => {
@@ -198,9 +200,11 @@ describe('tenant provisioning integration', () => {
       keyName: 'Bootstrap admin',
       rawApiKey: bootstrapRawApiKey,
     });
-    const next = input('55555555-5555-4555-8555-555555555555');
+    const next = input('55555555-5555-7555-8555-555555555555');
 
     expect(bootstrap?.created).toBe(true);
+    expect(isUuidV7(bootstrap?.tenantId)).toBe(true);
+    expect(isUuidV7(bootstrap?.key.id)).toBe(true);
     expect((await runProvisioning(next)).created).toBe(true);
     expect(
       await provisioner.bootstrapInitialAdmin({
@@ -239,7 +243,7 @@ describe('tenant provisioning integration', () => {
   });
 
   it('does not bootstrap when the only existing credential is revoked', async () => {
-    const existing = input('14141414-1414-4141-8141-141414141414');
+    const existing = input('14141414-1414-7141-8141-141414141414');
     const provisioned = await runProvisioning(existing);
     await unitOfWork.run(new TenantId(existing.tenantId), async ({ services }) => {
       await services.apiKeys.revokeApiKey(
@@ -282,8 +286,8 @@ describe('tenant provisioning integration', () => {
 
   it('rolls tenant creation back when a credential uniqueness constraint fails', async () => {
     const credential = generateApiKey();
-    const first = input('66666666-6666-4666-8666-666666666666', { rawApiKey: credential });
-    const conflicting = input('77777777-7777-4777-8777-777777777777', { rawApiKey: credential });
+    const first = input('66666666-6666-7666-8666-666666666666', { rawApiKey: credential });
+    const conflicting = input('77777777-7777-7777-8777-777777777777', { rawApiKey: credential });
     await runProvisioning(first);
 
     await expect(runProvisioning(conflicting)).rejects.toThrow();
@@ -292,7 +296,7 @@ describe('tenant provisioning integration', () => {
   });
 
   it('rolls provisioning back when the host callback fails', async () => {
-    const request = input('88888888-8888-4888-8888-888888888888');
+    const request = input('88888888-8888-7888-8888-888888888888');
 
     await expect(
       unitOfWork.run(new TenantId(request.tenantId), async ({ provisioning }) => {
@@ -306,7 +310,7 @@ describe('tenant provisioning integration', () => {
   });
 
   it('rolls provisioning back when a later application service operation fails', async () => {
-    const request = input('99999999-9999-4999-8999-999999999999');
+    const request = input('99999999-9999-7999-8999-999999999999');
 
     await expect(
       unitOfWork.run(new TenantId(request.tenantId), async ({ provisioning, services }) => {
@@ -320,8 +324,8 @@ describe('tenant provisioning integration', () => {
   });
 
   it('keeps tenant data isolated and rejects cross-tenant admin key management in a UOW', async () => {
-    const tenantA = input('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
-    const tenantB = input('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', { role: ApiKeyRole.SERVICE });
+    const tenantA = input('aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa');
+    const tenantB = input('bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb', { role: ApiKeyRole.SERVICE });
     const keyA = await runProvisioning(tenantA);
     await runProvisioning(tenantB);
     const adminA = await apiKeyService.authenticate(tenantA.rawApiKey);
@@ -370,14 +374,14 @@ describe('tenant provisioning integration', () => {
     const run = (request: ReturnType<typeof input>) =>
       concurrentProvisioner.provisionTenant(request);
     try {
-      const same = input('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+      const same = input('cccccccc-cccc-7ccc-8ccc-cccccccccccc');
       const sameResults = await Promise.all([run(same), run(same)]);
       expect(sameResults.map((result) => result.created).sort()).toEqual([false, true]);
       expect(
         await db.select().from(apiKeys).where(eq(apiKeys.tenantId, same.tenantId)),
       ).toHaveLength(1);
 
-      const contested = input('cccccccc-cccc-4ccc-8ccc-cccccccccccd');
+      const contested = input('cccccccc-cccc-7ccc-8ccc-cccccccccccd');
       const roleConflict = { ...contested, role: ApiKeyRole.SERVICE };
       const conflictingResults = await Promise.allSettled([run(contested), run(roleConflict)]);
       expect(conflictingResults.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
@@ -386,8 +390,8 @@ describe('tenant provisioning integration', () => {
         await db.select().from(apiKeys).where(eq(apiKeys.tenantId, contested.tenantId)),
       ).toHaveLength(1);
 
-      const one = input('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
-      const two = input('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee');
+      const one = input('dddddddd-dddd-7ddd-8ddd-dddddddddddd');
+      const two = input('eeeeeeee-eeee-7eee-8eee-eeeeeeeeeeee');
       const differentResults = await Promise.all([run(one), run(two)]);
       expect(differentResults.map((result) => result.created)).toEqual([true, true]);
       expect(await findTenant(one.tenantId)).not.toBeNull();

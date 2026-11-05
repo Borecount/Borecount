@@ -16,6 +16,7 @@ import {
   reconResultListFilter,
   reconRuleListFilter,
 } from '@borecount/core/application';
+import { generateUuidV7 } from '@borecount/core/base';
 import { InvariantViolationError, LedgerNotFoundError } from '@borecount/core/errors';
 import { and, asc, eq, getTableColumns, inArray } from 'drizzle-orm';
 import type { DbClient } from '../client';
@@ -31,7 +32,6 @@ import {
 import { toTransactionEntity } from '../mappers/transaction-mapper';
 import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
-import { generateUuidV7 } from '../uuid-v7';
 import { loadEntriesByTransactionIds } from './entry-loader';
 
 export class DrizzleReconciliationRepository implements ReconciliationApplicationRepository {
@@ -282,7 +282,7 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
         rules: ruleRows.map(toReconRule),
       });
       const now = new Date();
-      const runId = generateUuidV7();
+      const runId = generateUuidV7(new Date());
       const run: ReconRun = {
         id: runId,
         tenantId: input.tenantId,
@@ -295,7 +295,7 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
         startedAt: now,
         completedAt: now,
         results: decisions.map((decision) => ({
-          id: generateUuidV7(),
+          id: generateUuidV7(new Date()),
           runId,
           externalRecordId: decision.externalRecordId ?? null,
           externalId: decision.externalId ?? null,

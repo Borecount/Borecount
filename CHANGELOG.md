@@ -16,6 +16,8 @@ notes and implement the new methods before upgrading.
 
 ### Changed
 
+- LL-134 (breaking): require UUIDv7 tenant IDs for provisioning and generate UUIDv7 during bootstrap with an injected clock. Share the cryptographically random core UUIDv7 generator with PostgreSQL workflows; existing-resource UUID validation stays version-neutral.
+
 - LL-134: replace core error self-imports with relative imports and share ESM modules across entry points to preserve constructor identity in published packages.
 
 - LL-134: classify errors across package copies using validated global symbol brands. Share canonical PostgreSQL UUID validation without version/variant restrictions; remove the unused UUIDv7-only helper.

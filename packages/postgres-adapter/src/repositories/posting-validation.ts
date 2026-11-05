@@ -1,10 +1,10 @@
 import { AccountId, CreateTransactionUseCase, LedgerId } from '@borecount/core';
 import type { CreateTransactionInput } from '@borecount/core/application';
+import { generateUuidV7 } from '@borecount/core/base';
 import { InvariantViolationError } from '@borecount/core/errors';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DrizzleDatabase } from '../client';
 import * as schema from '../schema';
-import { generateUuidV7 } from '../uuid-v7';
 
 export const validatePosting = async (
   tx: DrizzleDatabase,
@@ -44,7 +44,7 @@ export const validatePosting = async (
 
   await useCase.execute({
     tenantId: input.tenantId,
-    id: generateUuidV7(),
+    id: generateUuidV7(new Date()),
     ledgerId: input.ledgerId,
     reference: input.reference,
     currency: input.currency,
