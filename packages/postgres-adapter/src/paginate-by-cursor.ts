@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { UnknownRecord } from '@borecount/core';
-import { type BasePaginationQuery, InvariantViolationError } from '@borecount/core/application';
+import type { BasePaginationQuery } from '@borecount/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import type { AnyColumn } from 'drizzle-orm';
 import { and, asc, desc, eq, gt, lt, or, SQL, type SQLWrapper, sql } from 'drizzle-orm';
 import stringify from 'safe-stable-stringify';

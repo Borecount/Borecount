@@ -1,10 +1,10 @@
 import {
-  InvariantViolationError,
   type ListFilterPolicy,
   serializeListWhere,
   validateListWhere,
   type WhereFor,
 } from '@borecount/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import {
   type AnyColumn,
   and,

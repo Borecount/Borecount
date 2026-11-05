@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-
+import { InvalidAmountError } from '@borecount/core/errors';
 import type { AccountId } from '../../base/id';
-import { InvalidAmountError } from '../errors';
 import type { TransactionAccountSnapshot, TransactionRepository } from '../repository.interface';
 import { CreateTransactionUseCase } from './create-transaction.use-case';
 
 describe('CreateTransactionUseCase', () => {
-  it('passes tenantId into repository account lookup', async () => {
+  it('scopes account lookup to the tenant and returns 404 for a missing posting account', async () => {
     const calls: string[] = [];
 
     const repository: TransactionRepository = {
@@ -41,7 +40,7 @@ describe('CreateTransactionUseCase', () => {
           },
         ],
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_FOUND', httpStatus: 404, accountId: 'account-1' });
 
     expect(calls).toEqual(['tenant-1']);
   });

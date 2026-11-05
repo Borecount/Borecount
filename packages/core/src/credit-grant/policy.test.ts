@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { creditGrantRemaining, InvalidCreditGrantError, validateCreditGrant } from './policy';
+import { InvalidCreditGrantError } from '@borecount/core/errors';
+import { creditGrantRemaining, validateCreditGrant } from './policy';
 
 const grant = {
   amountMinor: 100n,

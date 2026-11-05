@@ -1,4 +1,5 @@
-import { type DomainError, isDomainError, type UnknownRecord } from '@borecount/core/base';
+import type { UnknownRecord } from '@borecount/core/base';
+import { type DomainError, isDomainError, RateLimitExceededError } from '@borecount/core/errors';
 import type { InferSchema } from './schema-types';
 
 export const errorResponseSchema = {
@@ -27,33 +28,6 @@ export const rateLimitExceededResponseSchema = {
 
 export type RateLimitExceededResponse = InferSchema<typeof rateLimitExceededResponseSchema>;
 
-export class RateLimitExceededError extends Error {
-  public readonly code = 'RATE_LIMIT_EXCEEDED';
-  public readonly retryAfterSeconds: number;
-
-  public constructor(retryAfterSeconds: number) {
-    if (!Number.isSafeInteger(retryAfterSeconds) || retryAfterSeconds < 1) {
-      throw new RangeError('retryAfterSeconds must be a positive safe integer');
-    }
-    super('Rate limit exceeded');
-    this.name = 'RateLimitExceededError';
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
-// Root and subpath bundles may contain distinct class identities, as with core errors.
-const isRateLimitExceededError = (error: unknown): error is RateLimitExceededError => {
-  if (!(error instanceof Error)) return false;
-  const candidate = error as Partial<RateLimitExceededError>;
-  return (
-    candidate.name === 'RateLimitExceededError' &&
-    candidate.code === 'RATE_LIMIT_EXCEEDED' &&
-    typeof candidate.retryAfterSeconds === 'number' &&
-    Number.isSafeInteger(candidate.retryAfterSeconds) &&
-    candidate.retryAfterSeconds >= 1
-  );
-};
-
 export type ErrorResponse = {
   error: string;
   message: string;
@@ -68,6 +42,7 @@ export type HttpErrorDto = {
 };
 
 const codeToStatus: Record<string, number> = {
+  RATE_LIMIT_EXCEEDED: 429,
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   LEDGER_NOT_FOUND: 404,
@@ -99,7 +74,7 @@ export const toHttpErrorPayload = (
   headers?: Record<string, string>;
   retry_after_seconds?: number;
 } => {
-  if (isRateLimitExceededError(error)) {
+  if (error instanceof RateLimitExceededError) {
     return {
       statusCode: 429,
       headers: { 'Retry-After': String(error.retryAfterSeconds) },

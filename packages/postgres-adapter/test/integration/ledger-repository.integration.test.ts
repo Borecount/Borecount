@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { InvariantViolationError } from '@borecount/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import { eq } from 'drizzle-orm';
 import { DrizzleAccountRepository } from '../../src/repositories/account-repository';
 import { DrizzleBalanceRepository } from '../../src/repositories/balance-repository';

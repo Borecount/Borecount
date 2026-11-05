@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { isDomainError } from '@borecount/core';
-import { InvariantViolationError, RepositoryError } from '@borecount/core/application';
 import type { TenantId } from '@borecount/core/base';
+import { InvariantViolationError, isDomainError, RepositoryError } from '@borecount/core/errors';
 import type { DbClient } from './client';
 import {
   type AdapterUnitOfWork,

@@ -12,9 +12,11 @@ Domain-first ledger library for Borecount.
 ## Package structure
 
 - `src/base`
-  - Shared primitives and abstractions: `DomainError`, `Result`, `UnitOfWork`, `Clock`, `Id`, `Money`.
+  - Shared primitives and abstractions: `Result`, `UnitOfWork`, `Clock`, `Id`, `Money`.
 - `src/application`
-  - App-facing contracts and error types for service/repository boundaries.
+  - App-facing contracts and services for service/repository boundaries.
+- `src/errors`
+  - All reusable error classes, `DomainError`, and classification helpers; import from `@borecount/core/errors`.
 - `src/utils`
   - Shared helper utilities such as `assertNonEmpty`.
 - `src/tenant`
@@ -208,3 +210,24 @@ then pass a stable tenant UUID, tenant/key names and explicit ADMIN or SERVICE r
 port owns serialization and atomic rollback. The capability is reserved for trusted hosts,
 separate from tenant-facing application services. See the [adapter provisioning example](../postgres-adapter/README.md#host-invoked-tenant-provisioning)
 for host composition, recovery and administrative HTTP ownership.
+
+## Error imports
+
+Import all custom error classes and guards from the single `@borecount/core/errors` entry point:
+
+```ts
+import { AccountNotFoundError, DomainError, RateLimitExceededError } from '@borecount/core/errors';
+```
+
+Error declarations do not install policy. Hosts still own rate limiting and decide when to throw
+`RateLimitExceededError`; `@borecount/http` owns its HTTP response schema and status/body/header mapping.
+
+This is a breaking import change: errors are no longer re-exported by the root, `application`,
+`base`, `account`, `transaction`, or `credit-grant` entry points, or by `@borecount/http`.
+Update host imports to `@borecount/core/errors`. Existing codes and messages are retained unless
+explicitly called out in the release notes.
+
+The former transaction-local `AccountNotFoundError` is consolidated with the application error.
+Missing accounts during posting now return `404`, matching account lookups, instead of the
+historical default `400`. Currency mismatch definitions share one class; Money preserves its
+existing message by supplying it to the constructor.

@@ -1,4 +1,4 @@
-import type { DomainError } from './domain-error';
+import type { DomainError } from '@borecount/core/errors';
 
 export type Result<T, E extends DomainError> = Ok<T> | Err<E>;
 

@@ -25,20 +25,22 @@ npm init --yes >/dev/null
 npm install --ignore-scripts --no-package-lock "$TARBALL_DIR"/*.tgz
 
 node --input-type=module <<'NODE'
-await import('@borecount/core');
+const core = await import('@borecount/core');
 await import('@borecount/core/application');
 await import('@borecount/core/base');
+const coreErrors = await import('@borecount/core/errors');
 await import('@borecount/core/utils');
 const http = await import('@borecount/http');
 await import('@borecount/http/contracts');
 const httpErrors = await import('@borecount/http/errors');
-const { deepStrictEqual } = await import('node:assert');
-// Separately bundled public entry points must recognize each other's transport errors.
-for (const [ErrorClass, mapError] of [
-  [http.RateLimitExceededError, httpErrors.toHttpErrorPayload],
-  [httpErrors.RateLimitExceededError, http.toHttpErrorPayload],
-]) {
-  deepStrictEqual(mapError(new ErrorClass(7)), {
+const { deepStrictEqual, throws } = await import('node:assert');
+// Other core entry points must throw the exact classes exported by the catalogue.
+throws(() => core.Money.of(1n, 'USD').add(core.Money.of(1n, 'EUR')), coreErrors.CurrencyMismatchError);
+throws(() => new core.AccountId(''), coreErrors.InvalidIdError);
+throws(() => core.validateCreditGrant({ amountMinor: 0n }), coreErrors.InvalidCreditGrantError);
+// Both HTTP entry points consume the canonical core error catalogue.
+for (const mapError of [http.toHttpErrorPayload, httpErrors.toHttpErrorPayload]) {
+  deepStrictEqual(mapError(new coreErrors.RateLimitExceededError(7)), {
     statusCode: 429,
     headers: { 'Retry-After': '7' },
     error: 'RATE_LIMIT_EXCEEDED',

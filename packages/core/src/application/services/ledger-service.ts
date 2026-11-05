@@ -1,6 +1,6 @@
+import { LedgerNotFoundError } from '@borecount/core/errors';
 import { ledgerListFilter } from '../../ledger/list-filter';
 import { assertNonEmpty } from '../../utils';
-import { LedgerNotFoundError } from '../errors';
 import { validateListWhere } from '../list-filters';
 import { validatePaginationQuery } from '../pagination-query';
 import type { LedgerRepository } from '../repositories.interface';

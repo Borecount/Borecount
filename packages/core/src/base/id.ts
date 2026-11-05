@@ -1,11 +1,5 @@
-import { DomainError } from './domain-error';
+import { InvalidIdError } from '@borecount/core/errors';
 import { isNonEmptyString } from './string';
-
-class InvalidIdError extends DomainError {
-  public constructor(name: string, value: string) {
-    super(`${name} must be a non-empty string, got: ${value}`, 'INVALID_ID');
-  }
-}
 
 export abstract class Id {
   public readonly value: string;

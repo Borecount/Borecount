@@ -1,5 +1,5 @@
+import { InvariantViolationError } from '@borecount/core/errors';
 import type { Id } from '../base/id';
-import { InvariantViolationError } from './errors';
 
 /** Fields and operators are ANDed. Null matches use eq/ne; in accepts 1–100 non-null values. */
 export type FieldFilter<T> = {

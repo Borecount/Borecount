@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { InvariantViolationError, RepositoryError } from '@borecount/core/application';
+import { InvariantViolationError, RepositoryError } from '@borecount/core/errors';
 import { createDbClient } from './client';
 
 describe('db client module', () => {

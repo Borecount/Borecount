@@ -7,7 +7,6 @@ export type {
 export {
   errorResponseSchema,
   mapDomainErrorToHttp,
-  RateLimitExceededError,
   rateLimitExceededResponseSchema,
   toHttpErrorPayload,
 } from './errors';

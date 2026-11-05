@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { InvariantViolationError } from '@borecount/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import { toHttpErrorPayload } from '../../http/src/errors';
 import { createDbClient } from './client';
 

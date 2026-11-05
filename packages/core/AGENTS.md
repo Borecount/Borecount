@@ -8,7 +8,10 @@ These rules extend the repository root instructions for `packages/core`.
   ports, unit-of-work contracts, and persistence-neutral workflows.
 - Keep repositories and application services focused by resource/responsibility. Do not introduce a
   new combined service or compatibility facade as the primary production API.
-- Put shared primitives in `src/base`, application-facing contracts and orchestration in
+- Keep all reusable error classes and classification helpers in `src/errors`, exposed only through
+  `@borecount/core/errors`. Host-consumable error declarations such as `RateLimitExceededError`
+  belong to this catalogue; rate-limit policy and HTTP serialization remain outside core.
+- Put other shared primitives in `src/base`, application-facing contracts and orchestration in
   `src/application`, and bounded domain behavior in its named module.
 - Keep repository interfaces expressed only in domain/application types. Never expose SQL, Drizzle,
   PostgreSQL rows, HTTP requests, or framework types.
@@ -36,7 +39,8 @@ These rules extend the repository root instructions for `packages/core`.
 
 ## Domain Guarantees
 
-- Core emits domain/application errors only; transport and database failures do not belong here.
+- Core owns the shared error catalogue; raw framework/database failures are not public errors.
+  Keep framework response schemas, status/body/header mapping, and host admission policy out of core.
 - Preserve explicit transaction requirements for state changes and balance projections, and
   idempotency semantics in addition to database uniqueness.
 

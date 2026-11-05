@@ -6,7 +6,7 @@ import {
   MissingReferenceError,
   NotEnoughEntriesError,
   UnbalancedTransactionError,
-} from './errors';
+} from '@borecount/core/errors';
 import {
   validateDoubleEntry,
   validateEntryAmounts,

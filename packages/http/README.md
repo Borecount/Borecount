@@ -5,7 +5,7 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
 ## Boundaries
 
 - Owns transport contracts and route-level reusable error response specs.
-- Maps domain/application errors and the HTTP-owned `RateLimitExceededError` to transport-safe responses.
+- Maps domain/application errors and `RateLimitExceededError` from `@borecount/core/errors` to transport-safe responses.
 - Accepts supported error shapes across bundled public export identities while rejecting raw database/unknown errors as non-leaking `500 INTERNAL_ERROR` responses.
 - Contains no HTTP server runtime code and no persistence code.
 - Reads no environment variables; JWT, rate limiting, port, and lifecycle configuration belong to the host application.
@@ -21,7 +21,7 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
   - `errorResponseSchema`
   - `defaultErrorResponses`
   - `rateLimitExceededResponseSchema`
-  - `RateLimitExceededError`, `toHttpErrorPayload`
+  - `toHttpErrorPayload`
   - `RateLimitExceededResponse` type
   - `readWhereParameter`, typed list-filter field maps, and URL-encoded JSON schema helpers
   - `HttpErrorDto`, `HttpErrorMapper`, `ErrorResponse` types
@@ -60,14 +60,14 @@ import { errorResponseSchema } from '@borecount/http/errors';
 The canonical contract documents host-generated `429` responses for `/v1/*` operations and `413`
 responses for POST operations. All ordinary errors, including `413`, use `errorResponseSchema`.
 Only `429` adds a required `retry_after_seconds` field through `rateLimitExceededResponseSchema`.
-These schemas, the transport error and its mapper are available from both `@borecount/http` and
-`@borecount/http/errors`; `defaultErrorResponses` includes both statuses. They do not install a
+These schemas and the mapper are available from both `@borecount/http` and
+`@borecount/http/errors`; error classes come from `@borecount/core/errors`; `defaultErrorResponses` includes both statuses. They do not install a
 limiter, configure body parsing, or change application services.
 
 The host limiter throws a transport error when it denies admission:
 
 ```ts
-import { RateLimitExceededError } from '@borecount/http';
+import { RateLimitExceededError } from '@borecount/core/errors';
 
 throw new RateLimitExceededError(retryAfterSeconds);
 ```

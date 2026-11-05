@@ -266,6 +266,8 @@ paths:
             schema:
               $ref: '#/components/schemas/BulkCreateTransactionRequest'
       responses:
+        '404':
+          $ref: '#/components/responses/NotFoundError'
         '413':
           $ref: '#/components/responses/RequestTooLargeError'
         '429':
@@ -393,6 +395,8 @@ paths:
                       signed_amount_minor: '-100'
                       currency: USD
       responses:
+        '404':
+          $ref: '#/components/responses/NotFoundError'
         '413':
           $ref: '#/components/responses/RequestTooLargeError'
         '429':

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test';
+import { AccountNotFoundError, RateLimitExceededError } from '@borecount/core/errors';
 import Ajv from 'ajv';
 import {
-  RateLimitExceededError,
+  mapDomainErrorToHttp,
   rateLimitExceededResponseSchema,
   toHttpErrorPayload,
 } from './errors';
@@ -49,20 +50,12 @@ describe('host resource error contracts', () => {
     }
   });
 
-  it('maps the supported error shape across bundles without reflecting private messages', () => {
+  it('rejects objects merely resembling the canonical rate-limit error', () => {
     const error = Object.assign(new Error('private limiter internals'), {
       name: 'RateLimitExceededError',
       code: 'RATE_LIMIT_EXCEEDED',
       retryAfterSeconds: 7,
     });
-    expect(toHttpErrorPayload(error)).toEqual({
-      statusCode: 429,
-      headers: { 'Retry-After': '7' },
-      error: 'RATE_LIMIT_EXCEEDED',
-      message: 'Rate limit exceeded',
-      retry_after_seconds: 7,
-    });
-    error.retryAfterSeconds = 0;
     expect(toHttpErrorPayload(error)).toEqual({
       statusCode: 500,
       error: 'INTERNAL_ERROR',
@@ -82,6 +75,15 @@ describe('host resource error contracts', () => {
 });
 
 describe('toHttpErrorPayload', () => {
+  it('maps canonical missing-account errors to 404 and recognizes rate errors in both mappers', () => {
+    expect(toHttpErrorPayload(new AccountNotFoundError('missing'))).toMatchObject({
+      statusCode: 404,
+      error: 'ACCOUNT_NOT_FOUND',
+      message: 'Account not found: missing',
+    });
+    expect(mapDomainErrorToHttp(new RateLimitExceededError(7)).statusCode).toBe(429);
+  });
+
   it('maps structurally compatible domain errors from another public export identity', () => {
     const error = Object.assign(new Error('total debits must equal total credits'), {
       code: 'UNBALANCED_TRANSACTION',

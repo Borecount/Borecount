@@ -1,4 +1,4 @@
-import { DomainError } from '../base/domain-error';
+import { DomainError } from './domain-error';
 
 export class LedgerNotFoundError extends DomainError {
   public readonly ledgerId: string;

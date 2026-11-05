@@ -1,4 +1,4 @@
-import { ForbiddenError, UnauthorizedError } from '@borecount/core/application';
+import { ForbiddenError, UnauthorizedError } from '@borecount/core/errors';
 import { ApiKeyRole } from '@borecount/http/contracts';
 import type { RequestContext, RequestWithContext } from '../types';
 

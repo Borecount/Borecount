@@ -1,17 +1,5 @@
-import { DomainError } from './domain-error';
+import { CurrencyMismatchError, EmptyCurrencyError } from '@borecount/core/errors';
 import { isNonEmptyString } from './string';
-
-class CurrencyMismatchError extends DomainError {
-  public constructor() {
-    super('Currency mismatch', 'CURRENCY_MISMATCH');
-  }
-}
-
-class EmptyCurrencyError extends DomainError {
-  public constructor() {
-    super('Currency is required', 'CURRENCY_REQUIRED');
-  }
-}
 
 export class Money {
   public readonly amountMinor: bigint;
@@ -41,7 +29,7 @@ export class Money {
 
   private assertSameCurrency(other: Money): void {
     if (this.currency !== other.currency) {
-      throw new CurrencyMismatchError();
+      throw new CurrencyMismatchError('Currency mismatch');
     }
   }
 }

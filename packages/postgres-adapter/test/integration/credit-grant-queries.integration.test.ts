@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import { AccountSide } from '@borecount/core';
-import { AccountNotFoundError, InvariantViolationError } from '@borecount/core/application';
+import { AccountNotFoundError, InvariantViolationError } from '@borecount/core/errors';
 import { eq, sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import { creditGrants } from '../../src/schema';
