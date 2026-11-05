@@ -1,4 +1,4 @@
-import { InvalidAccountSideError, InvalidOverdraftPolicyError } from '@borecount/core/errors';
+import { InvalidAccountSideError, InvalidOverdraftPolicyError } from '../errors';
 import { AccountSide, OverdraftPolicy } from './entity';
 
 export function validateAccountSide(side: string): void {

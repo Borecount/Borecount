@@ -1,4 +1,4 @@
-import { CurrencyMismatchError, EmptyCurrencyError } from '@borecount/core/errors';
+import { CurrencyMismatchError, EmptyCurrencyError } from '../errors';
 import { isNonEmptyString } from './string';
 
 export class Money {

@@ -1,4 +1,4 @@
-import { InvalidIdError } from '@borecount/core/errors';
+import { InvalidIdError } from '../errors';
 import { isNonEmptyString } from './string';
 
 export abstract class Id {

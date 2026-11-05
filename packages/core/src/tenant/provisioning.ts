@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { InvariantViolationError } from '@borecount/core/errors';
 import { hashApiKey } from '../api-key/credentials';
 import type { ApiKeyEntity } from '../api-key/entity';
 import { ApiKeyRole } from '../api-key/entity';
+import { InvariantViolationError } from '../errors';
 import { assertNonEmpty } from '../utils';
 import type { BootstrapInitialAdminInput, ProvisionTenantInput } from './input.interface';
 import type {

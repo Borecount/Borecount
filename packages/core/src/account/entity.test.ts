@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { InvalidAccountSideError, InvalidOverdraftPolicyError } from '@borecount/core/errors';
+import { InvalidAccountSideError, InvalidOverdraftPolicyError } from '../errors';
 import { AccountEntity, AccountSide, OverdraftPolicy } from './entity';
 
 describe('AccountEntity', () => {

@@ -1,4 +1,4 @@
-import { HoldNotFoundError, InvariantViolationError } from '@borecount/core/errors';
+import { HoldNotFoundError, InvariantViolationError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
 import type {
   HoldCapture,

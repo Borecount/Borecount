@@ -1,4 +1,4 @@
-import { InvariantViolationError } from '@borecount/core/errors';
+import { InvariantViolationError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
 import { validatePaginationQuery } from '../pagination-query';
 import type { StatementRepository } from '../repositories.interface';

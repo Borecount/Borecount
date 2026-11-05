@@ -240,3 +240,7 @@ they are not an authentication or trust boundary for hostile code running inside
 `isUuid` and `UUID_PATTERN` from `@borecount/core/base` validate canonical PostgreSQL UUID
 text (case-insensitive hex groups, with no version or variant restriction). HTTP parameters,
 filters and persistence cursors share this predicate. The unused UUIDv7-only helper is removed.
+
+Core uses relative imports internally. Its ESM build shares modules between entry points using
+code splitting, so errors thrown by core retain the same class identity as exports from
+`@borecount/core/errors`. All generated chunks are included in the published package.

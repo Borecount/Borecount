@@ -50,7 +50,7 @@ import {
   LedgerNotFoundError,
   ReconRunNotFoundError,
   TransactionNotFoundError,
-} from '@borecount/core/errors';
+} from '../../errors';
 
 class InMemoryLedgerRepository {
   private readonly ledgers = new Map<string, Ledger>();

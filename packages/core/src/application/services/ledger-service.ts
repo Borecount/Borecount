@@ -1,4 +1,4 @@
-import { LedgerNotFoundError } from '@borecount/core/errors';
+import { LedgerNotFoundError } from '../../errors';
 import { ledgerListFilter } from '../../ledger/list-filter';
 import { assertNonEmpty } from '../../utils';
 import { validateListWhere } from '../list-filters';

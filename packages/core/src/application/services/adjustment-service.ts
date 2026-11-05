@@ -1,4 +1,4 @@
-import { InvariantViolationError } from '@borecount/core/errors';
+import { InvariantViolationError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
 import type { AdjustmentRepository } from '../repositories.interface';
 import type { AdjustmentResult, CreateAdjustmentInput } from '../types';

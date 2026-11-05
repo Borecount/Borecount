@@ -1,4 +1,4 @@
-import { InvalidCreditGrantError } from '@borecount/core/errors';
+import { InvalidCreditGrantError } from '../errors';
 
 export const validateCreditGrant = (input: { amountMinor: bigint }): void => {
   if (input.amountMinor <= 0n || input.amountMinor > 9223372036854775807n) {

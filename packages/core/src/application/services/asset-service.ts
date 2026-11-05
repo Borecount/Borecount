@@ -1,4 +1,4 @@
-import { AssetNotFoundError, InvariantViolationError } from '@borecount/core/errors';
+import { AssetNotFoundError, InvariantViolationError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
 import { validateListWhere } from '../list-filters';
 import { validatePaginationQuery } from '../pagination-query';

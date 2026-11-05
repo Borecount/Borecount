@@ -1,6 +1,6 @@
-import { AssetMismatchError, InvalidTransactionRelationError } from '@borecount/core/errors';
 import type { LedgerId, TransactionId } from '../base/id';
 import type { EntryEntity } from '../entry/entity';
+import { AssetMismatchError, InvalidTransactionRelationError } from '../errors';
 import type { TransactionMetadata } from './metadata';
 import {
   validateDoubleEntry,
