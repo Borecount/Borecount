@@ -52,8 +52,7 @@ its initial credential in one transaction, including in a nonempty database. For
 session/outbox rows or ledger seeding, use `provisioning` inside the existing unit of work:
 
 ```ts
-import { randomUUID } from 'node:crypto';
-import { TenantId } from '@borecount/core';
+import { TenantId, generateUuidV7 } from '@borecount/core';
 import { ApiKeyRole, generateApiKey } from '@borecount/core/application';
 import { createDbClient, createUnitOfWork } from '@borecount/postgres-adapter';
 import { onboardingSessions } from './db/schema';
@@ -62,7 +61,7 @@ const client = createDbClient({ hostSchema: { onboardingSessions } });
 const unitOfWork = createUnitOfWork(client);
 // Generate once and durably retain this command in trusted host storage before execution.
 const command = {
-  tenantId: randomUUID(),
+  tenantId: generateUuidV7(new Date()),
   tenantName: 'Example tenant',
   keyName: 'Initial service credential',
   role: ApiKeyRole.SERVICE,

@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { generateUuidV7 } from '@borecount/core/base';
 import { InvariantViolationError } from '@borecount/core/errors';
 import { sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import * as schema from '../../src/schema';
-import { generateUuidV7 } from '../../src/uuid-v7';
 import {
   createLedger,
   createRepositoryTestClient,
@@ -479,7 +479,11 @@ describe('service list where filters against PostgreSQL', () => {
 
   it('continues balance history across sub-millisecond timestamps without repeating rows', async () => {
     const { tenantId, ledgerId, wallet } = await fixture();
-    const ids = [generateUuidV7(), generateUuidV7(), generateUuidV7()];
+    const ids = [
+      generateUuidV7(new Date()),
+      generateUuidV7(new Date()),
+      generateUuidV7(new Date()),
+    ];
     await client.runTenantTx(tenantId, 'seed precise history timestamps', async (tx) => {
       for (const [index, id] of ids.entries()) {
         await tx.insert(schema.balanceSnapshots).values({
@@ -529,8 +533,8 @@ describe('service list where filters against PostgreSQL', () => {
         services.balances.listHistory({ ...query, cursor: oldHistoryCursor }),
       ).rejects.toBeInstanceOf(InvariantViolationError);
       for (const changedScope of [
-        { accountId: generateUuidV7() },
-        { tenantId: generateUuidV7() },
+        { accountId: generateUuidV7(new Date()) },
+        { tenantId: generateUuidV7(new Date()) },
         { from: new Date('2024-01-01') },
         { to: new Date('2026-01-01') },
       ]) {
