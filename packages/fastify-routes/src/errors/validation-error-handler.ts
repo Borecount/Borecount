@@ -1,9 +1,16 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
+import { sendInvalidInput } from './send-invalid-input';
 
 type ValidationError = FastifyError & {
   validation?: unknown;
   validationContext?: string;
 };
+
+export const isQuerystringValidationError = (error: unknown): boolean =>
+  typeof error === 'object' &&
+  error !== null &&
+  Array.isArray((error as { validation?: unknown }).validation) &&
+  (error as { validationContext?: unknown }).validationContext === 'querystring';
 
 const validationMessage = (context: string | undefined): string => {
   if (context === 'params') return 'Invalid path parameter';
@@ -17,9 +24,7 @@ export const handleValidationError = (
   reply: FastifyReply,
 ): void => {
   if (Array.isArray(error.validation)) {
-    reply
-      .status(400)
-      .send({ error: 'INVALID_INPUT', message: validationMessage(error.validationContext) });
+    sendInvalidInput(reply, validationMessage(error.validationContext));
     return;
   }
 

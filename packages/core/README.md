@@ -5,7 +5,9 @@ Domain-first ledger library for Borecount.
 ## Design goals
 
 - Explicit invariants in domain classes/use-cases.
-- Zero framework/runtime dependencies in core domain model.
+- Zero external runtime dependencies; framework-free domain model.
+- The current package targets Node-compatible server runtimes (including Bun). Credential and UUID
+  generation use built-in `node:crypto`; browser and edge runtimes without that API are not supported.
 - Stable contracts (`input.interface.ts` / `repository.interface.ts` / use-case result contracts).
 - Deterministic behavior: same input -> same domain decision.
 

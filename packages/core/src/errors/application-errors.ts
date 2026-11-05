@@ -100,7 +100,7 @@ export class InsufficientReservedCapacityError extends InvariantViolationError {
 }
 
 export class BulkTransactionError extends DomainError {
-  public readonly details: {
+  public override readonly details: {
     item_index: number;
     reference: string;
     category: BulkTransactionErrorCategory;

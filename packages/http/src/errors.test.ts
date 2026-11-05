@@ -185,3 +185,10 @@ it('maps branded errors from independently loaded class copies', () => {
   Object.assign(error, { retryAfterSeconds: 0 });
   expect(toHttpErrorPayload(error).statusCode).toBe(500);
 });
+
+it('omits malformed details from branded errors instead of violating the response schema', () => {
+  for (const details of [null, [], 'private string', 1]) {
+    const error = Object.assign(new InvariantViolationError('Invalid posting'), { details });
+    expect(Object.hasOwn(toHttpErrorPayload(error).body, 'details')).toBe(false);
+  }
+});

@@ -1,11 +1,15 @@
+import type { UnknownRecord } from '../base/object';
+import { isErrorHttpStatus } from './validation';
+
 const DOMAIN_ERROR_BRAND = Symbol.for('borecount.domain-error');
 
 export abstract class DomainError extends Error {
   public readonly code: string;
   public readonly httpStatus: number;
+  public declare readonly details?: UnknownRecord;
 
   protected constructor(message: string, code: string, httpStatus = 400, options?: ErrorOptions) {
-    if (!Number.isInteger(httpStatus) || httpStatus < 400 || httpStatus > 599) {
+    if (!isErrorHttpStatus(httpStatus)) {
       throw new RangeError('httpStatus must be an integer between 400 and 599');
     }
     super(message, options);
@@ -23,8 +27,6 @@ export const isDomainError = (error: unknown): error is DomainError => {
   return (
     candidate[DOMAIN_ERROR_BRAND] === true &&
     typeof candidate.code === 'string' &&
-    Number.isInteger(candidate.httpStatus) &&
-    candidate.httpStatus >= 400 &&
-    candidate.httpStatus <= 599
+    isErrorHttpStatus(candidate.httpStatus)
   );
 };

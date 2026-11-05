@@ -45,6 +45,7 @@ import {
 } from '@borecount/http/mappers';
 import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
+import { sendInvalidInput } from '../errors/send-invalid-input';
 import { handleValidationError } from '../errors/validation-error-handler';
 import { BaseEntityRoute } from '../routing/base-route';
 
@@ -149,10 +150,7 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
             request.raw.url ?? '',
             accountFilterFields,
           );
-          if (where === null)
-            return reply
-              .status(400)
-              .send({ error: 'INVALID_INPUT', message: 'Invalid querystring' });
+          if (where === null) return sendInvalidInput(reply, 'Invalid querystring');
           const page = await this.accounts.list({
             tenantId: request.tenantId as string,
             limit: resolveLimit(request.query.limit),

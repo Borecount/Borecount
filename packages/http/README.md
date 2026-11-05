@@ -64,7 +64,7 @@ These schemas and the mapper are available from both `@borecount/http` and
 `@borecount/http/errors`; error classes come from `@borecount/core/errors`; `defaultErrorResponses` includes both statuses. They do not install a
 limiter, configure body parsing, or change application services.
 
-The host limiter throws a transport error when it denies admission:
+The host limiter throws the shared resource-limit error when it denies admission:
 
 ```ts
 import { RateLimitExceededError } from '@borecount/core/errors';
@@ -73,7 +73,9 @@ throw new RateLimitExceededError(retryAfterSeconds);
 ```
 
 The delay must be a positive safe integer; round the remaining window up and clamp it to at least
-one second before constructing the error. The mapper produces the existing MVP JSON shape and
+one second before constructing the error. `Number.MAX_SAFE_INTEGER` is a numeric representation
+bound, not an operational recommendation: hosts must choose a practical maximum delay supported
+by their clients (for example, no longer than their configured limiter window). The mapper produces the existing MVP JSON shape and
 matching `Retry-After` header. Framework adapters use it for errors caught inside their route handlers.
 Errors thrown earlier by host hooks or middleware need the same mapping in the host's global error
 handler; adapter registration does not install or replace that handler.
@@ -91,11 +93,37 @@ reply.code(statusCode).send(body);
 Express hosts use `res.set(headers)` when headers are present and
 `res.status(statusCode).json(body)`. Status and header metadata must not be included in the JSON body.
 
-In the host's size-error branch, before invoking an application service:
+Recognize the known parser error in the host's global handler, before the generic mapper.
+For Fastify:
 
 ```ts
-reply.code(413).send({ error: 'REQUEST_TOO_LARGE', message: 'Request too large' });
+if (error instanceof Error && 'code' in error && error.code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+  return reply.code(413).send({ error: 'REQUEST_TOO_LARGE', message: 'Request too large' });
+}
+const { statusCode, headers, body } = toHttpErrorPayload(error);
+if (headers) reply.headers(headers);
+return reply.code(statusCode).send(body);
 ```
+
+For Express, install this error middleware after the parser and adapter routes:
+
+```ts
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (error instanceof Error && 'type' in error && error.type === 'entity.too.large' &&
+      'status' in error && error.status === 413) {
+    res.status(413).json({ error: 'REQUEST_TOO_LARGE', message: 'Request too large' });
+    return;
+  }
+  const { statusCode, headers, body } = toHttpErrorPayload(error);
+  if (headers) res.set(headers);
+  res.status(statusCode).json(body);
+});
+```
+
+Import `Request`, `Response`, and `NextFunction` as types from `express`. These branches use the
+[Fastify size-error code](https://fastify.dev/docs/latest/Reference/Errors/#fst_err_ctp_body_too_large)
+and [body-parser error type](https://expressjs.com/en/resources/middleware/body-parser/#request-entity-too-large);
+do not map arbitrary objects solely because they expose status 413.
 
 Hosts explicitly map their known body-parser size errors to `413 REQUEST_TOO_LARGE`; unknown or
 database errors retain the non-leaking `500` mapping. Schema validation and host item-count checks
