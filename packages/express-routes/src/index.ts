@@ -14,13 +14,6 @@ import type { RequestWithContext } from './types';
 
 export type { RequestContext, RequestWithContext } from './types';
 
-const ensureJsonMiddleware = (app: Application): void => {
-  const stack = (app as Application & { _router?: { stack?: unknown[] } })._router?.stack;
-  if (!Array.isArray(stack) || stack.length === 0) {
-    app.use(express.json());
-  }
-};
-
 export type LedgerAdapterOptions = HttpLedgerAdapterOptions<RequestWithContext>;
 
 export const registerLedgerAdapter = (
@@ -32,7 +25,7 @@ export const registerLedgerAdapter = (
   if (authorizeAdjustment !== false && typeof authorizeAdjustment !== 'function') {
     throw new Error('authorizeAdjustment must be a function or explicitly false');
   }
-  ensureJsonMiddleware(app);
+  app.use(express.json());
 
   registerLedgerRoutes(app, services);
   registerTransactionRoutes(app, services);
@@ -48,5 +41,3 @@ export const registerLedgerAdapter = (
   registerEntryRoutes(app, services);
   registerAdminApiKeyRoutes(app, services);
 };
-
-export const registerLedgerExpressAdapter = registerLedgerAdapter;

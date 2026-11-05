@@ -34,6 +34,7 @@ import {
   creditLotStatementResponseSchema,
   type ListAccountsQuery,
   listAccountsQuerySchemaExtra,
+  mergePaginationQuerySchema,
   type StatementQuery,
   statementQuerySchema,
 } from '@borecount/http/contracts';
@@ -42,9 +43,9 @@ import {
   toAccountStatementResponse,
   toCreditLotStatementResponse,
 } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
-import { createPaginationQuerySchema, resolvePaginationLimit } from '../query/pagination';
 import { BaseEntityRoute } from '../routing/base-route';
 
 export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountResponse> {
@@ -130,7 +131,7 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
       {
         errorHandler: handleValidationError,
         schema: {
-          querystring: createPaginationQuerySchema({
+          querystring: mergePaginationQuerySchema({
             ...listAccountsQuerySchemaExtra,
             properties: {
               ...listAccountsQuerySchemaExtra.properties,
@@ -154,7 +155,7 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
               .send({ error: 'INVALID_INPUT', message: 'Invalid querystring' });
           const page = await this.accounts.list({
             tenantId: request.tenantId as string,
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             ledgerId: request.query.ledger_id,
             where,
@@ -230,7 +231,7 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
             accountId: request.params.id,
             from: new Date(request.query.from),
             to: new Date(request.query.to),
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             where,
           });
@@ -273,7 +274,7 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
                 accountId: request.params.id,
                 from: new Date(request.query.from),
                 asOf: new Date(request.query.as_of),
-                limit: resolvePaginationLimit(request.query.limit),
+                limit: resolveLimit(request.query.limit),
                 cursor: request.query.cursor,
               }),
             ),
@@ -301,7 +302,7 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
                 grantId: request.query.grant_id,
                 from: new Date(request.query.from),
                 asOf: new Date(request.query.as_of),
-                limit: resolvePaginationLimit(request.query.limit),
+                limit: resolveLimit(request.query.limit),
                 cursor: request.query.cursor,
               }),
             ),

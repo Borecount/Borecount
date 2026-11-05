@@ -26,14 +26,16 @@ npm install --ignore-scripts --no-package-lock "$TARBALL_DIR"/*.tgz
 
 node --input-type=module <<'NODE'
 const core = await import('@borecount/core');
-await import('@borecount/core/application');
+const application = await import('@borecount/core/application');
 await import('@borecount/core/base');
 const coreErrors = await import('@borecount/core/errors');
 await import('@borecount/core/utils');
 const http = await import('@borecount/http');
-await import('@borecount/http/contracts');
+const contracts = await import('@borecount/http/contracts');
 const httpErrors = await import('@borecount/http/errors');
 const { deepStrictEqual, throws } = await import('node:assert');
+deepStrictEqual([application.MAX_PAGE_LIMIT, application.MAX_FILTER_IN_VALUES], [200, 100]);
+deepStrictEqual(contracts.MAX_PAGE_LIMIT, application.MAX_PAGE_LIMIT);
 // Other core entry points must throw the exact classes exported by the catalogue.
 throws(() => core.Money.of(1n, 'USD').add(core.Money.of(1n, 'EUR')), coreErrors.CurrencyMismatchError);
 throws(() => new core.AccountId(''), coreErrors.InvalidIdError);

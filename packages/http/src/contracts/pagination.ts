@@ -1,9 +1,10 @@
+import { MAX_PAGE_LIMIT } from '@borecount/core/application';
 import type { UnknownRecord } from '@borecount/core/base';
 import type { InferSchema } from '../schema-types';
 import { isRecord } from '../validation-utils';
 
 export const DEFAULT_PAGE_LIMIT = 50;
-export const MAX_PAGE_LIMIT = 200;
+export { MAX_PAGE_LIMIT } from '@borecount/core/application';
 
 export const paginationQuerySchema = {
   type: 'object',

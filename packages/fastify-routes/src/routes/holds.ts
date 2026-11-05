@@ -10,7 +10,7 @@ import {
   holdCaptureFilterFields,
   holdCreditAllocationFilterFields,
   holdEntryFilterFields,
-  holdFilterFields,
+  holdSummaryFilterFields,
   invalidWhereError,
   readWhereParameter,
 } from '@borecount/http';
@@ -21,11 +21,11 @@ import {
   commitHoldResponseSchema,
   createHoldRequestSchema,
   createHoldResponseSchema,
-  type HoldByIdParams,
-  holdByIdParamsSchema,
+  type HoldIdParams,
   holdCapturesPageResponseSchema,
   holdCreditAllocationsPageResponseSchema,
   holdEntriesPageResponseSchema,
+  holdIdParamsSchema,
   holdSummaryResponseSchema,
   holdsPageResponseSchema,
   listHoldCapturesQuerySchema,
@@ -41,9 +41,9 @@ import {
   toHoldSummaryResponse,
   toPaginatedResponse,
 } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
-import { resolvePaginationLimit } from '../query/pagination';
 import { BaseRoute } from '../routing/base-route';
 
 export class HoldsRoutes extends BaseRoute {
@@ -59,11 +59,11 @@ export class HoldsRoutes extends BaseRoute {
   }
 
   private registerReads(server: FastifyInstance): void {
-    server.get<{ Params: HoldByIdParams }>(
+    server.get<{ Params: HoldIdParams }>(
       '/v1/holds/:id',
       {
         errorHandler: handleValidationError,
-        schema: { params: holdByIdParamsSchema, response: { 200: holdSummaryResponseSchema } },
+        schema: { params: holdIdParamsSchema, response: { 200: holdSummaryResponseSchema } },
       },
       async (request, reply) =>
         this.handle(reply, async () => {
@@ -73,7 +73,7 @@ export class HoldsRoutes extends BaseRoute {
     );
 
     server.get<{
-      Params: HoldByIdParams;
+      Params: HoldIdParams;
       Querystring: { limit?: number; cursor?: string; where?: string };
     }>(
       '/v1/holds',
@@ -85,13 +85,13 @@ export class HoldsRoutes extends BaseRoute {
         this.handle(reply, async () => {
           const where = readWhereParameter<WhereFor<typeof holdListFilter>>(
             request.raw.url ?? '',
-            holdFilterFields,
+            holdSummaryFilterFields,
           );
           if (where === null) throw invalidWhereError();
           const page = await this.holds.list({
             tenantId: request.tenantId as string,
 
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             where,
           });
@@ -100,14 +100,14 @@ export class HoldsRoutes extends BaseRoute {
     );
 
     server.get<{
-      Params: HoldByIdParams;
+      Params: HoldIdParams;
       Querystring: { limit?: number; cursor?: string; where?: string };
     }>(
       '/v1/holds/:id/entries',
       {
         errorHandler: handleValidationError,
         schema: {
-          params: holdByIdParamsSchema,
+          params: holdIdParamsSchema,
           querystring: listHoldEntriesQuerySchema,
           response: { 200: holdEntriesPageResponseSchema },
         },
@@ -122,7 +122,7 @@ export class HoldsRoutes extends BaseRoute {
           const page = await this.holds.listEntries({
             tenantId: request.tenantId as string,
             holdId: request.params.id,
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             where,
           });
@@ -131,14 +131,14 @@ export class HoldsRoutes extends BaseRoute {
     );
 
     server.get<{
-      Params: HoldByIdParams;
+      Params: HoldIdParams;
       Querystring: { limit?: number; cursor?: string; where?: string };
     }>(
       '/v1/holds/:id/captures',
       {
         errorHandler: handleValidationError,
         schema: {
-          params: holdByIdParamsSchema,
+          params: holdIdParamsSchema,
           querystring: listHoldCapturesQuerySchema,
           response: { 200: holdCapturesPageResponseSchema },
         },
@@ -153,7 +153,7 @@ export class HoldsRoutes extends BaseRoute {
           const page = await this.holds.listCaptures({
             tenantId: request.tenantId as string,
             holdId: request.params.id,
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             where,
           });
@@ -162,14 +162,14 @@ export class HoldsRoutes extends BaseRoute {
     );
 
     server.get<{
-      Params: HoldByIdParams;
+      Params: HoldIdParams;
       Querystring: { limit?: number; cursor?: string; where?: string };
     }>(
       '/v1/holds/:id/credit-allocations',
       {
         errorHandler: handleValidationError,
         schema: {
-          params: holdByIdParamsSchema,
+          params: holdIdParamsSchema,
           querystring: listHoldCreditAllocationsQuerySchema,
           response: { 200: holdCreditAllocationsPageResponseSchema },
         },
@@ -184,7 +184,7 @@ export class HoldsRoutes extends BaseRoute {
           const page = await this.holds.listCreditAllocations({
             tenantId: request.tenantId as string,
             holdId: request.params.id,
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             where,
           });
@@ -232,12 +232,12 @@ export class HoldsRoutes extends BaseRoute {
   }
 
   private registerCommitHold(server: FastifyInstance): void {
-    server.post<{ Params: HoldByIdParams; Body: CommitHoldRequest }>(
+    server.post<{ Params: HoldIdParams; Body: CommitHoldRequest }>(
       '/v1/holds/:id/commit',
       {
         errorHandler: handleValidationError,
         schema: {
-          params: holdByIdParamsSchema,
+          params: holdIdParamsSchema,
           body: commitHoldRequestSchema,
           response: {
             200: commitHoldResponseSchema,
@@ -268,12 +268,12 @@ export class HoldsRoutes extends BaseRoute {
   }
 
   private registerVoidHold(server: FastifyInstance): void {
-    server.post<{ Params: HoldByIdParams }>(
+    server.post<{ Params: HoldIdParams }>(
       '/v1/holds/:id/void',
       {
         errorHandler: handleValidationError,
         schema: {
-          params: holdByIdParamsSchema,
+          params: holdIdParamsSchema,
           response: { 200: voidHoldResponseSchema },
         },
       },

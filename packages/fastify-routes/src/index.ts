@@ -36,5 +36,3 @@ export const registerLedgerAdapter = (
   new ReconRoutes(services.reconciliation).register(server);
   new AdminApiKeyRoutes(services.apiKeys).register(server);
 };
-
-export const registerLedgerFastifyAdapter = registerLedgerAdapter;

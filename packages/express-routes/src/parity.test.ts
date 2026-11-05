@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { createServer } from 'node:http';
 import {
   ApiKeyRole,
   type ApiKeyService,
@@ -8,12 +9,16 @@ import {
 } from '@borecount/core/application';
 import type { UnknownRecord } from '@borecount/core/base';
 import {
+  AdjustmentConflictError,
+  CreditGrantConflictError,
+  DomainError,
   ForbiddenError,
   HoldNotFoundError,
   InvariantViolationError,
   RateLimitExceededError,
   ReconRunNotFoundError,
   UnauthorizedError,
+  UnbalancedTransactionError,
 } from '@borecount/core/errors';
 import type { TransactionMetadata } from '@borecount/core/transaction';
 import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@borecount/fastify-routes';
@@ -52,6 +57,12 @@ const adjustmentPayload = {
   actor_id: 'operator-1',
   attributes: { ticket: 'T-1' },
 };
+
+class IdempotencyConflictTestError extends DomainError {
+  public constructor(message: string) {
+    super(message, 'IDEMPOTENCY_CONFLICT', 409);
+  }
+}
 
 type FakeAccount = {
   id: string;
@@ -272,10 +283,7 @@ class FakeLedgerService {
     metadata?: TransactionMetadata;
   }): Promise<{ transactionId: string; created: boolean }> {
     if (input.reference.startsWith('unbalanced-')) {
-      throw Object.assign(new Error('total debits must equal total credits'), {
-        code: 'UNBALANCED_TRANSACTION',
-        httpStatus: 400,
-      });
+      throw new UnbalancedTransactionError();
     }
     if (input.reference.startsWith('unexpected-')) {
       throw Object.assign(new Error('duplicate key violates transactions_reference_key'), {
@@ -287,10 +295,9 @@ class FakeLedgerService {
     const existing = this.txByReference.get(key);
     if (existing) {
       if (JSON.stringify(this.txMetadataByReference.get(key)) !== JSON.stringify(input.metadata)) {
-        throw Object.assign(new Error('transaction retry metadata conflicts with the original'), {
-          code: 'IDEMPOTENCY_CONFLICT',
-          httpStatus: 409,
-        });
+        throw new IdempotencyConflictTestError(
+          'transaction retry metadata conflicts with the original',
+        );
       }
       return { transactionId: existing, created: false };
     }
@@ -452,10 +459,7 @@ describe('express adapter parity with fastify adapter', () => {
         },
         refund: async (input: { grantId: string; amountMinor: bigint; reference: string }) => {
           if (input.reference.startsWith('conflict-')) {
-            throw Object.assign(new Error('Refund exceeds unspent grant capacity'), {
-              code: 'CREDIT_GRANT_CONFLICT',
-              httpStatus: 409,
-            });
+            throw new CreditGrantConflictError('Refund exceeds unspent grant capacity');
           }
           return {
             grantId: input.grantId,
@@ -482,10 +486,7 @@ describe('express adapter parity with fastify adapter', () => {
         }),
         debit: async (input: { reference: string }) => {
           if (input.reference.startsWith('conflict-')) {
-            throw Object.assign(new Error('Adjustment reference payload mismatch'), {
-              code: 'ADJUSTMENT_CONFLICT',
-              httpStatus: 409,
-            });
+            throw new AdjustmentConflictError();
           }
           return { transactionId: '00000000-0000-4000-8000-000000000907', created: true };
         },
@@ -1636,6 +1637,51 @@ describe('express adapter parity with fastify adapter', () => {
     }
   });
 
+  it('accepts UUIDv7 credit grant account filters and rejects malformed filters in both adapters', async () => {
+    const accountIdV7 = '01900000-0000-7000-8000-000000000001';
+    listObservations.clear();
+    const validPath = `/v1/credit-grants?account_id=${accountIdV7}`;
+    const [fastifyValid, expressValid] = await Promise.all([
+      requestFastify('GET', validPath),
+      requestExpress('GET', validPath),
+    ]);
+    expect(fastifyValid.status).toBe(200);
+    expect(expressValid).toEqual(fastifyValid);
+    expect(listObservations.get('credit-grants')).toHaveLength(2);
+    expect(listObservations.get('credit-grants')).toEqual([
+      {
+        tenantId,
+        limit: 50,
+        cursor: undefined,
+        accountId: accountIdV7,
+        reference: undefined,
+        externalReference: undefined,
+        where: undefined,
+      },
+      {
+        tenantId,
+        limit: 50,
+        cursor: undefined,
+        accountId: accountIdV7,
+        reference: undefined,
+        externalReference: undefined,
+        where: undefined,
+      },
+    ]);
+
+    for (const invalidQuery of ['account_id=not-a-uuid', 'reference=%20%20']) {
+      listObservations.clear();
+      const path = `/v1/credit-grants?${invalidQuery}`;
+      const [fastifyInvalid, expressInvalid] = await Promise.all([
+        requestFastify('GET', path),
+        requestExpress('GET', path),
+      ]);
+      expect(fastifyInvalid.status).toBe(400);
+      expect(expressInvalid).toEqual(fastifyInvalid);
+      expect(listObservations.has('credit-grants')).toBeFalse();
+    }
+  });
+
   it('serializes hold summaries and child reads consistently, and safely handles missing parents', async () => {
     const requests = [
       {
@@ -1850,6 +1896,59 @@ describe('express adapter parity with fastify adapter', () => {
       ]);
       expect(fastifyAdjustment.status).toBe(status);
       expect(expressAdjustment).toEqual(fastifyAdjustment);
+    }
+  });
+
+  it('installs Express JSON parsing after pre-existing host middleware', async () => {
+    let serviceCalls = 0;
+    let observedAmount: bigint | undefined;
+    const services = {
+      adjustments: {
+        credit: async (input: { amountMinor: bigint }) => {
+          serviceCalls += 1;
+          observedAmount = input.amountMinor;
+          return { transactionId: '00000000-0000-4000-8000-000000000906', created: true };
+        },
+      },
+    } as unknown as ApplicationServices;
+    const app = express();
+    app.use((request, _response, next) => {
+      Object.assign(request, {
+        tenantId,
+        apiKeyId: 'host-api-key',
+        apiKeyRole: ApiKeyRole.ADMIN,
+      });
+      next();
+    });
+    registerExpressLedgerAdapter(app, services, { authorizeAdjustment: false });
+
+    const server = createServer(app);
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+
+    try {
+      const address = server.address();
+      if (address === null || typeof address === 'string') {
+        throw new Error('Expected an ephemeral TCP address');
+      }
+      const response = await fetch(`http://127.0.0.1:${address.port}/v1/adjustments/credit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(adjustmentPayload),
+      });
+      expect(response.status).toBe(201);
+      expect(await response.json()).toEqual({
+        transaction_id: '00000000-0000-4000-8000-000000000906',
+        created: true,
+      });
+      expect(observedAmount).toBe(25n);
+      expect(serviceCalls).toBe(1);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
     }
   });
 

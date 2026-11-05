@@ -9,8 +9,9 @@ import type {
   StatementRepository,
 } from '@borecount/core/application';
 import { AccountNotFoundError, RepositoryError } from '@borecount/core/errors';
-import { type AnyColumn, and, desc, eq, gt, lt, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, lt, lte, or, sql } from 'drizzle-orm';
 import type { DbClient, DrizzleDatabase } from '../client';
+import { exactTimestamp } from '../exact-timestamp';
 import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
 
@@ -33,9 +34,6 @@ type CapacityRow = {
 };
 
 const INITIAL_CAPACITY_VERSION = 1n;
-
-const exactTimestamp = (column: AnyColumn) =>
-  sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 export class DrizzleStatementRepository implements StatementRepository {
   public constructor(private readonly client: DbClient) {}

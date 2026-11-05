@@ -194,7 +194,9 @@ PostgreSQL applies these predicates before pagination, alongside mandatory tenan
 ledger/account, time range, fixed filters, and cursor conditions. Filters cannot override
 these scopes. Keep the same `where` when following a cursor: changing or removing it is
 rejected. Field/operator key order does not matter; `in` value order must remain the same.
-Existing unfiltered cursor formats remain compatible (including the legacy history codec).
+Every cursor is bound to its tenant, resource, range and normalized filter. Balance history uses the
+same current cursor format as other paginated reads; timestamp keys preserve all six PostgreSQL
+fractional digits.
 HTTP adapters expose pagination as `limit`/`cursor` and serialize typed filters through `where`.
 
 Reconciliation result pages use `reconResultListFilter`; candidate ID arrays are excluded
@@ -222,12 +224,11 @@ import { AccountNotFoundError, DomainError, RateLimitExceededError } from '@bore
 Error declarations do not install policy. Hosts still own rate limiting and decide when to throw
 `RateLimitExceededError`; `@borecount/http` owns its HTTP response schema and status/body/header mapping.
 
-This is a breaking import change: errors are no longer re-exported by the root, `application`,
-`base`, `account`, `transaction`, or `credit-grant` entry points, or by `@borecount/http`.
-Update host imports to `@borecount/core/errors`. Existing codes and messages are retained unless
-explicitly called out in the release notes.
+Missing accounts during posting and lookups use the same `AccountNotFoundError` with status `404`.
+Money and transaction validation use the same `CurrencyMismatchError` class and message.
 
-The former transaction-local `AccountNotFoundError` is consolidated with the application error.
-Missing accounts during posting now return `404`, matching account lookups, instead of the
-historical default `400`. Currency mismatch definitions share one class; Money preserves its
-existing message by supplying it to the constructor.
+## Shared query bounds
+
+`MAX_PAGE_LIMIT` (200) and `MAX_FILTER_IN_VALUES` (100) are exported from
+`@borecount/core/application`. Core service validation and HTTP contracts/parsers use these same
+constants; the HTTP page-size default of 50 remains transport policy.

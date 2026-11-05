@@ -6,7 +6,7 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
 
 - Owns transport contracts and route-level reusable error response specs.
 - Maps domain/application errors and `RateLimitExceededError` from `@borecount/core/errors` to transport-safe responses.
-- Accepts supported error shapes across bundled public export identities while rejecting raw database/unknown errors as non-leaking `500 INTERNAL_ERROR` responses.
+- Recognizes instances of the canonical core error classes; raw database/unknown errors produce non-leaking `500 INTERNAL_ERROR` responses.
 - Contains no HTTP server runtime code and no persistence code.
 - Reads no environment variables; JWT, rate limiting, port, and lifecycle configuration belong to the host application.
 
@@ -17,14 +17,13 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
 
 ## Public API
 - `@borecount/http`:
-  - `mapDomainErrorToHttp`
+  - `toHttpErrorPayload`
   - `errorResponseSchema`
   - `defaultErrorResponses`
   - `rateLimitExceededResponseSchema`
-  - `toHttpErrorPayload`
   - `RateLimitExceededResponse` type
   - `readWhereParameter`, typed list-filter field maps, and URL-encoded JSON schema helpers
-  - `HttpErrorDto`, `HttpErrorMapper`, `ErrorResponse` types
+  - `ErrorResponse` type
 - `@borecount/http/errors`: schema and response contracts
 - `@borecount/http/errors`: error mapping
 - `@borecount/http/route-specs`: default route error response specs
@@ -44,10 +43,11 @@ timing, detached body snapshots, result matching, and the explicit trusted-servi
 ## Usage
 
 ```ts
-import { defaultErrorResponses, mapDomainErrorToHttp } from '@borecount/http';
+import { defaultErrorResponses, toHttpErrorPayload } from '@borecount/http';
 
-const dto = mapDomainErrorToHttp(error);
-reply.code(dto.statusCode).send(dto);
+const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+if (headers) reply.headers(headers);
+reply.code(statusCode).send(body);
 route.schema.response = { ...defaultErrorResponses };
 ```
 
@@ -115,12 +115,6 @@ Operators must document deployed limits, units, defaults, proxy topology, and re
 in-process limiter resets on restart and does not coordinate replicas; distributed enforcement belongs
 to the host. These free protection contracts require no subscription or commercial entitlement check.
 
-## Upgrade note
-
-The `invalidInputPayload` export from `@borecount/http/errors` has been removed. Replace
-`invalidInputPayload(message)` with `{ error: 'INVALID_INPUT', message }` in host validation handlers.
-This removes a wrapper without changing the HTTP response shape or status.
-
 ## Canonical contract
 
 The source-of-truth HTTP contract is [`openapi/openapi.yaml`](./openapi/openapi.yaml). Runtime contract definitions and OpenAPI must change together and pass `bun run contract:verify`. See the repository [integration guide](../../docs/integration/README.md) for host responsibilities and conventions.
@@ -139,6 +133,10 @@ return the shared `400 INVALID_INPUT` response.
 Date-time filter values require a timezone and must be exactly representable in milliseconds.
 Extra fractional digits are accepted only when zero (for example, `.123000Z`); values such as
 `.123001Z` return `400 INVALID_INPUT` instead of silently changing the comparison boundary.
+
+`MAX_PAGE_LIMIT` is defined in core and re-exported by the HTTP pagination contracts. The default
+page size remains transport-owned. The shared core `MAX_FILTER_IN_VALUES` also bounds `in` filters
+in both core validation and HTTP parsing/schemas.
 
 Paginated list endpoints accept `limit` (default 50, maximum 200) and an opaque `cursor`, and return
 `{ data, next_cursor }`. Reconciliation results can be fetched from

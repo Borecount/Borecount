@@ -35,11 +35,7 @@ const replaceCursorTimestamp = (cursor: string, key: string, value: string): str
     string,
     unknown
   >;
-  if ('values' in payload && typeof payload.values === 'object' && payload.values !== null) {
-    (payload.values as Record<string, unknown>)[key] = value;
-  } else {
-    payload[key] = value;
-  }
+  (payload.values as Record<string, unknown>)[key] = value;
   return Buffer.from(JSON.stringify(payload)).toString('base64url');
 };
 
@@ -391,15 +387,14 @@ describe('service list where filters against PostgreSQL', () => {
     ).toEqual([]);
   });
 
-  it('preserves precise account, transaction and entry cursors and accepts legacy milliseconds', async () => {
+  it('preserves precise account, transaction and entry cursors and rejects truncated timestamps', async () => {
     const { tenantId, ledgerId, wallet, funding } = await fixture();
     const assetId = wallet.assetId;
     if (!assetId) throw new Error('Fixture account must have an asset');
     const ids = [1, 2, 3].map((n) => `01900000-0000-7000-8000-00000000000${n}`);
     await client.runTenantTx(tenantId, 'seed precise list timestamps', async (tx) => {
       for (const [index, id] of ids.entries()) {
-        // First row is exactly representable by legacy cursors; the others share
-        // a microsecond timestamp, exercising both timestamp and ID ordering.
+        // Rows exercise both timestamp and ID ordering at microsecond precision.
         const createdAt = sql`${index === 0 ? '2025-01-01T00:00:00.123000Z' : '2025-01-01T00:00:00.123001Z'}::timestamptz`;
         await tx.insert(schema.accounts).values({
           id,
@@ -465,10 +460,11 @@ describe('service list where filters against PostgreSQL', () => {
       expect(seen).toEqual(ids);
       expect(cursor).toBeUndefined();
       const first = await read();
-      const legacy = JSON.parse(Buffer.from(first.nextCursor ?? '', 'base64url').toString());
-      legacy.values.created_at = '2025-01-01T00:00:00.123Z';
-      const second = await read(Buffer.from(JSON.stringify(legacy)).toString('base64url'));
-      expect(second.data.map((row) => String(row.id))).toEqual([ids[1]]);
+      const truncated = JSON.parse(Buffer.from(first.nextCursor ?? '', 'base64url').toString());
+      truncated.values.created_at = '2025-01-01T00:00:00.123Z';
+      await expect(
+        read(Buffer.from(JSON.stringify(truncated)).toString('base64url')),
+      ).rejects.toBeInstanceOf(InvariantViolationError);
       await expect(
         read(
           replaceCursorTimestamp(
@@ -518,19 +514,40 @@ describe('service list where filters against PostgreSQL', () => {
       expect(seen).toEqual(ids);
       expect(cursor).toBeUndefined();
       const first = await services.balances.listHistory(query);
-      const legacy = JSON.parse(Buffer.from(first.nextCursor ?? '', 'base64url').toString());
-      legacy.effectiveAt = '2025-01-01T00:00:00.123Z';
-      const second = await services.balances.listHistory({
-        ...query,
-        cursor: Buffer.from(JSON.stringify(legacy)).toString('base64url'),
-      });
-      expect(second.data.map((row) => row.id)).toEqual([ids[1]]);
+      const truncated = JSON.parse(Buffer.from(first.nextCursor ?? '', 'base64url').toString());
+      truncated.values.effective_at = '2025-01-01T00:00:00.123Z';
+      await expect(
+        services.balances.listHistory({
+          ...query,
+          cursor: Buffer.from(JSON.stringify(truncated)).toString('base64url'),
+        }),
+      ).rejects.toBeInstanceOf(InvariantViolationError);
+      const oldHistoryCursor = Buffer.from(
+        JSON.stringify({ effectiveAt: '2025-01-01T00:00:00.123000Z', id: ids[0] }),
+      ).toString('base64url');
+      await expect(
+        services.balances.listHistory({ ...query, cursor: oldHistoryCursor }),
+      ).rejects.toBeInstanceOf(InvariantViolationError);
+      for (const changedScope of [
+        { accountId: generateUuidV7() },
+        { tenantId: generateUuidV7() },
+        { from: new Date('2024-01-01') },
+        { to: new Date('2026-01-01') },
+      ]) {
+        await expect(
+          services.balances.listHistory({
+            ...query,
+            ...changedScope,
+            cursor: first.nextCursor ?? undefined,
+          }),
+        ).rejects.toBeInstanceOf(InvariantViolationError);
+      }
       await expect(
         services.balances.listHistory({
           ...query,
           cursor: replaceCursorTimestamp(
             first.nextCursor as string,
-            'effectiveAt',
+            'effective_at',
             '2025-02-31T00:00:00.123000Z',
           ),
         }),

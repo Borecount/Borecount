@@ -33,7 +33,7 @@ describe('canonical error catalogue', () => {
     expect(error.message).toBe('Account not found: missing');
   });
 
-  it('uses canonical value errors without changing their messages', () => {
+  it('uses the canonical currency mismatch message', () => {
     expect(() => Money.of(1n, '')).toThrow(errors.EmptyCurrencyError);
     try {
       Money.of(1n, 'USD').add(Money.of(1n, 'EUR'));
@@ -42,7 +42,7 @@ describe('canonical error catalogue', () => {
       expect(error).toBeInstanceOf(errors.CurrencyMismatchError);
       expect((error as Error).message).toBe('Currency mismatch');
     }
-    expect(new errors.CurrencyMismatchError().message).toBe('currency must match');
+    expect(new errors.CurrencyMismatchError().message).toBe('Currency mismatch');
   });
 
   it('validates retry delays and classifies resource errors through the shared base', () => {

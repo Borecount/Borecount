@@ -12,6 +12,7 @@ import {
   type ListEntriesQuery,
 } from '@borecount/http/contracts';
 import { toEntryResponse } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import { BasePaginatedRoute, type PaginatedRequest } from '../routing/paginated-route';
 
 export class EntriesListRoute extends BasePaginatedRoute<
@@ -39,7 +40,7 @@ export class EntriesListRoute extends BasePaginatedRoute<
     if (where === null) throw invalidWhereError();
     return this.transactions.listEntries({
       tenantId: request.tenantId as string,
-      limit: this.resolveLimit(request.query.limit),
+      limit: resolveLimit(request.query.limit),
       cursor: request.query.cursor,
       where,
     });

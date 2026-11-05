@@ -1,12 +1,10 @@
 export * from './contracts';
 export type {
   ErrorResponse,
-  HttpErrorDto,
   RateLimitExceededResponse,
 } from './errors';
 export {
   errorResponseSchema,
-  mapDomainErrorToHttp,
   rateLimitExceededResponseSchema,
   toHttpErrorPayload,
 } from './errors';

@@ -16,6 +16,12 @@ notes and implement the new methods before upgrading.
 
 ### Changed
 
+- Removed adapter registration aliases, Fastify pagination renaming wrappers and unused HTTP route base classes. Hold reads use `holdSummaryFilterFields` and `holdIdParamsSchema`; string validation uses core `isNonEmptyString`.
+- Error classification requires the canonical `DomainError` instance; the constructor accepts an explicit status and options without the old argument overload.
+- All lists now use the current scoped cursor codec with six-digit timestamps; balance history no longer has a separate codec. Previous cursor encodings are not supported.
+- **Breaking:** removed legacy `mapDomainErrorToHttp` and `HttpErrorDto`; use `toHttpErrorPayload` with declared error statuses, JSON field `error`, and separate status/header metadata.
+- Shared UUID validation now accepts UUIDv7 consistently in Express credit-grant filters, paths and typed filters. Core owns the shared pagination and `in`-filter maximum constants; configured values remain unchanged.
+- Statement pagination reuses the shared exact-timestamp SQL helper; Express query validation reuses the shared non-empty-string predicate.
 - **Breaking:** all custom error classes and guards now live in `@borecount/core/errors`, including `DomainError` and `RateLimitExceededError`. Replace imports from core root/module entry points and HTTP with this subpath. No compatibility re-exports remain. Both `AccountNotFoundError` definitions are consolidated into one class with status `404`; missing accounts during posting change from `400` to `404`.
 - **Breaking:** removed `invalidInputPayload` from `@borecount/http/errors`. Hosts using it should construct `{ error: 'INVALID_INPUT', message }` directly; HTTP response bodies and statuses are unchanged.
 
