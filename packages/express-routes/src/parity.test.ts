@@ -14,6 +14,11 @@ import {
 import type { UnknownRecord } from '@borecount/core/base';
 import type { TransactionMetadata } from '@borecount/core/transaction';
 import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@borecount/fastify-routes';
+import {
+  defaultErrorResponses,
+  rateLimitExceededPayload,
+  requestTooLargePayload,
+} from '@borecount/http';
 import type { AdjustmentAuthorizationHook, LedgerAdapterOptions } from '@borecount/http/route-core';
 import { createContractHarness } from '@borecount/http/test/harness';
 import express, { type Application } from 'express';
@@ -1894,6 +1899,147 @@ describe('express adapter parity with fastify adapter', () => {
       }
     } finally {
       await server.close();
+    }
+  });
+});
+
+describe('host rate limit and request size error parity', () => {
+  it('returns matching host 429 and 413 responses before adapter services run', async () => {
+    const retryAfterSeconds = 37;
+    const rateLimitPayload = rateLimitExceededPayload(retryAfterSeconds);
+    const requestTooLarge = requestTooLargePayload();
+    let rejection: 429 | 413 | null = 429;
+    let serviceCalls = 0;
+    const services = {
+      adjustments: {
+        credit: async () => {
+          serviceCalls += 1;
+          return { transactionId: '00000000-0000-4000-8000-000000000906', created: true };
+        },
+      },
+    } as unknown as ApplicationServices;
+
+    const fastify = Fastify();
+    fastify.decorateRequest('tenantId');
+    fastify.decorateRequest('apiKeyId');
+    fastify.decorateRequest('apiKeyRole');
+    fastify.addHook('onRoute', (routeOptions) => {
+      routeOptions.schema ??= {};
+      const routeResponses = routeOptions.schema.response;
+      routeOptions.schema.response = {
+        ...defaultErrorResponses,
+        ...(typeof routeResponses === 'object' && routeResponses !== null
+          ? (routeResponses as Record<string, unknown>)
+          : {}),
+      };
+    });
+    fastify.addHook('onRequest', (request, reply, done) => {
+      if (rejection === 429) {
+        reply.code(429).header('Retry-After', String(retryAfterSeconds)).send(rateLimitPayload);
+        return;
+      }
+      if (rejection === 413) {
+        reply.code(413).send(requestTooLarge);
+        return;
+      }
+      Object.assign(request, { tenantId, apiKeyId: 'host-api-key', apiKeyRole: ApiKeyRole.ADMIN });
+      done();
+    });
+    registerFastifyLedgerAdapter(fastify, services, { authorizeAdjustment: false });
+
+    const expressApp = express();
+    expressApp.use((request, response, next) => {
+      if (rejection === 429) {
+        response.status(429).set('Retry-After', String(retryAfterSeconds)).json(rateLimitPayload);
+        return;
+      }
+      if (rejection === 413) {
+        response.status(413).json(requestTooLarge);
+        return;
+      }
+      Object.assign(request, { tenantId, apiKeyId: 'host-api-key', apiKeyRole: ApiKeyRole.ADMIN });
+      next();
+    });
+    registerExpressLedgerAdapter(expressApp, services, { authorizeAdjustment: false });
+
+    const requestExpress = async () => {
+      const req = httpMocks.createRequest({
+        method: 'POST',
+        url: '/v1/adjustments/credit',
+        body: adjustmentPayload,
+        headers: { 'content-type': 'application/json' },
+      });
+      const res = httpMocks.createResponse({
+        eventEmitter: (await import('node:events')).EventEmitter,
+      });
+      await new Promise<void>((resolve) => {
+        (expressApp as unknown as (req: unknown, res: unknown, next: () => void) => void)(
+          req,
+          res,
+          resolve,
+        );
+        if (res.writableEnded) resolve();
+        else res.on('finish', resolve);
+      });
+      const body = res._getData() as string;
+      return {
+        status: res.statusCode,
+        json: body.length ? JSON.parse(body) : null,
+        retryAfter: res.getHeader('Retry-After'),
+      };
+    };
+
+    try {
+      for (const [status, body] of [
+        [
+          429,
+          {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Rate limit exceeded',
+            retry_after_seconds: retryAfterSeconds,
+          },
+        ],
+        [413, { error: 'REQUEST_TOO_LARGE', message: 'Request too large' }],
+      ] as const) {
+        rejection = status;
+        const fastifyResponse = await fastify.inject({
+          method: 'POST',
+          url: '/v1/adjustments/credit',
+          payload: adjustmentPayload,
+        });
+        const expressResponse = await requestExpress();
+        expect(fastifyResponse.statusCode).toBe(status);
+        expect(expressResponse.status).toBe(status);
+        expect(JSON.parse(fastifyResponse.body)).toEqual(body);
+        expect(expressResponse.json).toEqual(body);
+        expect(fastifyResponse.headers['retry-after']).toBe(
+          status === 429 ? String(retryAfterSeconds) : undefined,
+        );
+        expect(expressResponse.retryAfter).toBe(
+          status === 429 ? String(retryAfterSeconds) : undefined,
+        );
+        if (status === 429) {
+          expect(Number(fastifyResponse.headers['retry-after'])).toBe(body.retry_after_seconds);
+          expect(Number(expressResponse.retryAfter)).toBe(body.retry_after_seconds);
+        }
+        expect(serviceCalls).toBe(0);
+      }
+
+      rejection = null;
+      const [fastifyResponse, expressResponse] = await Promise.all([
+        fastify.inject({
+          method: 'POST',
+          url: '/v1/adjustments/credit',
+          payload: adjustmentPayload,
+        }),
+        requestExpress(),
+      ]);
+      expect(fastifyResponse.statusCode).toBe(201);
+      expect(expressResponse.status).toBe(201);
+      expect(JSON.parse(fastifyResponse.body)).toEqual(expressResponse.json);
+      expect(serviceCalls).toBe(2);
+    } finally {
+      await fastify.close();
     }
   });
 });

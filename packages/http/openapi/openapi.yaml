@@ -80,6 +80,10 @@ paths:
       security:
         - ApiKeyAuth: []
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Access token issued
           content:
@@ -98,6 +102,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateLedgerRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Ledger created
           content:
@@ -131,6 +139,8 @@ paths:
                   eq: Operating
       summary: List tenant ledgers
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Tenant ledgers
           content:
@@ -152,6 +162,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Ledger
           content:
@@ -174,6 +186,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateTransactionRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Transaction created
           content:
@@ -210,6 +226,8 @@ paths:
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/LedgerIdQuery'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Transaction page
           content:
@@ -248,6 +266,10 @@ paths:
             schema:
               $ref: '#/components/schemas/BulkCreateTransactionRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: At least one transaction created
           content:
@@ -275,6 +297,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Transaction
           content:
@@ -323,6 +347,10 @@ paths:
                   reference: tx-ref-1-reversal
                   description: Reverse invalid posting
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Reversal created
           content:
@@ -365,6 +393,10 @@ paths:
                       signed_amount_minor: '-100'
                       currency: USD
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Correction flow created
           content:
@@ -387,6 +419,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateAccountRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Account created
           content:
@@ -417,6 +453,8 @@ paths:
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/LedgerIdQuery'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Account page
           content:
@@ -438,6 +476,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Account
           content:
@@ -467,6 +507,8 @@ paths:
             type: string
             format: date-time
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Historical account balance
           content:
@@ -515,6 +557,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Account balance history page
           content:
@@ -555,6 +599,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Bounded account statement page with stable as-of boundary
           content:
@@ -602,6 +648,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Bounded credit lot statement page
           content:
@@ -638,6 +686,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Hold page
           content:
@@ -657,6 +707,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateHoldRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Hold created
           content:
@@ -687,6 +741,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Hold summary
           content:
@@ -726,6 +782,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Hold entry page
           content:
@@ -766,6 +824,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Hold capture page
           content:
@@ -806,6 +866,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Hold credit allocation page
           content:
@@ -835,6 +897,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CommitHoldRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Hold commit created a transaction
           content:
@@ -866,6 +932,10 @@ paths:
             type: string
             format: uuid
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Hold voided
           content:
@@ -898,6 +968,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Entry page
           content:
@@ -919,6 +991,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Trial balance
           content:
@@ -955,6 +1029,8 @@ paths:
                   eq: ADMIN
       summary: List API keys (admin only)
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: API key list
           content:
@@ -976,6 +1052,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateApiKeyRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: API key created
           content:
@@ -994,6 +1074,10 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ApiKeyIdPath'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '204':
           description: API key revoked
         '400':
@@ -1012,6 +1096,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateReconciliationMatchingRuleRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Matching rule created
           content:
@@ -1045,6 +1133,8 @@ paths:
                   eq: invoice-match
       summary: List reconciliation matching rules
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Matching rules
           content:
@@ -1073,6 +1163,10 @@ paths:
             schema:
               $ref: '#/components/schemas/IngestExternalRecordsRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: External records accepted
           content:
@@ -1093,6 +1187,10 @@ paths:
             schema:
               $ref: '#/components/schemas/RunReconciliationRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Reconciliation run persisted
           content:
@@ -1120,6 +1218,8 @@ paths:
             type: string
             format: uuid
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Reconciliation run
           content:
@@ -1159,6 +1259,8 @@ paths:
                 status:
                   eq: conflict
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: A page of run results
           content:
@@ -1177,6 +1279,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateCreditGrantRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Grant created
           content:
@@ -1227,6 +1333,8 @@ paths:
           required: false
           schema: { type: string, minLength: 1 }
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Grants ordered by creation time then id
           content:
@@ -1246,6 +1354,8 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Credit grant
           content:
@@ -1268,6 +1378,10 @@ paths:
             schema:
               $ref: '#/components/schemas/ProcessCreditGrantExpirationsRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Deterministic bounded FEFO preview
           content:
@@ -1288,6 +1402,10 @@ paths:
             schema:
               $ref: '#/components/schemas/ProcessCreditGrantExpirationsRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Expirations posted by this worker
           content:
@@ -1313,6 +1431,10 @@ paths:
             schema:
               $ref: '#/components/schemas/ReverseCreditGrantRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Compensation posted
           content:
@@ -1349,6 +1471,10 @@ paths:
             schema:
               $ref: '#/components/schemas/RefundCreditGrantRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Refund posted
           content:
@@ -1380,6 +1506,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateAdjustmentRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Adjustment posted
           content:
@@ -1413,6 +1543,10 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateAdjustmentRequest'
       responses:
+        '413':
+          $ref: '#/components/responses/RequestTooLargeError'
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '201':
           description: Adjustment posted
           content:
@@ -1457,6 +1591,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Immutable allocation lineage page ordered by entry creation, entry id, then grant id
           content:
@@ -1489,6 +1625,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Immutable allocation lineage page ordered by entry creation, entry id, then grant id
           content:
@@ -1508,6 +1646,8 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Summary reconciled with the ledger
           content:
@@ -1544,6 +1684,8 @@ paths:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
+        '429':
+          $ref: '#/components/responses/RateLimitExceededError'
         '200':
           description: Lots ordered by grant creation time then grant id
           content:
@@ -1598,6 +1740,26 @@ components:
         type: string
         format: uuid
   responses:
+    RequestTooLargeError:
+      description: Host request-size limit exceeded before application services run. Hosts choose and document their limits.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RequestTooLargeResponse'
+    RateLimitExceededError:
+      description: Host resource limit exceeded. Enforcement and accounting are host responsibilities; this contract does not imply distributed enforcement.
+      headers:
+        Retry-After:
+          required: true
+          description: Delay in whole seconds before retrying; equals retry_after_seconds in the response body.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RateLimitExceededResponse'
     BadRequestError:
       description: Invalid input
       content:
@@ -1833,6 +1995,21 @@ components:
               amount_minor: { type: string, pattern: '^[1-9][0-9]*$' }
               cumulative_expired_minor: { type: string, pattern: '^[1-9][0-9]*$' }
               transaction_id: { type: string, format: uuid, nullable: true }
+    RateLimitExceededResponse:
+      type: object
+      additionalProperties: false
+      required: [error, message, retry_after_seconds]
+      properties:
+        error: { type: string, enum: [RATE_LIMIT_EXCEEDED] }
+        message: { type: string, enum: [Rate limit exceeded] }
+        retry_after_seconds: { type: integer, minimum: 1, maximum: 9007199254740991 }
+    RequestTooLargeResponse:
+      type: object
+      additionalProperties: false
+      required: [error, message]
+      properties:
+        error: { type: string, enum: [REQUEST_TOO_LARGE] }
+        message: { type: string, enum: [Request too large] }
     ErrorResponse:
       type: object
       required: [error, message]

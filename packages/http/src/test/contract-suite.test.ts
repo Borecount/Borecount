@@ -8,6 +8,7 @@ import {
   reconResultsListQuerySchema,
   reconResultsListResponseSchema,
 } from '../contracts/reconciliation';
+import { rateLimitExceededResponseSchema, requestTooLargeResponseSchema } from '../errors';
 import {
   accountResponseSchema,
   accountStatementResponseSchema,
@@ -58,6 +59,7 @@ import {
   reconRuleFilterFields,
   transactionFilterFields,
 } from '../query/list-filter-fields';
+import { defaultErrorResponses } from '../route-specs';
 import { createContractHarness } from './harness';
 
 const openapiPath = resolve(import.meta.dir, '../../openapi/openapi.yaml');
@@ -95,6 +97,54 @@ type OpenApiDocument = {
 };
 
 describe('framework-agnostic contract suite', () => {
+  it('governs host resource errors without requiring package-owned enforcement', () => {
+    const document = Bun.YAML.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocument & {
+      components: { responses: Record<string, unknown> };
+    };
+    expect(document.components.schemas?.RateLimitExceededResponse).toEqual(
+      rateLimitExceededResponseSchema,
+    );
+    expect(document.components.schemas?.RequestTooLargeResponse).toEqual(
+      requestTooLargeResponseSchema,
+    );
+    expect(defaultErrorResponses[429]).toEqual(rateLimitExceededResponseSchema);
+    expect(defaultErrorResponses[413]).toEqual(requestTooLargeResponseSchema);
+    expect(document.components.responses.RateLimitExceededError).toEqual({
+      description: expect.any(String),
+      headers: {
+        'Retry-After': {
+          required: true,
+          description: expect.any(String),
+          schema: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+        },
+      },
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/RateLimitExceededResponse' } },
+      },
+    });
+    expect(document.components.responses.RequestTooLargeError).toEqual({
+      description: expect.any(String),
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/RequestTooLargeResponse' } },
+      },
+    });
+    for (const [path, item] of Object.entries(document.paths ?? {})) {
+      if (!path.startsWith('/v1/')) continue;
+      for (const method of ['get', 'post'] as const) {
+        const operation = item[method];
+        if (!operation) continue;
+        expect(operation.responses?.['429']).toEqual({
+          $ref: '#/components/responses/RateLimitExceededError',
+        });
+        if (method === 'post') {
+          expect(operation.responses?.['413']).toEqual({
+            $ref: '#/components/responses/RequestTooLargeError',
+          });
+        }
+      }
+    }
+  });
+
   it('keeps core request/response schemas deterministic', () => {
     const harness = createContractHarness();
     const adapters = [{ name: 'fastify' }, { name: 'express' }] as const;
@@ -417,6 +467,8 @@ describe('framework-agnostic contract suite', () => {
         ...authorizationResponses,
         '404',
         '409',
+        '413',
+        '429',
       ]);
       for (const status of authorizationResponses) {
         expect(operation?.responses?.[status]).toEqual({
@@ -604,7 +656,7 @@ describe('framework-agnostic contract suite', () => {
         });
       }
       expect(Object.keys(operation?.responses ?? {}).sort()).toEqual(
-        hasParentId ? ['200', '400', '401', '404'] : ['200', '400', '401'],
+        hasParentId ? ['200', '400', '401', '404', '429'] : ['200', '400', '401', '429'],
       );
       expect(operation?.responses?.['400']).toEqual({
         $ref: '#/components/responses/BadRequestError',
@@ -623,6 +675,7 @@ describe('framework-agnostic contract suite', () => {
       '400',
       '401',
       '404',
+      '429',
     ]);
     expect(resultsOperation?.responses?.['404']).toEqual({
       $ref: '#/components/responses/NotFoundError',

@@ -13,6 +13,20 @@ test('public API includes shared HTTP contracts and primitives', () => {
   expect(keys).toContain('holdFilterFields');
   expect(keys).toContain('ApiKeyRole');
   expect(keys).toContain('mapDomainErrorToHttp');
+  expect(keys).toContain('rateLimitExceededPayload');
+  expect(keys).toContain('rateLimitExceededResponseSchema');
+  expect(keys).toContain('requestTooLargePayload');
+  expect(keys).toContain('requestTooLargeResponseSchema');
+});
+
+test('host resource contracts are available through the root and errors entry points', async () => {
+  const errors = await import('../errors');
+  const rate: publicApi.RateLimitExceededResponse = errors.rateLimitExceededPayload(5);
+  const size: import('../errors').RequestTooLargeResponse = publicApi.requestTooLargePayload();
+  expect(rate).toEqual(publicApi.rateLimitExceededPayload(5));
+  expect(size).toEqual(errors.requestTooLargePayload());
+  expect(errors.rateLimitExceededResponseSchema).toBe(publicApi.rateLimitExceededResponseSchema);
+  expect(errors.requestTooLargeResponseSchema).toBe(publicApi.requestTooLargeResponseSchema);
 });
 
 // Compile the host extension through both supported public entry points.

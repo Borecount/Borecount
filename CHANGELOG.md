@@ -10,6 +10,10 @@ Upgrade notice: the required `HoldApplicationRepository` read methods introduced
 `0.7.0` are a breaking extension for custom persistence adapters; see the release
 notes and implement the new methods before upgrading.
 
+### Added
+
+- LL-134: shared host resource-protection response schemas, types and payload helpers for `429 RATE_LIMIT_EXCEEDED` and `413 REQUEST_TOO_LARGE`, with canonical OpenAPI responses and matching `Retry-After` semantics. Enforcement remains host-owned; no database migrations or commercial checks are introduced.
+
 ## [0.7.0] - 2026-11-02
 
 ### Added

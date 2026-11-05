@@ -20,6 +20,9 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
   - `mapDomainErrorToHttp`
   - `errorResponseSchema`
   - `defaultErrorResponses`
+  - `rateLimitExceededResponseSchema`, `requestTooLargeResponseSchema`
+  - `rateLimitExceededPayload`, `requestTooLargePayload`
+  - `RateLimitExceededResponse`, `RequestTooLargeResponse` types
   - `readWhereParameter`, typed list-filter field maps, and URL-encoded JSON schema helpers
   - `HttpErrorDto`, `HttpErrorMapper`, `ErrorResponse` types
 - `@borecount/http/errors`: schema and response contracts
@@ -51,6 +54,51 @@ route.schema.response = { ...defaultErrorResponses };
 ```ts
 import { errorResponseSchema } from '@borecount/http/errors';
 ```
+
+## Host resource protection responses
+
+The canonical contract documents host-generated `429` responses for `/v1/*` operations and `413`
+responses for POST operations. These schemas and payload helpers are available from both
+`@borecount/http` and `@borecount/http/errors`; `defaultErrorResponses` includes both schemas.
+They do not install a limiter, configure body parsing, or change application services.
+
+For throttling, send status `429`, `rateLimitExceededPayload(seconds)`, and a `Retry-After` header
+containing the same whole-second delay as `retry_after_seconds`. The delay must be a positive safe
+integer; round the remaining window up and clamp it to at least one second before calling the helper.
+The JSON shape preserves the reference host's existing MVP throttle response.
+
+```ts
+import { rateLimitExceededPayload, requestTooLargePayload } from '@borecount/http';
+
+// Inside a host's Fastify hook, after its own limiter denies admission:
+const payload = rateLimitExceededPayload(42);
+reply.header('Retry-After', String(payload.retry_after_seconds)).code(429).send(payload);
+```
+
+In the host's size-error branch, before invoking an application service:
+
+```ts
+reply.code(413).send(requestTooLargePayload());
+```
+
+Express hosts send the same payloads with `res.status(...).json(...)` and set the same retry header.
+Hosts explicitly map their known body-parser size errors to `413 REQUEST_TOO_LARGE`; unknown or
+database errors retain the non-leaking `500` mapping. Schema validation and host item-count checks
+use `400 INVALID_INPUT`. Reject an oversized bulk request as a whole; do not split or partially post it.
+
+Authentication must precede tenant-based accounting. Use verified authentication context for tenant
+buckets, never caller-selected tenant headers or resource IDs. Protect unauthenticated requests with
+a bounded abuse key and configure trusted proxies explicitly. Hosts own bucket retention/capacity,
+body-byte limits, stricter bulk/entry limits, concurrency admission, and bounded queues.
+
+Library bounds remain 100 transactions per bulk request and 200 items per pagination page (default
+50). Transaction entries have no shared maximum; request-byte and stricter item limits are host policy.
+The PostgreSQL adapter exposes pool maximum, idle timeout, and connect timeout; connect timeout is
+not a query deadline. This contract adds no query timeout, export endpoint, or export concurrency control.
+
+Operators must document deployed limits, units, defaults, proxy topology, and remaining gaps. An
+in-process limiter resets on restart and does not coordinate replicas; distributed enforcement belongs
+to the host. These free protection contracts require no subscription or commercial entitlement check.
 
 ## Canonical contract
 
