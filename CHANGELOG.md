@@ -12,7 +12,11 @@ notes and implement the new methods before upgrading.
 
 ### Added
 
-- LL-134: shared host resource-protection response schemas, types and payload helpers for `429 RATE_LIMIT_EXCEEDED` and `413 REQUEST_TOO_LARGE`, with canonical OpenAPI responses and matching `Retry-After` semantics. Enforcement remains host-owned; no database migrations or commercial checks are introduced.
+- LL-134: shared `429` response schema and type, HTTP-owned `RateLimitExceededError` and safe status/body/header mapping in both adapters, plus generic `413` error documentation, with canonical OpenAPI responses and matching `Retry-After` semantics. Enforcement remains host-owned; no database migrations or commercial checks are introduced.
+
+### Changed
+
+- **Breaking:** removed `invalidInputPayload` from `@borecount/http/errors`. Hosts using it should construct `{ error: 'INVALID_INPUT', message }` directly; HTTP response bodies and statuses are unchanged.
 
 ## [0.7.0] - 2026-11-02
 

@@ -1,8 +1,4 @@
-import {
-  errorResponseSchema,
-  rateLimitExceededResponseSchema,
-  requestTooLargeResponseSchema,
-} from './errors';
+import { errorResponseSchema, rateLimitExceededResponseSchema } from './errors';
 
 export const defaultErrorResponses = {
   400: errorResponseSchema,
@@ -10,7 +6,7 @@ export const defaultErrorResponses = {
   403: errorResponseSchema,
   404: errorResponseSchema,
   409: errorResponseSchema,
-  413: requestTooLargeResponseSchema,
+  413: errorResponseSchema,
   429: rateLimitExceededResponseSchema,
   500: errorResponseSchema,
 } as const;

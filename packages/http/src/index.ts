@@ -3,15 +3,13 @@ export type {
   ErrorResponse,
   HttpErrorDto,
   RateLimitExceededResponse,
-  RequestTooLargeResponse,
 } from './errors';
 export {
   errorResponseSchema,
   mapDomainErrorToHttp,
-  rateLimitExceededPayload,
+  RateLimitExceededError,
   rateLimitExceededResponseSchema,
-  requestTooLargePayload,
-  requestTooLargeResponseSchema,
+  toHttpErrorPayload,
 } from './errors';
 export * from './mappers';
 export * from './query/list-filter';

@@ -1745,7 +1745,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/RequestTooLargeResponse'
+            $ref: '#/components/schemas/ErrorResponse'
     RateLimitExceededError:
       description: Host resource limit exceeded. Enforcement and accounting are host responsibilities; this contract does not imply distributed enforcement.
       headers:
@@ -2000,18 +2000,15 @@ components:
       additionalProperties: false
       required: [error, message, retry_after_seconds]
       properties:
-        error: { type: string, enum: [RATE_LIMIT_EXCEEDED] }
-        message: { type: string, enum: [Rate limit exceeded] }
+        error: { type: string }
+        message: { type: string }
         retry_after_seconds: { type: integer, minimum: 1, maximum: 9007199254740991 }
-    RequestTooLargeResponse:
-      type: object
-      additionalProperties: false
-      required: [error, message]
-      properties:
-        error: { type: string, enum: [REQUEST_TOO_LARGE] }
-        message: { type: string, enum: [Request too large] }
+        details:
+          type: object
+          additionalProperties: true
     ErrorResponse:
       type: object
+      additionalProperties: false
       required: [error, message]
       properties:
         error:

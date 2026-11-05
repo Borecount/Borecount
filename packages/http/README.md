@@ -5,8 +5,8 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
 ## Boundaries
 
 - Owns transport contracts and route-level reusable error response specs.
-- Maps domain/application errors to transport-safe HTTP DTOs.
-- Accepts the stable domain-error shape across bundled public export identities while rejecting raw database/unknown errors as non-leaking `500 INTERNAL_ERROR` responses.
+- Maps domain/application errors and the HTTP-owned `RateLimitExceededError` to transport-safe responses.
+- Accepts supported error shapes across bundled public export identities while rejecting raw database/unknown errors as non-leaking `500 INTERNAL_ERROR` responses.
 - Contains no HTTP server runtime code and no persistence code.
 - Reads no environment variables; JWT, rate limiting, port, and lifecycle configuration belong to the host application.
 
@@ -20,9 +20,9 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
   - `mapDomainErrorToHttp`
   - `errorResponseSchema`
   - `defaultErrorResponses`
-  - `rateLimitExceededResponseSchema`, `requestTooLargeResponseSchema`
-  - `rateLimitExceededPayload`, `requestTooLargePayload`
-  - `RateLimitExceededResponse`, `RequestTooLargeResponse` types
+  - `rateLimitExceededResponseSchema`
+  - `RateLimitExceededError`, `toHttpErrorPayload`
+  - `RateLimitExceededResponse` type
   - `readWhereParameter`, typed list-filter field maps, and URL-encoded JSON schema helpers
   - `HttpErrorDto`, `HttpErrorMapper`, `ErrorResponse` types
 - `@borecount/http/errors`: schema and response contracts
@@ -58,30 +58,45 @@ import { errorResponseSchema } from '@borecount/http/errors';
 ## Host resource protection responses
 
 The canonical contract documents host-generated `429` responses for `/v1/*` operations and `413`
-responses for POST operations. These schemas and payload helpers are available from both
-`@borecount/http` and `@borecount/http/errors`; `defaultErrorResponses` includes both schemas.
-They do not install a limiter, configure body parsing, or change application services.
+responses for POST operations. All ordinary errors, including `413`, use `errorResponseSchema`.
+Only `429` adds a required `retry_after_seconds` field through `rateLimitExceededResponseSchema`.
+These schemas, the transport error and its mapper are available from both `@borecount/http` and
+`@borecount/http/errors`; `defaultErrorResponses` includes both statuses. They do not install a
+limiter, configure body parsing, or change application services.
 
-For throttling, send status `429`, `rateLimitExceededPayload(seconds)`, and a `Retry-After` header
-containing the same whole-second delay as `retry_after_seconds`. The delay must be a positive safe
-integer; round the remaining window up and clamp it to at least one second before calling the helper.
-The JSON shape preserves the reference host's existing MVP throttle response.
+The host limiter throws a transport error when it denies admission:
 
 ```ts
-import { rateLimitExceededPayload, requestTooLargePayload } from '@borecount/http';
+import { RateLimitExceededError } from '@borecount/http';
 
-// Inside a host's Fastify hook, after its own limiter denies admission:
-const payload = rateLimitExceededPayload(42);
-reply.header('Retry-After', String(payload.retry_after_seconds)).code(429).send(payload);
+throw new RateLimitExceededError(retryAfterSeconds);
 ```
+
+The delay must be a positive safe integer; round the remaining window up and clamp it to at least
+one second before constructing the error. The mapper produces the existing MVP JSON shape and
+matching `Retry-After` header. Framework adapters use it for errors caught inside their route handlers.
+Errors thrown earlier by host hooks or middleware need the same mapping in the host's global error
+handler; adapter registration does not install or replace that handler.
+
+In the host's existing Fastify error handler, after its framework-specific validation handling:
+
+```ts
+import { toHttpErrorPayload } from '@borecount/http';
+
+const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+if (headers) reply.headers(headers);
+reply.code(statusCode).send(body);
+```
+
+Express hosts use `res.set(headers)` when headers are present and
+`res.status(statusCode).json(body)`. Status and header metadata must not be included in the JSON body.
 
 In the host's size-error branch, before invoking an application service:
 
 ```ts
-reply.code(413).send(requestTooLargePayload());
+reply.code(413).send({ error: 'REQUEST_TOO_LARGE', message: 'Request too large' });
 ```
 
-Express hosts send the same payloads with `res.status(...).json(...)` and set the same retry header.
 Hosts explicitly map their known body-parser size errors to `413 REQUEST_TOO_LARGE`; unknown or
 database errors retain the non-leaking `500` mapping. Schema validation and host item-count checks
 use `400 INVALID_INPUT`. Reject an oversized bulk request as a whole; do not split or partially post it.
@@ -99,6 +114,12 @@ not a query deadline. This contract adds no query timeout, export endpoint, or e
 Operators must document deployed limits, units, defaults, proxy topology, and remaining gaps. An
 in-process limiter resets on restart and does not coordinate replicas; distributed enforcement belongs
 to the host. These free protection contracts require no subscription or commercial entitlement check.
+
+## Upgrade note
+
+The `invalidInputPayload` export from `@borecount/http/errors` has been removed. Replace
+`invalidInputPayload(message)` with `{ error: 'INVALID_INPUT', message }` in host validation handlers.
+This removes a wrapper without changing the HTTP response shape or status.
 
 ## Canonical contract
 

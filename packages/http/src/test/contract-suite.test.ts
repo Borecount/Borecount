@@ -8,7 +8,7 @@ import {
   reconResultsListQuerySchema,
   reconResultsListResponseSchema,
 } from '../contracts/reconciliation';
-import { rateLimitExceededResponseSchema, requestTooLargeResponseSchema } from '../errors';
+import { errorResponseSchema, rateLimitExceededResponseSchema } from '../errors';
 import {
   accountResponseSchema,
   accountStatementResponseSchema,
@@ -104,11 +104,9 @@ describe('framework-agnostic contract suite', () => {
     expect(document.components.schemas?.RateLimitExceededResponse).toEqual(
       rateLimitExceededResponseSchema,
     );
-    expect(document.components.schemas?.RequestTooLargeResponse).toEqual(
-      requestTooLargeResponseSchema,
-    );
+    expect(document.components.schemas?.ErrorResponse).toEqual(errorResponseSchema);
     expect(defaultErrorResponses[429]).toEqual(rateLimitExceededResponseSchema);
-    expect(defaultErrorResponses[413]).toEqual(requestTooLargeResponseSchema);
+    expect(defaultErrorResponses[413]).toEqual(errorResponseSchema);
     expect(document.components.responses.RateLimitExceededError).toEqual({
       description: expect.any(String),
       headers: {
@@ -125,7 +123,7 @@ describe('framework-agnostic contract suite', () => {
     expect(document.components.responses.RequestTooLargeError).toEqual({
       description: expect.any(String),
       content: {
-        'application/json': { schema: { $ref: '#/components/schemas/RequestTooLargeResponse' } },
+        'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
       },
     });
     for (const [path, item] of Object.entries(document.paths ?? {})) {

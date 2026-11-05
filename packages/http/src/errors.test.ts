@@ -1,61 +1,73 @@
 import { describe, expect, it } from 'bun:test';
 import Ajv from 'ajv';
 import {
-  rateLimitExceededPayload,
+  RateLimitExceededError,
   rateLimitExceededResponseSchema,
-  requestTooLargePayload,
-  requestTooLargeResponseSchema,
   toHttpErrorPayload,
 } from './errors';
 
 describe('host resource error contracts', () => {
   const ajv = new Ajv();
   const validateRate = ajv.compile(rateLimitExceededResponseSchema);
-  const validateSize = ajv.compile(requestTooLargeResponseSchema);
 
-  it('preserves the MVP throttle payload and accepts positive safe retry delays', () => {
-    expect(rateLimitExceededPayload(42)).toEqual({
+  it('maps a thrown HTTP error to the MVP body and matching retry header', () => {
+    expect(toHttpErrorPayload(new RateLimitExceededError(42))).toEqual({
+      statusCode: 429,
+      headers: { 'Retry-After': '42' },
       error: 'RATE_LIMIT_EXCEEDED',
       message: 'Rate limit exceeded',
       retry_after_seconds: 42,
     });
     for (const seconds of [1, 42, Number.MAX_SAFE_INTEGER]) {
-      expect(validateRate(rateLimitExceededPayload(seconds))).toBe(true);
+      const error = new RateLimitExceededError(seconds);
+      expect(error).toBeInstanceOf(Error);
+      const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+      expect(statusCode).toBe(429);
+      expect(headers).toEqual({ 'Retry-After': String(seconds) });
+      expect(validateRate(body)).toBe(true);
     }
   });
 
   it('rejects invalid retry delays at construction and schema validation', () => {
+    const valid = {
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: 'Rate limit exceeded',
+      retry_after_seconds: 1,
+    };
     for (const seconds of [0, -1, 0.5, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
-      expect(() => rateLimitExceededPayload(seconds)).toThrow(RangeError);
-      expect(validateRate({ ...rateLimitExceededPayload(1), retry_after_seconds: seconds })).toBe(
-        false,
-      );
+      expect(() => new RateLimitExceededError(seconds)).toThrow(RangeError);
+      expect(validateRate({ ...valid, retry_after_seconds: seconds })).toBe(false);
     }
     for (const invalid of [
       { error: 'RATE_LIMIT_EXCEEDED', message: 'Rate limit exceeded' },
-      { ...rateLimitExceededPayload(1), retry_after_seconds: '1' },
-      { ...rateLimitExceededPayload(1), error: 'INTERNAL_ERROR' },
-      { ...rateLimitExceededPayload(1), message: 'secret database details' },
-      { ...rateLimitExceededPayload(1), details: { secret: 'value' } },
+      { ...valid, retry_after_seconds: '1' },
+      { ...valid, error: 429 },
+      { ...valid, message: null },
+      { ...valid, stack: 'private stack' },
     ]) {
       expect(validateRate(invalid)).toBe(false);
     }
   });
 
-  it('provides a deterministic size error without reflecting framework or request details', () => {
-    expect(requestTooLargePayload()).toEqual({
-      error: 'REQUEST_TOO_LARGE',
-      message: 'Request too large',
+  it('maps the supported error shape across bundles without reflecting private messages', () => {
+    const error = Object.assign(new Error('private limiter internals'), {
+      name: 'RateLimitExceededError',
+      code: 'RATE_LIMIT_EXCEEDED',
+      retryAfterSeconds: 7,
     });
-    expect(validateSize(requestTooLargePayload())).toBe(true);
-    for (const invalid of [
-      { error: 'REQUEST_TOO_LARGE' },
-      { ...requestTooLargePayload(), error: 'INVALID_INPUT' },
-      { ...requestTooLargePayload(), message: 'secret request details' },
-      { ...requestTooLargePayload(), stack: 'private stack' },
-    ]) {
-      expect(validateSize(invalid)).toBe(false);
-    }
+    expect(toHttpErrorPayload(error)).toEqual({
+      statusCode: 429,
+      headers: { 'Retry-After': '7' },
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: 'Rate limit exceeded',
+      retry_after_seconds: 7,
+    });
+    error.retryAfterSeconds = 0;
+    expect(toHttpErrorPayload(error)).toEqual({
+      statusCode: 500,
+      error: 'INTERNAL_ERROR',
+      message: 'Internal server error',
+    });
   });
 
   it('does not recognize framework errors as trusted domain errors', () => {

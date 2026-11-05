@@ -1,4 +1,3 @@
-import { invalidInputPayload } from '@borecount/http/errors';
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 
 type ValidationError = FastifyError & {
@@ -18,7 +17,9 @@ export const handleValidationError = (
   reply: FastifyReply,
 ): void => {
   if (Array.isArray(error.validation)) {
-    reply.status(400).send(invalidInputPayload(validationMessage(error.validationContext)));
+    reply
+      .status(400)
+      .send({ error: 'INVALID_INPUT', message: validationMessage(error.validationContext) });
     return;
   }
 

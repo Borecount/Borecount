@@ -37,7 +37,6 @@ import {
   type StatementQuery,
   statementQuerySchema,
 } from '@borecount/http/contracts';
-import { invalidInputPayload } from '@borecount/http/errors';
 import {
   toAccountResponse,
   toAccountStatementResponse,
@@ -150,7 +149,9 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
             accountFilterFields,
           );
           if (where === null)
-            return reply.status(400).send(invalidInputPayload('Invalid querystring'));
+            return reply
+              .status(400)
+              .send({ error: 'INVALID_INPUT', message: 'Invalid querystring' });
           const page = await this.accounts.list({
             tenantId: request.tenantId as string,
             limit: resolvePaginationLimit(request.query.limit),

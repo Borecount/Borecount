@@ -14,11 +14,8 @@ import {
 import type { UnknownRecord } from '@borecount/core/base';
 import type { TransactionMetadata } from '@borecount/core/transaction';
 import { registerLedgerAdapter as registerFastifyLedgerAdapter } from '@borecount/fastify-routes';
-import {
-  defaultErrorResponses,
-  rateLimitExceededPayload,
-  requestTooLargePayload,
-} from '@borecount/http';
+import { defaultErrorResponses } from '@borecount/http';
+import { RateLimitExceededError, toHttpErrorPayload } from '@borecount/http/errors';
 import type { AdjustmentAuthorizationHook, LedgerAdapterOptions } from '@borecount/http/route-core';
 import { createContractHarness } from '@borecount/http/test/harness';
 import express, { type Application } from 'express';
@@ -1906,8 +1903,7 @@ describe('express adapter parity with fastify adapter', () => {
 describe('host rate limit and request size error parity', () => {
   it('returns matching host 429 and 413 responses before adapter services run', async () => {
     const retryAfterSeconds = 37;
-    const rateLimitPayload = rateLimitExceededPayload(retryAfterSeconds);
-    const requestTooLarge = requestTooLargePayload();
+    const requestTooLarge = { error: 'REQUEST_TOO_LARGE', message: 'Request too large' };
     let rejection: 429 | 413 | null = 429;
     let serviceCalls = 0;
     const services = {
@@ -1935,8 +1931,7 @@ describe('host rate limit and request size error parity', () => {
     });
     fastify.addHook('onRequest', (request, reply, done) => {
       if (rejection === 429) {
-        reply.code(429).header('Retry-After', String(retryAfterSeconds)).send(rateLimitPayload);
-        return;
+        throw new RateLimitExceededError(retryAfterSeconds);
       }
       if (rejection === 413) {
         reply.code(413).send(requestTooLarge);
@@ -1945,12 +1940,17 @@ describe('host rate limit and request size error parity', () => {
       Object.assign(request, { tenantId, apiKeyId: 'host-api-key', apiKeyRole: ApiKeyRole.ADMIN });
       done();
     });
+    fastify.setErrorHandler((error, _request, reply) => {
+      const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+      if (headers) reply.headers(headers);
+      reply.code(statusCode).send(body);
+    });
     registerFastifyLedgerAdapter(fastify, services, { authorizeAdjustment: false });
 
     const expressApp = express();
     expressApp.use((request, response, next) => {
       if (rejection === 429) {
-        response.status(429).set('Retry-After', String(retryAfterSeconds)).json(rateLimitPayload);
+        next(new RateLimitExceededError(retryAfterSeconds));
         return;
       }
       if (rejection === 413) {
@@ -1961,6 +1961,18 @@ describe('host rate limit and request size error parity', () => {
       next();
     });
     registerExpressLedgerAdapter(expressApp, services, { authorizeAdjustment: false });
+    expressApp.use(
+      (
+        error: unknown,
+        _request: express.Request,
+        response: express.Response,
+        _next: express.NextFunction,
+      ) => {
+        const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+        if (headers) response.set(headers);
+        response.status(statusCode).json(body);
+      },
+    );
 
     const requestExpress = async () => {
       const req = httpMocks.createRequest({
@@ -2038,6 +2050,73 @@ describe('host rate limit and request size error parity', () => {
       expect(expressResponse.status).toBe(201);
       expect(JSON.parse(fastifyResponse.body)).toEqual(expressResponse.json);
       expect(serviceCalls).toBe(2);
+    } finally {
+      await fastify.close();
+    }
+  });
+
+  it('maps RateLimitExceededError thrown by adapter authorization with matching headers', async () => {
+    const retryAfterSeconds = 37;
+    let serviceCalls = 0;
+    const services = {
+      adjustments: {
+        credit: async () => {
+          serviceCalls += 1;
+          return { transactionId: '00000000-0000-4000-8000-000000000906', created: true };
+        },
+      },
+    } as unknown as ApplicationServices;
+    const authorizeAdjustment = () => {
+      throw new RateLimitExceededError(retryAfterSeconds);
+    };
+    const fastify = Fastify();
+    fastify.decorateRequest('tenantId');
+    fastify.decorateRequest('apiKeyId');
+    fastify.decorateRequest('apiKeyRole');
+    fastify.addHook('onRequest', (request, _reply, done) => {
+      Object.assign(request, { tenantId, apiKeyId: 'host-api-key', apiKeyRole: ApiKeyRole.ADMIN });
+      done();
+    });
+    registerFastifyLedgerAdapter(fastify, services, { authorizeAdjustment });
+
+    const expressApp = express();
+    expressApp.use((request, _response, next) => {
+      Object.assign(request, { tenantId, apiKeyId: 'host-api-key', apiKeyRole: ApiKeyRole.ADMIN });
+      next();
+    });
+    registerExpressLedgerAdapter(expressApp, services, { authorizeAdjustment });
+
+    try {
+      const fastifyResponse = await fastify.inject({
+        method: 'POST',
+        url: '/v1/adjustments/credit',
+        payload: adjustmentPayload,
+      });
+      const req = httpMocks.createRequest({
+        method: 'POST',
+        url: '/v1/adjustments/credit',
+        body: adjustmentPayload,
+        headers: { 'content-type': 'application/json' },
+      });
+      const res = httpMocks.createResponse({
+        eventEmitter: (await import('node:events')).EventEmitter,
+      });
+      await new Promise<void>((resolve, reject) => {
+        res.on('finish', resolve);
+        expressApp(req, res, (error?: unknown) => (error ? reject(error) : resolve()));
+      });
+      const expected = {
+        error: 'RATE_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded',
+        retry_after_seconds: retryAfterSeconds,
+      };
+      expect(fastifyResponse.statusCode).toBe(429);
+      expect(JSON.parse(fastifyResponse.body)).toEqual(expected);
+      expect(fastifyResponse.headers['retry-after']).toBe(String(retryAfterSeconds));
+      expect(res.statusCode).toBe(429);
+      expect(res._getJSONData()).toEqual(expected);
+      expect(res.getHeader('Retry-After')).toBe(String(retryAfterSeconds));
+      expect(serviceCalls).toBe(0);
     } finally {
       await fastify.close();
     }

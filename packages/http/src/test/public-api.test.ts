@@ -13,20 +13,24 @@ test('public API includes shared HTTP contracts and primitives', () => {
   expect(keys).toContain('holdFilterFields');
   expect(keys).toContain('ApiKeyRole');
   expect(keys).toContain('mapDomainErrorToHttp');
-  expect(keys).toContain('rateLimitExceededPayload');
+  expect(keys).toContain('RateLimitExceededError');
+  expect(keys).toContain('toHttpErrorPayload');
   expect(keys).toContain('rateLimitExceededResponseSchema');
-  expect(keys).toContain('requestTooLargePayload');
-  expect(keys).toContain('requestTooLargeResponseSchema');
 });
 
 test('host resource contracts are available through the root and errors entry points', async () => {
   const errors = await import('../errors');
-  const rate: publicApi.RateLimitExceededResponse = errors.rateLimitExceededPayload(5);
-  const size: import('../errors').RequestTooLargeResponse = publicApi.requestTooLargePayload();
-  expect(rate).toEqual(publicApi.rateLimitExceededPayload(5));
-  expect(size).toEqual(errors.requestTooLargePayload());
+  const error = new publicApi.RateLimitExceededError(5);
+  const { statusCode, headers, ...body } = errors.toHttpErrorPayload(error);
+  const rate: publicApi.RateLimitExceededResponse = {
+    error: 'RATE_LIMIT_EXCEEDED',
+    message: 'Rate limit exceeded',
+    retry_after_seconds: 5,
+  };
+  expect(statusCode).toBe(429);
+  expect(headers).toEqual({ 'Retry-After': '5' });
+  expect(body).toEqual(rate);
   expect(errors.rateLimitExceededResponseSchema).toBe(publicApi.rateLimitExceededResponseSchema);
-  expect(errors.requestTooLargeResponseSchema).toBe(publicApi.requestTooLargeResponseSchema);
 });
 
 // Compile the host extension through both supported public entry points.

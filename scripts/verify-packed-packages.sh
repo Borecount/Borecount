@@ -29,9 +29,23 @@ await import('@borecount/core');
 await import('@borecount/core/application');
 await import('@borecount/core/base');
 await import('@borecount/core/utils');
-await import('@borecount/http');
+const http = await import('@borecount/http');
 await import('@borecount/http/contracts');
-await import('@borecount/http/errors');
+const httpErrors = await import('@borecount/http/errors');
+const { deepStrictEqual } = await import('node:assert');
+// Separately bundled public entry points must recognize each other's transport errors.
+for (const [ErrorClass, mapError] of [
+  [http.RateLimitExceededError, httpErrors.toHttpErrorPayload],
+  [httpErrors.RateLimitExceededError, http.toHttpErrorPayload],
+]) {
+  deepStrictEqual(mapError(new ErrorClass(7)), {
+    statusCode: 429,
+    headers: { 'Retry-After': '7' },
+    error: 'RATE_LIMIT_EXCEEDED',
+    message: 'Rate limit exceeded',
+    retry_after_seconds: 7,
+  });
+}
 await import('@borecount/http/mappers');
 await import('@borecount/http/query/pagination');
 await import('@borecount/http/route-core');
