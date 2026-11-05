@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { InvariantViolationError } from '@borecount/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import { sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import * as schema from '../../src/schema';

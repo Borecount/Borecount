@@ -12,10 +12,11 @@ notes and implement the new methods before upgrading.
 
 ### Added
 
-- LL-134: shared `429` response schema and type, HTTP-owned `RateLimitExceededError` and safe status/body/header mapping in both adapters, plus generic `413` error documentation, with canonical OpenAPI responses and matching `Retry-After` semantics. Enforcement remains host-owned; no database migrations or commercial checks are introduced.
+- LL-134: shared `429` response schema and type, shared `RateLimitExceededError` and safe status/body/header mapping in both adapters, plus generic `413` error documentation, with canonical OpenAPI responses and matching `Retry-After` semantics. Enforcement remains host-owned; no database migrations or commercial checks are introduced.
 
 ### Changed
 
+- **Breaking:** all custom error classes and guards now live in `@borecount/core/errors`, including `DomainError` and `RateLimitExceededError`. Replace imports from core root/module entry points and HTTP with this subpath. No compatibility re-exports remain. Both `AccountNotFoundError` definitions are consolidated into one class with status `404`; missing accounts during posting change from `400` to `404`.
 - **Breaking:** removed `invalidInputPayload` from `@borecount/http/errors`. Hosts using it should construct `{ error: 'INVALID_INPUT', message }` directly; HTTP response bodies and statuses are unchanged.
 
 ## [0.7.0] - 2026-11-02

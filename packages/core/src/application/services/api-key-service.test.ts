@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import { ApiKeyEntity, ApiKeyRole } from '@borecount/core';
 import type { ApiKeyRepository, PaginatedResult } from '@borecount/core/application';
-import {
-  ApiKeyService,
-  ForbiddenError,
-  InvariantViolationError,
-  UnauthorizedError,
-} from '@borecount/core/application';
+import { ApiKeyService } from '@borecount/core/application';
+import { ForbiddenError, InvariantViolationError, UnauthorizedError } from '@borecount/core/errors';
 
 const hash = (value: string): string => new Bun.CryptoHasher('sha256').update(value).digest('hex');
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { InvariantViolationError } from '../application/errors';
 import { isDomainError } from './domain-error';
+import { InvariantViolationError } from './index';
 
 describe('isDomainError', () => {
   it('accepts domain errors by stable public shape', () => {

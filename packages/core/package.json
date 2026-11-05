@@ -55,6 +55,10 @@
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors/index.d.ts",
+      "import": "./dist/errors/index.js"
     }
   },
   "files": [
@@ -76,6 +80,6 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/account/index.ts src/api-key/index.ts src/application/index.ts src/base/index.ts src/credit-grant/index.ts src/entry/index.ts src/ledger/index.ts src/reconciliation/index.ts src/tenant/index.ts src/transaction/index.ts src/utils/index.ts --target=node --format=esm --packages=external --root=src --outdir=dist && bunx tsc -p tsconfig.build.json --emitDeclarationOnly && node ../../scripts/fix-dts-relative-imports.mjs packages/core/dist"
+    "build": "rm -rf dist && bun build src/index.ts src/errors/index.ts src/account/index.ts src/api-key/index.ts src/application/index.ts src/base/index.ts src/credit-grant/index.ts src/entry/index.ts src/ledger/index.ts src/reconciliation/index.ts src/tenant/index.ts src/transaction/index.ts src/utils/index.ts --target=node --format=esm --packages=external --root=src --outdir=dist && bunx tsc -p tsconfig.build.json --emitDeclarationOnly && node ../../scripts/fix-dts-relative-imports.mjs packages/core/dist"
   }
 }

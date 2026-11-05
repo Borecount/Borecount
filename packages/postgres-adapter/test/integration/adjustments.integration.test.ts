@@ -1,8 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import {
-  AdjustmentConflictError,
-  OverdraftPolicyViolationError,
-} from '@borecount/core/application';
+import { AdjustmentConflictError, OverdraftPolicyViolationError } from '@borecount/core/errors';
 import { and, eq } from 'drizzle-orm';
 import { createDbClient } from '../../src/client';
 import { DrizzleAdjustmentRepository } from '../../src/repositories/adjustment-repository';

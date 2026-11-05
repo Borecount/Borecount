@@ -1,11 +1,11 @@
-import { isNonEmptyString } from '../base/string';
 import {
   CurrencyMismatchError,
   InvalidAmountError,
   MissingReferenceError,
   NotEnoughEntriesError,
   UnbalancedTransactionError,
-} from './errors';
+} from '@borecount/core/errors';
+import { isNonEmptyString } from '../base/string';
 
 type EntryAmountLine = {
   money: {

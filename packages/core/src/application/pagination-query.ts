@@ -1,5 +1,5 @@
+import { InvariantViolationError } from '@borecount/core/errors';
 import { assertNonEmpty } from '../utils';
-import { InvariantViolationError } from './errors';
 import type { BasePaginationQuery } from './types';
 
 export const validatePaginationQuery = (query: BasePaginationQuery): void => {

@@ -1,8 +1,6 @@
-import {
-  type ApplicationUnitOfWorkContext,
-  InvariantViolationError,
-} from '@borecount/core/application';
+import type { ApplicationUnitOfWorkContext } from '@borecount/core/application';
 import type { TenantId, UnitOfWork } from '@borecount/core/base';
+import { InvariantViolationError } from '@borecount/core/errors';
 import type { TenantProvisioningService } from '@borecount/core/tenant';
 import { createApplicationServices } from '../application-services';
 import type { DbClient, DrizzleDatabase } from '../client';

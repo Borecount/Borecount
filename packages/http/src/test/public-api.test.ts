@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { RateLimitExceededError } from '@borecount/core/errors';
 import * as publicApi from '../index';
 
 test('public API includes shared HTTP contracts and primitives', () => {
@@ -13,14 +14,14 @@ test('public API includes shared HTTP contracts and primitives', () => {
   expect(keys).toContain('holdFilterFields');
   expect(keys).toContain('ApiKeyRole');
   expect(keys).toContain('mapDomainErrorToHttp');
-  expect(keys).toContain('RateLimitExceededError');
+  expect(keys).not.toContain('RateLimitExceededError');
   expect(keys).toContain('toHttpErrorPayload');
   expect(keys).toContain('rateLimitExceededResponseSchema');
 });
 
 test('host resource contracts are available through the root and errors entry points', async () => {
   const errors = await import('../errors');
-  const error = new publicApi.RateLimitExceededError(5);
+  const error = new RateLimitExceededError(5);
   const { statusCode, headers, ...body } = errors.toHttpErrorPayload(error);
   const rate: publicApi.RateLimitExceededResponse = {
     error: 'RATE_LIMIT_EXCEEDED',

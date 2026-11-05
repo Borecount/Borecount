@@ -31,7 +31,7 @@ Existing hosts must add a callback or explicitly opt out with `false` before upg
 
 ```ts
 import { registerLedgerAdapter } from '@borecount/fastify-routes';
-import { ForbiddenError } from '@borecount/core/application';
+import { ForbiddenError } from '@borecount/core/errors';
 import type { FastifyInstance } from 'fastify';
 
 declare const server: FastifyInstance;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { ApiKeyEntity, ApiKeyRole } from '@borecount/core';
 import { generateApiKey } from '@borecount/core/application';
-import { InvariantViolationError } from '../application/errors';
+import { InvariantViolationError } from '@borecount/core/errors';
 import {
   type ProvisionTenantInput,
   TenantProvisioningService,

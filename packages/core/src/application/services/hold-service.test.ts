@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-
 import {
   type HoldApplicationRepository,
-  HoldNotFoundError,
   HoldService,
   type HoldSummary,
-  InvariantViolationError,
 } from '@borecount/core/application';
+import { HoldNotFoundError, InvariantViolationError } from '@borecount/core/errors';
 
 const hold: HoldSummary = {
   id: 'hold-1',

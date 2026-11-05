@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { AccountSide, isDomainError, TenantId } from '@borecount/core';
+import { AccountSide, TenantId } from '@borecount/core';
+import { isDomainError } from '@borecount/core/errors';
 import { createDbClient, createUnitOfWork } from '@borecount/postgres-adapter';
 import { sql } from 'drizzle-orm';
 import { pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';

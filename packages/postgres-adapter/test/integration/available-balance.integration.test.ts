@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import {
   BulkTransactionError,
+  InvalidAmountError,
   InvariantViolationError,
   OverdraftPolicyViolationError,
   RepositoryError,
-} from '@borecount/core/application';
-import { InvalidAmountError } from '@borecount/core/transaction';
+} from '@borecount/core/errors';
 import { eq } from 'drizzle-orm';
 import { DrizzleHoldRepository } from '../../src/repositories/hold-repository';
 import { DrizzleTransactionRepository } from '../../src/repositories/transaction-repository';

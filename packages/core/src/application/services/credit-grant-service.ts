@@ -1,6 +1,6 @@
+import { CreditGrantNotFoundError, InvariantViolationError } from '@borecount/core/errors';
 import { validateCreditGrant } from '../../credit-grant';
 import { assertNonEmpty } from '../../utils';
-import { CreditGrantNotFoundError, InvariantViolationError } from '../errors';
 import { validateListWhere } from '../list-filters';
 import { validatePaginationQuery } from '../pagination-query';
 import type { CreditGrantRepository } from '../repositories.interface';

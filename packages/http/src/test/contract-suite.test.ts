@@ -107,6 +107,15 @@ describe('framework-agnostic contract suite', () => {
     expect(document.components.schemas?.ErrorResponse).toEqual(errorResponseSchema);
     expect(defaultErrorResponses[429]).toEqual(rateLimitExceededResponseSchema);
     expect(defaultErrorResponses[413]).toEqual(errorResponseSchema);
+    for (const path of [
+      '/v1/transactions',
+      '/v1/transactions/bulk',
+      '/v1/transactions/{id}/correct',
+    ]) {
+      expect(document.paths?.[path]?.post?.responses?.['404']).toEqual({
+        $ref: '#/components/responses/NotFoundError',
+      });
+    }
     expect(document.components.responses.RateLimitExceededError).toEqual({
       description: expect.any(String),
       headers: {
