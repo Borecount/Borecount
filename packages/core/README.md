@@ -232,3 +232,11 @@ Money and transaction validation use the same `CurrencyMismatchError` class and 
 `MAX_PAGE_LIMIT` (200) and `MAX_FILTER_IN_VALUES` (100) are exported from
 `@borecount/core/application`. Core service validation and HTTP contracts/parsers use these same
 constants; the HTTP page-size default of 50 remains transport policy.
+
+Error guards use validated `Symbol.for` brands so separately loaded copies of core remain
+recognizable without trusting arbitrary `code`/`httpStatus` objects. Brands classify errors;
+they are not an authentication or trust boundary for hostile code running inside the process.
+
+`isUuid` and `UUID_PATTERN` from `@borecount/core/base` validate canonical PostgreSQL UUID
+text (case-insensitive hex groups, with no version or variant restriction). HTTP parameters,
+filters and persistence cursors share this predicate. The unused UUIDv7-only helper is removed.

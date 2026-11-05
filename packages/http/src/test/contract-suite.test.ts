@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { CREDIT_LOT_MOVEMENT_KINDS } from '@borecount/core/application';
+import { CREDIT_LOT_MOVEMENT_KINDS, MAX_PAGE_LIMIT } from '@borecount/core/application';
 import Ajv from 'ajv';
 import {
   reconResultResponseSchema,
@@ -581,7 +581,7 @@ describe('framework-agnostic contract suite', () => {
     expect(resultParameters.find((parameter) => parameter.name === 'limit')).toMatchObject({
       in: 'query',
       required: false,
-      schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+      schema: { type: 'integer', minimum: 1, maximum: MAX_PAGE_LIMIT, default: 50 },
     });
     expect(resultParameters.find((parameter) => parameter.name === 'cursor')).toMatchObject({
       in: 'query',
@@ -647,7 +647,7 @@ describe('framework-agnostic contract suite', () => {
       expect(querySchema.properties.limit).toEqual({
         type: 'integer',
         minimum: 1,
-        maximum: 200,
+        maximum: MAX_PAGE_LIMIT,
         default: 50,
       });
       expect(querySchema.properties.cursor).toEqual({ type: 'string', minLength: 1 });

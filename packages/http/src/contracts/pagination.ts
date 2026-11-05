@@ -4,7 +4,7 @@ import type { InferSchema } from '../schema-types';
 import { isRecord } from '../validation-utils';
 
 export const DEFAULT_PAGE_LIMIT = 50;
-export { MAX_PAGE_LIMIT } from '@borecount/core/application';
+export { MAX_PAGE_LIMIT };
 
 export const paginationQuerySchema = {
   type: 'object',

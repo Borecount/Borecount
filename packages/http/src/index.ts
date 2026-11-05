@@ -1,6 +1,7 @@
 export * from './contracts';
 export type {
   ErrorResponse,
+  HttpErrorPayload,
   RateLimitExceededResponse,
 } from './errors';
 export {

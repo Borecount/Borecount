@@ -6,3 +6,4 @@ export * from './object';
 export * from './result';
 export * from './string';
 export * from './unit-of-work';
+export * from './uuid';

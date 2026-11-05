@@ -16,6 +16,10 @@ notes and implement the new methods before upgrading.
 
 ### Changed
 
+- LL-134: classify errors across package copies using validated global symbol brands. Share canonical PostgreSQL UUID validation without version/variant restrictions; remove the unused UUIDv7-only helper.
+
+- LL-134 (breaking): error mapping returns `{ statusCode, headers, body }`; status 429 requires the canonical rate-limit error. Domain error statuses must be integers from 400 through 599. Invalid identifier messages omit input values. Express hosts can supply a JSON parser or disable the adapter parser explicitly.
+
 - Removed adapter registration aliases, Fastify pagination renaming wrappers and unused HTTP route base classes. Hold reads use `holdSummaryFilterFields` and `holdIdParamsSchema`; string validation uses core `isNonEmptyString`.
 - Error classification requires the canonical `DomainError` instance; the constructor accepts an explicit status and options without the old argument overload.
 - All lists now use the current scoped cursor codec with six-digit timestamps; balance history no longer has a separate codec. Previous cursor encodings are not supported.

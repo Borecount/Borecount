@@ -6,7 +6,7 @@ HTTP mapping helpers for `@borecount/core` domain/application errors.
 
 - Owns transport contracts and route-level reusable error response specs.
 - Maps domain/application errors and `RateLimitExceededError` from `@borecount/core/errors` to transport-safe responses.
-- Recognizes instances of the canonical core error classes; raw database/unknown errors produce non-leaking `500 INTERNAL_ERROR` responses.
+- Recognizes validated `Symbol.for` brands shared by core error classes across package copies; raw database/unknown errors produce non-leaking `500 INTERNAL_ERROR` responses.
 - Contains no HTTP server runtime code and no persistence code.
 - Reads no environment variables; JWT, rate limiting, port, and lifecycle configuration belong to the host application.
 
@@ -45,7 +45,7 @@ timing, detached body snapshots, result matching, and the explicit trusted-servi
 ```ts
 import { defaultErrorResponses, toHttpErrorPayload } from '@borecount/http';
 
-const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+const { statusCode, headers, body } = toHttpErrorPayload(error);
 if (headers) reply.headers(headers);
 reply.code(statusCode).send(body);
 route.schema.response = { ...defaultErrorResponses };
@@ -83,7 +83,7 @@ In the host's existing Fastify error handler, after its framework-specific valid
 ```ts
 import { toHttpErrorPayload } from '@borecount/http';
 
-const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+const { statusCode, headers, body } = toHttpErrorPayload(error);
 if (headers) reply.headers(headers);
 reply.code(statusCode).send(body);
 ```
@@ -147,3 +147,7 @@ Hold reads use `GET /v1/holds` and `GET /v1/holds/{id}`. The nested
 all hold list routes use typed `where` filters and the shared cursor and limit contract.
 
 Before production use, cross-check this README against the OpenAPI shipped with the installed package version and review the [documentation publication checklist](../../docs/integration/versioning.md#documentation-publication-checklist).
+
+`toHttpErrorPayload` returns `HttpErrorPayload` with separate `statusCode`, `headers`, and `body`.
+The 429 branch requires the retry body and header. Use the canonical `RateLimitExceededError`
+for 429 responses; a custom domain error with status 429 lacks that contract and maps to safe 500.

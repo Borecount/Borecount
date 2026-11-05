@@ -58,3 +58,11 @@ Pass host policy in the third argument, `LedgerAdapterOptions`. `authorizeAdjust
 Ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
 
 Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
+
+## JSON parsing
+
+Registration installs `express.json()` with Express defaults before ledger routes. Like other
+application middleware, it also applies to subsequently registered routes. Hosts can pass
+`jsonParser: express.json({ limit: '1mb' })` to choose parser settings, or `jsonParser: false` when
+they install their own parser before registration. Install the host error handler after routes
+and map known parser size errors to the documented 413 response.

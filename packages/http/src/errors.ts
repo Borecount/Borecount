@@ -1,5 +1,5 @@
 import type { UnknownRecord } from '@borecount/core/base';
-import { isDomainError, RateLimitExceededError } from '@borecount/core/errors';
+import { isDomainError, isRateLimitExceededError } from '@borecount/core/errors';
 import type { InferSchema } from './schema-types';
 
 export const errorResponseSchema = {
@@ -42,35 +42,46 @@ const extractDetails = (error: unknown): UnknownRecord | undefined => {
   return asRecord(record?.details) ?? undefined;
 };
 
-export const toHttpErrorPayload = (
-  error: unknown,
-): ErrorResponse & {
-  statusCode: number;
-  headers?: Record<string, string>;
-  retry_after_seconds?: number;
-} => {
-  if (error instanceof RateLimitExceededError) {
+type Digit = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+type ErrorStatus = `${4 | 5}${Digit}${Digit}` extends `${infer Status extends number}`
+  ? Status
+  : never;
+
+export type HttpErrorPayload =
+  | {
+      statusCode: 429;
+      headers: { 'Retry-After': string };
+      body: RateLimitExceededResponse;
+    }
+  | {
+      statusCode: Exclude<ErrorStatus, 429>;
+      headers?: Record<string, string>;
+      body: ErrorResponse;
+    };
+
+export const toHttpErrorPayload = (error: unknown): HttpErrorPayload => {
+  if (isRateLimitExceededError(error)) {
     return {
       statusCode: 429,
       headers: { 'Retry-After': String(error.retryAfterSeconds) },
-      error: 'RATE_LIMIT_EXCEEDED',
-      message: 'Rate limit exceeded',
-      retry_after_seconds: error.retryAfterSeconds,
+      body: {
+        error: 'RATE_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded',
+        retry_after_seconds: error.retryAfterSeconds,
+      },
     };
   }
 
-  if (isDomainError(error)) {
+  if (isDomainError(error) && error.httpStatus !== 429) {
+    const details = extractDetails(error);
     return {
-      statusCode: error.httpStatus,
-      error: error.code,
-      message: error.message,
-      details: extractDetails(error),
+      statusCode: error.httpStatus as Exclude<ErrorStatus, 429>,
+      body: { error: error.code, message: error.message, ...(details ? { details } : {}) },
     };
   }
 
   return {
     statusCode: 500,
-    error: 'INTERNAL_ERROR',
-    message: 'Internal server error',
+    body: { error: 'INTERNAL_ERROR', message: 'Internal server error' },
   };
 };

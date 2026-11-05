@@ -22,7 +22,7 @@ test('public API includes shared HTTP contracts and primitives', () => {
 test('host resource contracts are available through the root and errors entry points', async () => {
   const errors = await import('../errors');
   const error = new RateLimitExceededError(5);
-  const { statusCode, headers, ...body } = errors.toHttpErrorPayload(error);
+  const { statusCode, headers, body } = errors.toHttpErrorPayload(error);
   const rate: publicApi.RateLimitExceededResponse = {
     error: 'RATE_LIMIT_EXCEEDED',
     message: 'Rate limit exceeded',

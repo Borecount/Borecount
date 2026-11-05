@@ -45,9 +45,11 @@ for (const mapError of [http.toHttpErrorPayload, httpErrors.toHttpErrorPayload])
   deepStrictEqual(mapError(new coreErrors.RateLimitExceededError(7)), {
     statusCode: 429,
     headers: { 'Retry-After': '7' },
-    error: 'RATE_LIMIT_EXCEEDED',
-    message: 'Rate limit exceeded',
-    retry_after_seconds: 7,
+    body: {
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: 'Rate limit exceeded',
+      retry_after_seconds: 7,
+    },
   });
 }
 await import('@borecount/http/mappers');

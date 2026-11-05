@@ -40,7 +40,7 @@ import type { RequestWithContext } from '../types';
 
 const parseNonEmptyQuery = (value: unknown): string | null | undefined => {
   if (value === undefined) return undefined;
-  return typeof value === 'string' && isNonEmptyString(value) ? value : null;
+  return isNonEmptyString(value) ? value : null;
 };
 
 export const registerCreditGrantRoutes = (

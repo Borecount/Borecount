@@ -10,7 +10,7 @@ export const sendDomainError = (reply: FastifyReply, error: unknown): FastifyRep
   ) {
     return reply.status(400).send({ error: 'INVALID_INPUT', message: 'Invalid querystring' });
   }
-  const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+  const { statusCode, headers, body } = toHttpErrorPayload(error);
   if (headers) reply.headers(headers);
   return reply.status(statusCode).send(body);
 };

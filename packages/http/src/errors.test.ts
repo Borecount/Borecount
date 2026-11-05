@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   AccountNotFoundError,
   CreditGrantNotFoundError,
+  DomainError,
   ForbiddenError,
   HoldNotFoundError,
   InvariantViolationError,
@@ -19,14 +20,16 @@ describe('host resource error contracts', () => {
     expect(toHttpErrorPayload(new RateLimitExceededError(42))).toEqual({
       statusCode: 429,
       headers: { 'Retry-After': '42' },
-      error: 'RATE_LIMIT_EXCEEDED',
-      message: 'Rate limit exceeded',
-      retry_after_seconds: 42,
+      body: {
+        error: 'RATE_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded',
+        retry_after_seconds: 42,
+      },
     });
     for (const seconds of [1, 42, Number.MAX_SAFE_INTEGER]) {
       const error = new RateLimitExceededError(seconds);
       expect(error).toBeInstanceOf(Error);
-      const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+      const { statusCode, headers, body } = toHttpErrorPayload(error);
       expect(statusCode).toBe(429);
       expect(headers).toEqual({ 'Retry-After': String(seconds) });
       expect(validateRate(body)).toBe(true);
@@ -62,8 +65,10 @@ describe('host resource error contracts', () => {
     });
     expect(toHttpErrorPayload(error)).toEqual({
       statusCode: 500,
-      error: 'INTERNAL_ERROR',
-      message: 'Internal server error',
+      body: {
+        error: 'INTERNAL_ERROR',
+        message: 'Internal server error',
+      },
     });
   });
 
@@ -71,8 +76,10 @@ describe('host resource error contracts', () => {
     for (const code of ['FST_ERR_CTP_BODY_TOO_LARGE', 'RATE_LIMIT_EXCEEDED', 'REQUEST_TOO_LARGE']) {
       expect(toHttpErrorPayload(Object.assign(new Error('private details'), { code }))).toEqual({
         statusCode: 500,
-        error: 'INTERNAL_ERROR',
-        message: 'Internal server error',
+        body: {
+          error: 'INTERNAL_ERROR',
+          message: 'Internal server error',
+        },
       });
     }
   });
@@ -87,15 +94,17 @@ describe('toHttpErrorPayload', () => {
       [new UnauthorizedError(), 401],
       [new ForbiddenError(), 403],
     ] as const) {
-      expect(toHttpErrorPayload(error)).toMatchObject({ statusCode, error: error.code });
+      expect(toHttpErrorPayload(error)).toMatchObject({ statusCode, body: { error: error.code } });
     }
   });
 
   it('maps canonical missing-account errors to 404', () => {
     expect(toHttpErrorPayload(new AccountNotFoundError('missing'))).toMatchObject({
       statusCode: 404,
-      error: 'ACCOUNT_NOT_FOUND',
-      message: 'Account not found: missing',
+      body: {
+        error: 'ACCOUNT_NOT_FOUND',
+        message: 'Account not found: missing',
+      },
     });
   });
 
@@ -107,8 +116,10 @@ describe('toHttpErrorPayload', () => {
 
     expect(toHttpErrorPayload(error)).toEqual({
       statusCode: 500,
-      error: 'INTERNAL_ERROR',
-      message: 'Internal server error',
+      body: {
+        error: 'INTERNAL_ERROR',
+        message: 'Internal server error',
+      },
     });
   });
 
@@ -120,8 +131,57 @@ describe('toHttpErrorPayload', () => {
 
     expect(toHttpErrorPayload(error)).toEqual({
       statusCode: 500,
-      error: 'INTERNAL_ERROR',
-      message: 'Internal server error',
+      body: {
+        error: 'INTERNAL_ERROR',
+        message: 'Internal server error',
+      },
     });
   });
+});
+
+// Status narrowing must require the governed rate-limit body and header.
+const assertRateContract = (response: import('./errors').HttpErrorPayload): void => {
+  if (response.statusCode === 429) {
+    const delay: number = response.body.retry_after_seconds;
+    const header: string = response.headers['Retry-After'];
+    void delay;
+    void header;
+  }
+};
+void assertRateContract;
+
+it('omits absent details and preserves explicitly supplied safe details', () => {
+  const error = new InvariantViolationError('Invalid posting');
+  expect(Object.hasOwn(toHttpErrorPayload(error).body, 'details')).toBe(false);
+  Object.assign(error, { details: { field: 'amount' } });
+  expect(toHttpErrorPayload(error).body.details).toEqual({ field: 'amount' });
+});
+
+it('does not emit an incomplete 429 for a custom domain error', () => {
+  class IncompleteRateError extends DomainError {
+    constructor() {
+      super('Limited', 'LIMITED', 429);
+    }
+  }
+  expect(toHttpErrorPayload(new IncompleteRateError()).statusCode).toBe(500);
+});
+
+it('maps branded errors from independently loaded class copies', () => {
+  class ForeignRateError extends Error {
+    readonly code = 'RATE_LIMIT_EXCEEDED';
+    readonly httpStatus = 429;
+    readonly retryAfterSeconds = 9;
+    constructor() {
+      super('Rate limit exceeded');
+      Object.defineProperty(this, Symbol.for('borecount.domain-error'), { value: true });
+      Object.defineProperty(this, Symbol.for('borecount.rate-limit-exceeded-error'), {
+        value: true,
+      });
+    }
+  }
+  const error = new ForeignRateError();
+  expect(error instanceof RateLimitExceededError).toBe(false);
+  expect(toHttpErrorPayload(error)).toEqual(toHttpErrorPayload(new RateLimitExceededError(9)));
+  Object.assign(error, { retryAfterSeconds: 0 });
+  expect(toHttpErrorPayload(error).statusCode).toBe(500);
 });

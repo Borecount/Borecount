@@ -1637,8 +1637,12 @@ describe('express adapter parity with fastify adapter', () => {
     }
   });
 
-  it('accepts UUIDv7 credit grant account filters and rejects malformed filters in both adapters', async () => {
-    const accountIdV7 = '01900000-0000-7000-8000-000000000001';
+  it.each([
+    '01900000-0000-7000-8000-000000000001',
+    '00000000-0000-9000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000000',
+    'ffffffff-ffff-ffff-ffff-ffffffffffff',
+  ])('accepts PostgreSQL UUID filter %s in both adapters', async (accountIdV7) => {
     listObservations.clear();
     const validPath = `/v1/credit-grants?account_id=${accountIdV7}`;
     const [fastifyValid, expressValid] = await Promise.all([
@@ -1899,7 +1903,11 @@ describe('express adapter parity with fastify adapter', () => {
     }
   });
 
-  it('installs Express JSON parsing after pre-existing host middleware', async () => {
+  it.each([
+    'default',
+    'custom',
+    'host',
+  ] as const)('uses %s Express JSON parsing after host middleware', async (mode) => {
     let serviceCalls = 0;
     let observedAmount: bigint | undefined;
     const services = {
@@ -1920,7 +1928,17 @@ describe('express adapter parity with fastify adapter', () => {
       });
       next();
     });
-    registerExpressLedgerAdapter(app, services, { authorizeAdjustment: false });
+    let parserCalls = 0;
+    const parser = express.json();
+    const customParser: express.RequestHandler = (req, res, next) => {
+      parserCalls += 1;
+      parser(req, res, next);
+    };
+    if (mode === 'host') app.use(customParser);
+    registerExpressLedgerAdapter(app, services, {
+      authorizeAdjustment: false,
+      jsonParser: mode === 'host' ? false : mode === 'custom' ? customParser : undefined,
+    });
 
     const server = createServer(app);
     await new Promise<void>((resolve, reject) => {
@@ -1945,6 +1963,7 @@ describe('express adapter parity with fastify adapter', () => {
       });
       expect(observedAmount).toBe(25n);
       expect(serviceCalls).toBe(1);
+      expect(parserCalls).toBe(mode === 'default' ? 0 : 1);
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));
@@ -2043,7 +2062,7 @@ describe('host rate limit and request size error parity', () => {
       done();
     });
     fastify.setErrorHandler((error, _request, reply) => {
-      const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+      const { statusCode, headers, body } = toHttpErrorPayload(error);
       if (headers) reply.headers(headers);
       reply.code(statusCode).send(body);
     });
@@ -2070,7 +2089,7 @@ describe('host rate limit and request size error parity', () => {
         response: express.Response,
         _next: express.NextFunction,
       ) => {
-        const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+        const { statusCode, headers, body } = toHttpErrorPayload(error);
         if (headers) response.set(headers);
         response.status(statusCode).json(body);
       },
