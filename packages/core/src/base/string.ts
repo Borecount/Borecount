@@ -1,1 +1,2 @@
-export const isNonEmptyString = (value: string): boolean => value.trim().length > 0;
+export const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;

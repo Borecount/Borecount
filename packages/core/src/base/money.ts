@@ -29,7 +29,7 @@ export class Money {
 
   private assertSameCurrency(other: Money): void {
     if (this.currency !== other.currency) {
-      throw new CurrencyMismatchError('Currency mismatch');
+      throw new CurrencyMismatchError();
     }
   }
 }

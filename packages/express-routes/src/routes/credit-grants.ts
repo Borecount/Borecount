@@ -4,6 +4,7 @@ import type {
   creditLineageListFilter,
   WhereFor,
 } from '@borecount/core/application';
+import { isNonEmptyString } from '@borecount/core/base';
 import {
   creditGrantFilterFields,
   creditLineageFilterFields,
@@ -39,7 +40,7 @@ import type { RequestWithContext } from '../types';
 
 const parseNonEmptyQuery = (value: unknown): string | null | undefined => {
   if (value === undefined) return undefined;
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+  return typeof value === 'string' && isNonEmptyString(value) ? value : null;
 };
 
 export const registerCreditGrantRoutes = (

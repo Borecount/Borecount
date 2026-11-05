@@ -178,8 +178,6 @@ export const voidHoldResponseSchema = {
   },
 } as const;
 
-export { transactionByIdParamsSchema as holdByIdParamsSchema };
-
 export type HoldEntryRequest = InferSchema<typeof holdEntryRequestSchema>;
 export type HoldSummaryResponse = InferSchema<typeof holdSummaryResponseSchema>;
 export type HoldEntryResponse = InferSchema<typeof holdEntryResponseSchema>;
@@ -201,6 +199,5 @@ export type HoldIdParams = InferSchema<typeof holdIdParamsSchema>;
 export type CreateHoldRequest = InferSchema<typeof createHoldRequestSchema>;
 export type CreateHoldResponse = InferSchema<typeof createHoldResponseSchema>;
 export type CommitHoldRequest = InferSchema<typeof commitHoldRequestSchema>;
-export type HoldByIdParams = InferSchema<typeof transactionByIdParamsSchema>;
 export type CommitHoldResponse = InferSchema<typeof commitHoldResponseSchema>;
 export type VoidHoldResponse = InferSchema<typeof voidHoldResponseSchema>;

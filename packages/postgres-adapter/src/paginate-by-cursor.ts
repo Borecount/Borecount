@@ -3,17 +3,17 @@ import type { UnknownRecord } from '@borecount/core';
 import type { BasePaginationQuery } from '@borecount/core/application';
 import { InvariantViolationError } from '@borecount/core/errors';
 import type { AnyColumn } from 'drizzle-orm';
-import { and, asc, desc, eq, gt, lt, or, SQL, type SQLWrapper, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, lt, or, type SQL, type SQLWrapper, sql } from 'drizzle-orm';
 import stringify from 'safe-stable-stringify';
 import type { CursorPage } from './repository-types';
 
 type CursorDirection = 'asc' | 'desc';
-type CursorComparable = Date | number | string;
-type CursorValueType = 'date' | 'number' | 'string' | 'timestamp' | 'uuid';
+type CursorComparable = string;
+type CursorValueType = 'string' | 'timestamp' | 'uuid';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// Accept existing millisecond cursors; new timestamp cursors retain six digits.
-const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.(?:\d{3}|\d{6})Z$/;
+// Cursor timestamps always retain all six PostgreSQL fractional digits.
+const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 
 interface CursorOrderField<Row> {
   column: AnyColumn | SQL;
@@ -36,7 +36,7 @@ interface PaginateByCursorOptions<Row> {
 
 const CURSOR_VERSION = 1;
 
-export const isValidCursorTimestamp = (value: unknown): value is string => {
+const isValidCursorTimestamp = (value: unknown): value is string => {
   if (typeof value !== 'string' || !TIMESTAMP_PATTERN.test(value)) return false;
 
   const [date, time] = value.split('T');
@@ -72,82 +72,15 @@ const fingerprintScope = (scope: UnknownRecord): string => {
   return createHash('sha256').update(serialized).digest('base64url');
 };
 
-const parseCursorValue = (raw: unknown, type: CursorValueType): CursorComparable => {
-  if (type === 'timestamp') {
-    if (!isValidCursorTimestamp(raw)) {
-      throw new InvariantViolationError('Invalid cursor');
-    }
-
-    return raw;
-  }
-
-  if (type === 'uuid') {
-    if (typeof raw !== 'string' || !UUID_PATTERN.test(raw)) {
-      throw new InvariantViolationError('Invalid cursor');
-    }
-
-    return raw;
-  }
-
-  if (type === 'string') {
-    if (typeof raw !== 'string') {
-      throw new InvariantViolationError('Invalid cursor');
-    }
-
-    return raw;
-  }
-
-  if (type === 'number') {
-    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
-      throw new InvariantViolationError('Invalid cursor');
-    }
-
-    return raw;
-  }
-
-  if (typeof raw !== 'string') {
+const parseCursorValue = (raw: unknown, type: CursorValueType): string => {
+  if (
+    typeof raw !== 'string' ||
+    (type === 'timestamp' && !isValidCursorTimestamp(raw)) ||
+    (type === 'uuid' && !UUID_PATTERN.test(raw))
+  ) {
     throw new InvariantViolationError('Invalid cursor');
   }
-
-  const value = new Date(raw);
-
-  if (Number.isNaN(value.getTime())) {
-    throw new InvariantViolationError('Invalid cursor');
-  }
-
-  return value;
-};
-
-const serializeCursorValue = (value: CursorComparable, type: CursorValueType): unknown => {
-  if (type === 'timestamp') {
-    if (typeof value !== 'string' || !TIMESTAMP_PATTERN.test(value)) {
-      throw new InvariantViolationError('Invalid cursor');
-    }
-
-    return value;
-  }
-
-  if (type === 'string' || type === 'uuid') {
-    if (typeof value !== 'string') {
-      throw new InvariantViolationError('Invalid cursor');
-    }
-
-    return value;
-  }
-
-  if (type === 'number') {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      throw new InvariantViolationError('Invalid cursor');
-    }
-
-    return value;
-  }
-
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
-    throw new InvariantViolationError('Invalid cursor');
-  }
-
-  return value.toISOString();
+  return raw;
 };
 
 const parseCursor = <Row>(
@@ -204,7 +137,7 @@ const encodeCursor = <Row>(
   const values: UnknownRecord = {};
 
   for (const field of order) {
-    values[field.key] = serializeCursorValue(field.getValue(row), field.type);
+    values[field.key] = parseCursorValue(field.getValue(row), field.type);
   }
 
   const payload: UnknownRecord = {
@@ -241,12 +174,7 @@ const buildCursorPredicate = <Row>(
     const column = field.column as SQL;
     // Raw SQL expressions have no column encoder, and exact timestamps are kept as strings so
     // JavaScript cannot discard PostgreSQL's microseconds.
-    const bound =
-      field.type === 'timestamp'
-        ? sql`${cursorValue}::timestamptz`
-        : cursorValue instanceof Date && field.column instanceof SQL
-          ? sql`${cursorValue.toISOString()}::timestamptz`
-          : cursorValue;
+    const bound = field.type === 'timestamp' ? sql`${cursorValue}::timestamptz` : cursorValue;
     const step = direction === 'desc' ? lt(column, bound) : gt(column, bound);
     const clause = previousEquals ? and(previousEquals, step) : step;
 

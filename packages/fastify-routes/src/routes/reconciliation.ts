@@ -33,9 +33,9 @@ import {
   toReconRunResponse,
   toReconUploadResponse,
 } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
-import { resolvePaginationLimit } from '../query/pagination';
 import { BaseRoute } from '../routing/base-route';
 
 export class ReconRoutes extends BaseRoute {
@@ -103,7 +103,7 @@ export class ReconRoutes extends BaseRoute {
           if (where === null) throw invalidWhereError();
           const rules = await this.reconciliation.listRules({
             tenantId: request.tenantId as string,
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             where,
           });
@@ -139,7 +139,7 @@ export class ReconRoutes extends BaseRoute {
           const result = await this.reconciliation.listResults({
             tenantId: request.tenantId as string,
             runId: request.params.id,
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             where,
           });

@@ -6,9 +6,6 @@ export const UUID_PATTERN =
 export const isRecord = (value: unknown): value is UnknownRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export const isNonEmptyTrimmed = (value: unknown): value is string =>
-  typeof value === 'string' && value.trim().length > 0;
-
 export const isUuid = (value: unknown): value is string =>
   typeof value === 'string' && UUID_PATTERN.test(value);
 

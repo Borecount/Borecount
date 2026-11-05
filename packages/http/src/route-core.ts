@@ -14,27 +14,6 @@ export const withErrorHandling = async <T>(
   }
 };
 
-export abstract class BaseRouteCore<HandlerReply> {
-  protected async handle(
-    handler: () => Promise<HandlerReply>,
-    onError: ErrorResponder<HandlerReply>,
-  ) {
-    return withErrorHandling(handler, onError);
-  }
-}
-
-export abstract class BaseEntityRouteCore<TEntity, TDto> {
-  protected abstract toDto(entity: TEntity): TDto;
-
-  protected dto(entity: TEntity): TDto {
-    return this.toDto(entity);
-  }
-
-  protected dtoList(entities: TEntity[]): TDto[] {
-    return entities.map((entity) => this.toDto(entity));
-  }
-}
-
 type ReadonlyJsonValue = JsonPrimitive | ReadonlyJsonObject | readonly ReadonlyJsonValue[];
 interface ReadonlyJsonObject {
   readonly [key: string]: ReadonlyJsonValue;

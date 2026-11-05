@@ -1,5 +1,5 @@
 import type { UnknownRecord } from '@borecount/core/base';
-import { type DomainError, isDomainError, RateLimitExceededError } from '@borecount/core/errors';
+import { isDomainError, RateLimitExceededError } from '@borecount/core/errors';
 import type { InferSchema } from './schema-types';
 
 export const errorResponseSchema = {
@@ -33,31 +33,6 @@ export type ErrorResponse = {
   message: string;
   details?: UnknownRecord;
 };
-
-export type HttpErrorDto = {
-  statusCode: number;
-  code: string;
-  message: string;
-  details?: UnknownRecord;
-};
-
-const codeToStatus: Record<string, number> = {
-  RATE_LIMIT_EXCEEDED: 429,
-  UNAUTHORIZED: 401,
-  FORBIDDEN: 403,
-  LEDGER_NOT_FOUND: 404,
-  ACCOUNT_NOT_FOUND: 404,
-  TRANSACTION_NOT_FOUND: 404,
-  INVARIANT_VIOLATION: 409,
-};
-
-export function mapDomainErrorToHttp(error: DomainError): HttpErrorDto {
-  return {
-    statusCode: codeToStatus[error.code] ?? 400,
-    code: error.code,
-    message: error.message,
-  };
-}
 
 const asRecord = (value: unknown): UnknownRecord | null =>
   typeof value === 'object' && value !== null ? (value as UnknownRecord) : null;

@@ -27,9 +27,9 @@ import {
   trialBalanceResponseSchema,
 } from '@borecount/http/contracts';
 import { toTrialBalanceResponse } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
-import { resolvePaginationLimit } from '../query/pagination';
 import { BaseRoute } from '../routing/base-route';
 
 export class LedgerRoutes extends BaseRoute {
@@ -212,7 +212,7 @@ export class LedgerRoutes extends BaseRoute {
           if (where === null) throw invalidWhereError();
           const result = await this.ledgers.list({
             tenantId: request.tenantId as string,
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             where,
           });

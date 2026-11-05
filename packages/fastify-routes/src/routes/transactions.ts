@@ -26,6 +26,7 @@ import {
   transactionsPageResponseSchema,
 } from '@borecount/http/contracts';
 import { toTransactionResponse } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
 import { BasePaginatedRoute, type PaginatedRequest } from '../routing/paginated-route';
@@ -66,7 +67,7 @@ export class TransactionsRoutes extends BasePaginatedRoute<
     if (where === null) throw invalidWhereError();
     return this.transactions.list({
       tenantId: request.tenantId as string,
-      limit: this.resolveLimit(request.query.limit),
+      limit: resolveLimit(request.query.limit),
       cursor: request.query.cursor,
       ledgerId: request.query.ledger_id,
       where,

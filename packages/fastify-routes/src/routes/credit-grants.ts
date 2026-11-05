@@ -24,6 +24,7 @@ import {
   creditGrantsPageResponseSchema,
   type ListCreditGrantsQuery,
   listCreditGrantsQuerySchema,
+  mergePaginationQuerySchema,
   type PaginationQuery,
   type ProcessCreditGrantExpirationsRequest,
   processCreditGrantExpirationsBodySchema,
@@ -42,9 +43,9 @@ import {
   toPaginatedResponse,
   toRefundCreditGrantResponse,
 } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
-import { createPaginationQuerySchema, resolvePaginationLimit } from '../query/pagination';
 import { BaseRoute } from '../routing/base-route';
 
 export class CreditGrantRoutes extends BaseRoute {
@@ -131,7 +132,7 @@ export class CreditGrantRoutes extends BaseRoute {
           if (where === null) throw invalidWhereError();
           const page = await this.grants.list({
             tenantId: request.tenantId as string,
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             accountId: request.query.account_id,
             reference: request.query.reference,
@@ -209,7 +210,7 @@ export class CreditGrantRoutes extends BaseRoute {
         errorHandler: handleValidationError,
         schema: {
           params: creditGrantIdParamsSchema,
-          querystring: createPaginationQuerySchema({
+          querystring: mergePaginationQuerySchema({
             properties: { where: whereQueryProperty(creditLineageFilterFields) },
           }),
           response: { 200: creditGrantLineageResponseSchema },
@@ -227,7 +228,7 @@ export class CreditGrantRoutes extends BaseRoute {
               await this.grants.listLineageByGrant({
                 tenantId: request.tenantId as string,
                 grantId: request.params.id,
-                limit: resolvePaginationLimit(request.query.limit),
+                limit: resolveLimit(request.query.limit),
                 cursor: request.query.cursor,
                 where,
               }),
@@ -243,7 +244,7 @@ export class CreditGrantRoutes extends BaseRoute {
         errorHandler: handleValidationError,
         schema: {
           params: creditGrantIdParamsSchema,
-          querystring: createPaginationQuerySchema({
+          querystring: mergePaginationQuerySchema({
             properties: { where: whereQueryProperty(creditLineageFilterFields) },
           }),
           response: { 200: creditGrantLineageResponseSchema },
@@ -261,7 +262,7 @@ export class CreditGrantRoutes extends BaseRoute {
               await this.grants.listLineageByTransaction({
                 tenantId: request.tenantId as string,
                 transactionId: request.params.id,
-                limit: resolvePaginationLimit(request.query.limit),
+                limit: resolveLimit(request.query.limit),
                 cursor: request.query.cursor,
                 where,
               }),
@@ -277,7 +278,7 @@ export class CreditGrantRoutes extends BaseRoute {
         errorHandler: handleValidationError,
         schema: {
           params: creditGrantIdParamsSchema,
-          querystring: createPaginationQuerySchema({
+          querystring: mergePaginationQuerySchema({
             properties: { where: whereQueryProperty(creditGrantFilterFields) },
           }),
           response: { 200: creditGrantLotsPageResponseSchema },
@@ -295,7 +296,7 @@ export class CreditGrantRoutes extends BaseRoute {
               await this.grants.listLots({
                 tenantId: request.tenantId as string,
                 accountId: request.params.id,
-                limit: resolvePaginationLimit(request.query.limit),
+                limit: resolveLimit(request.query.limit),
                 cursor: request.query.cursor,
                 where,
               }),

@@ -1,6 +1,8 @@
 import { InvariantViolationError } from '@borecount/core/errors';
 import type { Id } from '../base/id';
 
+export const MAX_FILTER_IN_VALUES = 100;
+
 /** Fields and operators are ANDed. Null matches use eq/ne; in accepts 1–100 non-null values. */
 export type FieldFilter<T> = {
   eq?: T;
@@ -86,7 +88,7 @@ export const validateListWhere = (policy: ListFilterPolicy, where: unknown): voi
         operator === 'in'
           ? Array.isArray(value) &&
             value.length > 0 &&
-            value.length <= 100 &&
+            value.length <= MAX_FILTER_IN_VALUES &&
             Array.from(value).every((item) => item !== null && isScalar(item))
           : operator === 'eq' || operator === 'ne'
             ? isScalar(value)

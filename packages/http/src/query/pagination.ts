@@ -1,4 +1,5 @@
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '../contracts/pagination';
+import { isUuid } from '../validation-utils';
 
 export const resolveLimit = (value: number | undefined): number => value ?? DEFAULT_PAGE_LIMIT;
 
@@ -26,13 +27,4 @@ export const parseCursorQuery = (value: unknown): string | null => {
   return value;
 };
 
-export const parseUuidQuery = (value: unknown): string | null => {
-  if (value === undefined) {
-    return null;
-  }
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidPattern.test(value) ? value : null;
-};
+export const parseUuidQuery = (value: unknown): string | null => (isUuid(value) ? value : null);

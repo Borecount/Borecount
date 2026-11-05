@@ -13,9 +13,9 @@ import {
   revokeApiKeyParamsSchema,
 } from '@borecount/http/contracts';
 import { toApiKeyContract } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
 import { handleValidationError } from '../errors/validation-error-handler';
-import { resolvePaginationLimit } from '../query/pagination';
 import { BaseEntityRoute } from '../routing/base-route';
 
 export class AdminApiKeyRoutes extends BaseEntityRoute<ApiKeyEntity, ApiKeyContract> {
@@ -95,7 +95,7 @@ export class AdminApiKeyRoutes extends BaseEntityRoute<ApiKeyEntity, ApiKeyContr
               role: request.apiKeyRole as ApiKeyRole,
             },
             {
-              limit: resolvePaginationLimit(request.query.limit),
+              limit: resolveLimit(request.query.limit),
               cursor: request.query.cursor,
               where,
             },

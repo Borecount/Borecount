@@ -19,8 +19,8 @@ export class InvalidAmountError extends DomainError {
 }
 
 export class CurrencyMismatchError extends DomainError {
-  public constructor(message = 'currency must match') {
-    super(message, 'CURRENCY_MISMATCH');
+  public constructor() {
+    super('Currency mismatch', 'CURRENCY_MISMATCH');
   }
 }
 

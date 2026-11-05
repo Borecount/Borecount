@@ -11,9 +11,9 @@ test('public API includes shared HTTP contracts and primitives', () => {
   expect(keys).toContain('entriesPageResponseSchema');
   expect(keys).toContain('holdsPageResponseSchema');
   expect(keys).toContain('toHoldSummaryResponse');
-  expect(keys).toContain('holdFilterFields');
+  expect(keys).toContain('holdSummaryFilterFields');
   expect(keys).toContain('ApiKeyRole');
-  expect(keys).toContain('mapDomainErrorToHttp');
+  expect(keys).not.toContain('mapDomainErrorToHttp');
   expect(keys).not.toContain('RateLimitExceededError');
   expect(keys).toContain('toHttpErrorPayload');
   expect(keys).toContain('rateLimitExceededResponseSchema');
