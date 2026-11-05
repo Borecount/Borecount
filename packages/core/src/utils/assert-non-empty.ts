@@ -1,5 +1,5 @@
-import { InvariantViolationError } from '@borecount/core/errors';
 import { isNonEmptyString } from '../base/string';
+import { InvariantViolationError } from '../errors';
 
 export const assertNonEmpty = (value: string, message: string): void => {
   if (!isNonEmptyString(value)) {

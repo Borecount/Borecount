@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { InvalidAmountError } from '@borecount/core/errors';
 import type { AccountId } from '../../base/id';
+import { InvalidAmountError } from '../../errors';
 import type { TransactionAccountSnapshot, TransactionRepository } from '../repository.interface';
 import { CreateTransactionUseCase } from './create-transaction.use-case';
 

@@ -4,7 +4,7 @@ import {
   HoldService,
   type HoldSummary,
 } from '@borecount/core/application';
-import { HoldNotFoundError, InvariantViolationError } from '@borecount/core/errors';
+import { HoldNotFoundError, InvariantViolationError } from '../../errors';
 
 const hold: HoldSummary = {
   id: 'hold-1',

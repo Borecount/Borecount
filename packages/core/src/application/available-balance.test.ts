@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { OverdraftPolicyViolationError } from '@borecount/core/errors';
+import { OverdraftPolicyViolationError } from '../errors';
 import { assertAvailableBalance } from './available-balance';
 
 describe('assertAvailableBalance', () => {

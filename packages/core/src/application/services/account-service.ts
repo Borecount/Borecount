@@ -1,6 +1,6 @@
-import { AccountNotFoundError, InvariantViolationError } from '@borecount/core/errors';
 import { type AccountEntity, AccountSide, OverdraftPolicy } from '../../account/entity';
 import { accountListFilter } from '../../account/list-filter';
+import { AccountNotFoundError, InvariantViolationError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
 import { validateListWhere } from '../list-filters';
 import { validatePaginationQuery } from '../pagination-query';

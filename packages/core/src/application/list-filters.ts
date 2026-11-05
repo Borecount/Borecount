@@ -1,5 +1,5 @@
-import { InvariantViolationError } from '@borecount/core/errors';
 import type { Id } from '../base/id';
+import { InvariantViolationError } from '../errors';
 
 export const MAX_FILTER_IN_VALUES = 100;
 

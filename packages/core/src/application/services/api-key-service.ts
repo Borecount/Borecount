@@ -1,8 +1,8 @@
-import { ForbiddenError, InvariantViolationError, UnauthorizedError } from '@borecount/core/errors';
 import { generateApiKey, hashApiKey } from '../../api-key/credentials';
 import type { ApiKeyEntity } from '../../api-key/entity';
 import { ApiKeyRole } from '../../api-key/entity';
 import { apiKeyListFilter } from '../../api-key/list-filter';
+import { ForbiddenError, InvariantViolationError, UnauthorizedError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
 import { validateListWhere } from '../list-filters';
 import { validatePaginationQuery } from '../pagination-query';

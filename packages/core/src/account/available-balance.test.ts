@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { InvalidAmountError } from '@borecount/core/errors';
+import { InvalidAmountError } from '../errors';
 import {
   aggregateAccountEntries,
   calculateAvailableMinor,

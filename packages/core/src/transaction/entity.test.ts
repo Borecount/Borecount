@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'bun:test';
+import { AccountId, LedgerId, Money, TransactionId } from '../base';
+import { EntryEntity } from '../entry/entity';
 import {
   AssetMismatchError,
   MissingReferenceError,
   NotEnoughEntriesError,
   UnbalancedTransactionError,
-} from '@borecount/core/errors';
-import { AccountId, LedgerId, Money, TransactionId } from '../base';
-import { EntryEntity } from '../entry/entity';
+} from '../errors';
 import { TransactionEntity } from './';
 
 const buildEntry = (input: {
