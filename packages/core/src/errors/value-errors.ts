@@ -1,8 +1,8 @@
 import { DomainError } from './domain-error';
 
 export class InvalidIdError extends DomainError {
-  public constructor(name: string, value: string) {
-    super(`${name} must be a non-empty string, got: ${value}`, 'INVALID_ID');
+  public constructor(name: string) {
+    super(`${name} must be a non-empty string`, 'INVALID_ID');
   }
 }
 

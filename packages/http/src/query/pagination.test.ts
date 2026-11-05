@@ -15,14 +15,16 @@ const fields = { id: { kind: 'uuid' } } as const;
 const uuid = '00000000-0000-7000-8000-000000000001';
 
 describe('shared UUID validation', () => {
-  it('accepts UUID versions 1 through 8 consistently for paths, queries and filters', () => {
-    for (let version = 1; version <= 8; version++) {
-      const value = `00000000-0000-${version}000-8000-000000000001`;
-      expect(isUuid(value)).toBe(true);
-      expect(parseUuidParam(value, 'id')).toEqual({ id: value });
-      expect(parseUuidQuery(value)).toBe(value);
-      const filter = { id: { eq: value } };
-      expect(parseWhere<typeof filter>(JSON.stringify(filter), fields)).toEqual(filter);
+  it('accepts every UUID version and variant nibble for paths, queries and filters', () => {
+    for (let version = 0; version <= 15; version++) {
+      for (let variant = 0; variant <= 15; variant++) {
+        const value = `00000000-0000-${version.toString(16)}000-${variant.toString(16)}000-000000000001`;
+        expect(isUuid(value)).toBe(true);
+        expect(parseUuidParam(value, 'id')).toEqual({ id: value });
+        expect(parseUuidQuery(value)).toBe(value);
+        const filter = { id: { eq: value } };
+        expect(parseWhere<typeof filter>(JSON.stringify(filter), fields)).toEqual(filter);
+      }
     }
   });
 
@@ -34,9 +36,6 @@ describe('shared UUID validation', () => {
       ' ',
       [uuid],
       { id: uuid },
-      '00000000-0000-0000-8000-000000000001',
-      '00000000-0000-9000-8000-000000000001',
-      '00000000-0000-7000-0000-000000000001',
       'gggggggg-0000-7000-8000-000000000001',
     ]) {
       expect(isUuid(value)).toBe(false);

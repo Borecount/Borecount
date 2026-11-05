@@ -6,7 +6,7 @@ export abstract class Id {
 
   protected constructor(value: string, name: string) {
     if (!isNonEmptyString(value)) {
-      throw new InvalidIdError(name, value);
+      throw new InvalidIdError(name);
     }
 
     this.value = value;

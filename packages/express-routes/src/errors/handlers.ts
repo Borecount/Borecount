@@ -6,7 +6,7 @@ export const sendInvalidInput = (res: Response, message: string): Response =>
   res.status(400).json({ error: 'INVALID_INPUT', message });
 
 const sendDomainError = (res: Response, error: unknown): Response => {
-  const { statusCode, headers, ...body } = toHttpErrorPayload(error);
+  const { statusCode, headers, body } = toHttpErrorPayload(error);
   if (headers) res.set(headers);
   return res.status(statusCode).json(body);
 };

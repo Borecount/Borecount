@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { UnknownRecord } from '@borecount/core';
 import type { BasePaginationQuery } from '@borecount/core/application';
+import { isUuid } from '@borecount/core/base';
 import { InvariantViolationError } from '@borecount/core/errors';
 import type { AnyColumn } from 'drizzle-orm';
 import { and, asc, desc, eq, gt, lt, or, type SQL, type SQLWrapper, sql } from 'drizzle-orm';
@@ -8,10 +9,8 @@ import stringify from 'safe-stable-stringify';
 import type { CursorPage } from './repository-types';
 
 type CursorDirection = 'asc' | 'desc';
-type CursorComparable = string;
 type CursorValueType = 'string' | 'timestamp' | 'uuid';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Cursor timestamps always retain all six PostgreSQL fractional digits.
 const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 
@@ -20,7 +19,7 @@ interface CursorOrderField<Row> {
   key: string;
   type: CursorValueType;
   direction?: CursorDirection;
-  getValue: (row: Row) => CursorComparable;
+  getValue: (row: Row) => string;
 }
 
 interface PaginateByCursorOptions<Row> {
@@ -72,11 +71,11 @@ const fingerprintScope = (scope: UnknownRecord): string => {
   return createHash('sha256').update(serialized).digest('base64url');
 };
 
-const parseCursorValue = (raw: unknown, type: CursorValueType): string => {
+const validateCursorValue = (raw: unknown, type: CursorValueType): string => {
   if (
     typeof raw !== 'string' ||
     (type === 'timestamp' && !isValidCursorTimestamp(raw)) ||
-    (type === 'uuid' && !UUID_PATTERN.test(raw))
+    (type === 'uuid' && !isUuid(raw))
   ) {
     throw new InvariantViolationError('Invalid cursor');
   }
@@ -87,7 +86,7 @@ const parseCursor = <Row>(
   cursor: string | undefined,
   scope: UnknownRecord,
   order: [CursorOrderField<Row>, ...CursorOrderField<Row>[]],
-): Map<string, CursorComparable> | null => {
+): Map<string, string> | null => {
   if (!cursor) {
     return null;
   }
@@ -116,14 +115,14 @@ const parseCursor = <Row>(
   }
 
   const values = payload.values as UnknownRecord;
-  const cursorValues = new Map<string, CursorComparable>();
+  const cursorValues = new Map<string, string>();
 
   for (const field of order) {
     if (!(field.key in values)) {
       throw new InvariantViolationError('Invalid cursor');
     }
 
-    cursorValues.set(field.key, parseCursorValue(values[field.key], field.type));
+    cursorValues.set(field.key, validateCursorValue(values[field.key], field.type));
   }
 
   return cursorValues;
@@ -137,7 +136,7 @@ const encodeCursor = <Row>(
   const values: UnknownRecord = {};
 
   for (const field of order) {
-    values[field.key] = parseCursorValue(field.getValue(row), field.type);
+    values[field.key] = validateCursorValue(field.getValue(row), field.type);
   }
 
   const payload: UnknownRecord = {
@@ -154,7 +153,7 @@ const encodeCursor = <Row>(
 };
 
 const buildCursorPredicate = <Row>(
-  cursorValues: Map<string, CursorComparable> | null,
+  cursorValues: Map<string, string> | null,
   order: [CursorOrderField<Row>, ...CursorOrderField<Row>[]],
 ): SQL<unknown> | SQLWrapper => {
   if (cursorValues === null) {

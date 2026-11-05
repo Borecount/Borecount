@@ -3,7 +3,7 @@ import type { Id } from '../base/id';
 
 export const MAX_FILTER_IN_VALUES = 100;
 
-/** Fields and operators are ANDed. Null matches use eq/ne; in accepts 1–100 non-null values. */
+/** Fields and operators are ANDed. Null matches use eq/ne; in accepts up to MAX_FILTER_IN_VALUES non-null values. */
 export type FieldFilter<T> = {
   eq?: T;
   ne?: T;

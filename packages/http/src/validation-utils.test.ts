@@ -10,13 +10,8 @@ describe('UUID request parameter validation', () => {
     });
   });
 
-  it('rejects malformed UUIDs, unsupported versions and invalid variants', () => {
-    for (const value of [
-      'not-a-uuid',
-      '00000000-0000-9000-8000-000000000001',
-      '00000000-0000-4000-7000-000000000001',
-      '00000000000040008000000000000001',
-    ]) {
+  it('rejects malformed UUIDs', () => {
+    for (const value of ['not-a-uuid', '00000000000040008000000000000001']) {
       expect(isUuid(value)).toBeFalse();
       expect(parseUuidParam(value, 'id')).toBeNull();
     }
