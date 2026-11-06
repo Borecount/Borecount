@@ -1,7 +1,9 @@
 import type { Id } from '../base/id';
-import { InvariantViolationError } from './errors';
+import { InvariantViolationError } from '../errors';
 
-/** Fields and operators are ANDed. Null matches use eq/ne; in accepts 1–100 non-null values. */
+export const MAX_FILTER_IN_VALUES = 100;
+
+/** Fields and operators are ANDed. Null matches use eq/ne; in accepts up to MAX_FILTER_IN_VALUES non-null values. */
 export type FieldFilter<T> = {
   eq?: T;
   ne?: T;
@@ -86,7 +88,7 @@ export const validateListWhere = (policy: ListFilterPolicy, where: unknown): voi
         operator === 'in'
           ? Array.isArray(value) &&
             value.length > 0 &&
-            value.length <= 100 &&
+            value.length <= MAX_FILTER_IN_VALUES &&
             Array.from(value).every((item) => item !== null && isScalar(item))
           : operator === 'eq' || operator === 'ne'
             ? isScalar(value)

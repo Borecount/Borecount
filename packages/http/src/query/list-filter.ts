@@ -1,4 +1,6 @@
+import { MAX_FILTER_IN_VALUES } from '@borecount/core/application';
 import type { UnknownRecord } from '@borecount/core/base';
+import { isUuid } from '../validation-utils';
 
 export const MAX_WHERE_LENGTH = 8192;
 const INT64_MIN = -(1n << 63n);
@@ -25,7 +27,6 @@ const record = (v: unknown): v is Record<string, unknown> =>
   v !== null &&
   !Array.isArray(v) &&
   (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const dateTime =
   /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3}0*)?(?:Z|[+-](?:0\d|1\d|2[0-3]):[0-5]\d)$/;
 const validCalendarDate = (value: string): boolean => {
@@ -42,7 +43,7 @@ const parseValue = (value: unknown, field: FilterField): unknown => {
     case 'string':
       return typeof value === 'string' ? value : undefined;
     case 'uuid':
-      return typeof value === 'string' && uuid.test(value) ? value : undefined;
+      return isUuid(value) ? value : undefined;
     case 'boolean':
       return typeof value === 'boolean' ? value : undefined;
     case 'number':
@@ -102,7 +103,8 @@ export const parseWhere = <T>(raw: unknown, fields: FilterFields): T | undefined
       if ((operator === 'eq' || operator === 'ne') && value === null && !field.nullable)
         return null;
       if (operator === 'in') {
-        if (!Array.isArray(value) || value.length < 1 || value.length > 100) return null;
+        if (!Array.isArray(value) || value.length < 1 || value.length > MAX_FILTER_IN_VALUES)
+          return null;
         const values = value.map((v) => parseValue(v, { ...field, nullable: false }));
         if (values.some((v) => v === undefined)) return null;
         parsed[operator] = values;
@@ -134,7 +136,7 @@ export const whereFieldsToJsonSchema = (fields: FilterFields): UnknownRecord => 
               ? {
                   type: 'array',
                   minItems: 1,
-                  maxItems: 100,
+                  maxItems: MAX_FILTER_IN_VALUES,
                   items: scalarSchema({ ...field, nullable: false }),
                 }
               : scalarSchema(operatorSchemaField(field, op)),

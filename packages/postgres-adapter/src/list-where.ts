@@ -1,10 +1,10 @@
 import {
-  InvariantViolationError,
   type ListFilterPolicy,
   serializeListWhere,
   validateListWhere,
   type WhereFor,
 } from '@borecount/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import {
   type AnyColumn,
   and,
@@ -17,11 +17,8 @@ import {
   lt,
   lte,
   ne,
-  SQL,
+  type SQL,
 } from 'drizzle-orm';
-
-const compare = (operator: typeof eq, column: AnyColumn | SQL, value: unknown): SQL =>
-  column instanceof SQL ? operator(column, value) : operator(column, value);
 
 /** Column maps come from the existing schema; operation policy supplies exclusions. */
 export const listWhereSql = <Policy extends ListFilterPolicy>(
@@ -37,33 +34,30 @@ export const listWhereSql = <Policy extends ListFilterPolicy>(
     if (!Object.hasOwn(columns, field)) {
       throw new InvariantViolationError(`Invalid where field: ${field}`);
     }
-    const column = (columns as Record<string, AnyColumn | SQL>)[field];
+    // Keep the runtime column encoder; Drizzle overloads cannot accept the union type.
+    const column = (columns as Record<string, AnyColumn | SQL>)[field] as SQL;
     for (const [operator, value] of Object.entries(filter)) {
       switch (operator) {
         case 'eq':
-          clauses.push(value === null ? isNull(column) : compare(eq, column, value));
+          clauses.push(value === null ? isNull(column) : eq(column, value));
           break;
         case 'ne':
-          clauses.push(value === null ? isNotNull(column) : compare(ne, column, value));
+          clauses.push(value === null ? isNotNull(column) : ne(column, value));
           break;
         case 'in':
-          clauses.push(
-            column instanceof SQL
-              ? inArray(column, value as unknown[])
-              : inArray(column, value as unknown[]),
-          );
+          clauses.push(inArray(column, value as unknown[]));
           break;
         case 'gt':
-          clauses.push(compare(gt, column, value));
+          clauses.push(gt(column, value));
           break;
         case 'gte':
-          clauses.push(compare(gte, column, value));
+          clauses.push(gte(column, value));
           break;
         case 'lt':
-          clauses.push(compare(lt, column, value));
+          clauses.push(lt(column, value));
           break;
         case 'lte':
-          clauses.push(compare(lte, column, value));
+          clauses.push(lte(column, value));
           break;
       }
     }
@@ -71,8 +65,7 @@ export const listWhereSql = <Policy extends ListFilterPolicy>(
   return and(...clauses);
 };
 
-/** Keep existing unfiltered cursor scopes compatible. */
+/** Bind every cursor to the normalized filter, including an empty filter. */
 export const listWhereScope = (where: unknown): Record<string, string> => {
-  const serialized = serializeListWhere(where);
-  return serialized === '{}' ? {} : { where: serialized };
+  return { where: serializeListWhere(where) };
 };

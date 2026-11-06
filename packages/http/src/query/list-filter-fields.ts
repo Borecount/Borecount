@@ -87,7 +87,6 @@ export const holdSummaryFilterFields = {
   voided_at: { ...time, nullable: true, target: 'voidedAt' },
   account_id: { ...id, target: 'accountId' },
 } satisfies FilterFields;
-export const holdFilterFields = holdSummaryFilterFields;
 export const holdEntryFilterFields = {
   id,
   account_id: { ...id, target: 'accountId' },

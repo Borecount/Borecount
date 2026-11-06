@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { InvariantViolationError } from '../errors';
+import { InvariantViolationError } from '../../errors';
 import type { StatementRepository } from '../repositories.interface';
 import type { AccountStatement, CreditLotStatement } from '../types';
 import { StatementService } from './statement-service';

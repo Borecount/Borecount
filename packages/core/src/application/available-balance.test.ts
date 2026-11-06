@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import { OverdraftPolicyViolationError } from '../errors';
 import { assertAvailableBalance } from './available-balance';
-import { OverdraftPolicyViolationError } from './errors';
 
 describe('assertAvailableBalance', () => {
   const account = {

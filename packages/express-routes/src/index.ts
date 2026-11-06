@@ -1,6 +1,6 @@
 import type { ApplicationServices } from '@borecount/core/application';
 import type { LedgerAdapterOptions as HttpLedgerAdapterOptions } from '@borecount/http/route-core';
-import express, { type Application } from 'express';
+import express, { type Application, type RequestHandler } from 'express';
 import { registerAccountRoutes } from './routes/accounts';
 import { registerAdjustmentRoutes } from './routes/adjustments';
 import { registerAdminApiKeyRoutes } from './routes/admin-api-keys';
@@ -14,14 +14,10 @@ import type { RequestWithContext } from './types';
 
 export type { RequestContext, RequestWithContext } from './types';
 
-const ensureJsonMiddleware = (app: Application): void => {
-  const stack = (app as Application & { _router?: { stack?: unknown[] } })._router?.stack;
-  if (!Array.isArray(stack) || stack.length === 0) {
-    app.use(express.json());
-  }
+export type LedgerAdapterOptions = HttpLedgerAdapterOptions<RequestWithContext> & {
+  /** Installed before ledger routes. Use false when the host already installs a parser. */
+  jsonParser?: RequestHandler | false;
 };
-
-export type LedgerAdapterOptions = HttpLedgerAdapterOptions<RequestWithContext>;
 
 export const registerLedgerAdapter = (
   app: Application,
@@ -32,7 +28,9 @@ export const registerLedgerAdapter = (
   if (authorizeAdjustment !== false && typeof authorizeAdjustment !== 'function') {
     throw new Error('authorizeAdjustment must be a function or explicitly false');
   }
-  ensureJsonMiddleware(app);
+  if (options?.jsonParser !== false) {
+    app.use(options?.jsonParser ?? express.json());
+  }
 
   registerLedgerRoutes(app, services);
   registerTransactionRoutes(app, services);
@@ -48,5 +46,3 @@ export const registerLedgerAdapter = (
   registerEntryRoutes(app, services);
   registerAdminApiKeyRoutes(app, services);
 };
-
-export const registerLedgerExpressAdapter = registerLedgerAdapter;

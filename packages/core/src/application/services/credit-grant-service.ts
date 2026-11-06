@@ -1,6 +1,6 @@
 import { validateCreditGrant } from '../../credit-grant';
+import { CreditGrantNotFoundError, InvariantViolationError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
-import { CreditGrantNotFoundError, InvariantViolationError } from '../errors';
 import { validateListWhere } from '../list-filters';
 import { validatePaginationQuery } from '../pagination-query';
 import type { CreditGrantRepository } from '../repositories.interface';

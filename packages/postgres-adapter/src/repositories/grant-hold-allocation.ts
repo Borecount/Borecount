@@ -1,4 +1,4 @@
-import { InvariantViolationError } from '@borecount/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { DrizzleDatabase } from '../client';
 import * as schema from '../schema';

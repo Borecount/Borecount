@@ -52,8 +52,7 @@ its initial credential in one transaction, including in a nonempty database. For
 session/outbox rows or ledger seeding, use `provisioning` inside the existing unit of work:
 
 ```ts
-import { randomUUID } from 'node:crypto';
-import { TenantId } from '@borecount/core';
+import { TenantId, generateUuidV7 } from '@borecount/core';
 import { ApiKeyRole, generateApiKey } from '@borecount/core/application';
 import { createDbClient, createUnitOfWork } from '@borecount/postgres-adapter';
 import { onboardingSessions } from './db/schema';
@@ -62,7 +61,7 @@ const client = createDbClient({ hostSchema: { onboardingSessions } });
 const unitOfWork = createUnitOfWork(client);
 // Generate once and durably retain this command in trusted host storage before execution.
 const command = {
-  tenantId: randomUUID(),
+  tenantId: generateUuidV7(new Date()),
   tenantName: 'Example tenant',
   keyName: 'Initial service credential',
   role: ApiKeyRole.SERVICE,
@@ -102,11 +101,8 @@ If a host exposes administrative HTTP provisioning, it owns authentication, auth
 validation, rate limits and safe error/secret mapping. Borecount adds no public tenant-create
 route. Both ADMIN and SERVICE initial roles are tenant-scoped; neither grants authority over
 other tenants. Later credentials and revocation use the existing API-key service contracts.
-Bootstrap moved from `ApiKeyService.bootstrapInitialAdmin` to
-`TenantProvisioningService.bootstrapInitialAdmin`. The old API-key service method and its
-repository port are removed. Hosts should migrate to the provisioning service and handle its
-`null` result for an already-initialized key store. Demo adoption is a separate host change after
-a package release containing this API.
+Use `TenantProvisioningService.bootstrapInitialAdmin` for bootstrap and handle its `null` result
+when the key store is already initialized.
 
 ### Credit-grant allocation locking
 

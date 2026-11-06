@@ -1,17 +1,5 @@
-import { DomainError } from './domain-error';
+import { CurrencyMismatchError, EmptyCurrencyError } from '../errors';
 import { isNonEmptyString } from './string';
-
-class CurrencyMismatchError extends DomainError {
-  public constructor() {
-    super('Currency mismatch', 'CURRENCY_MISMATCH');
-  }
-}
-
-class EmptyCurrencyError extends DomainError {
-  public constructor() {
-    super('Currency is required', 'CURRENCY_REQUIRED');
-  }
-}
 
 export class Money {
   public readonly amountMinor: bigint;

@@ -25,13 +25,40 @@ npm init --yes >/dev/null
 npm install --ignore-scripts --no-package-lock "$TARBALL_DIR"/*.tgz
 
 node --input-type=module <<'NODE'
-await import('@borecount/core');
-await import('@borecount/core/application');
-await import('@borecount/core/base');
+const core = await import('@borecount/core');
+const application = await import('@borecount/core/application');
+const base = await import('@borecount/core/base');
+const coreErrors = await import('@borecount/core/errors');
 await import('@borecount/core/utils');
-await import('@borecount/http');
-await import('@borecount/http/contracts');
-await import('@borecount/http/errors');
+const http = await import('@borecount/http');
+const contracts = await import('@borecount/http/contracts');
+const httpErrors = await import('@borecount/http/errors');
+const { deepStrictEqual, strictEqual, throws } = await import('node:assert');
+deepStrictEqual([application.MAX_PAGE_LIMIT, application.MAX_FILTER_IN_VALUES], [200, 100]);
+deepStrictEqual(contracts.MAX_PAGE_LIMIT, application.MAX_PAGE_LIMIT);
+// Split entry points must share constructors, not merely accept branded copies.
+strictEqual(core.Money, base.Money);
+const generatedId = base.generateUuidV7(new Date('2026-11-05T12:00:00.000Z'));
+strictEqual(base.isUuidV7(generatedId), true);
+strictEqual(core.AccountId, base.AccountId);
+strictEqual(core.LedgerService, application.LedgerService);
+throws(() => new base.AccountId(''), coreErrors.InvalidIdError);
+// Other core entry points must throw the exact classes exported by the catalogue.
+throws(() => core.Money.of(1n, 'USD').add(core.Money.of(1n, 'EUR')), coreErrors.CurrencyMismatchError);
+throws(() => new core.AccountId(''), coreErrors.InvalidIdError);
+throws(() => core.validateCreditGrant({ amountMinor: 0n }), coreErrors.InvalidCreditGrantError);
+// Both HTTP entry points consume the canonical core error catalogue.
+for (const mapError of [http.toHttpErrorPayload, httpErrors.toHttpErrorPayload]) {
+  deepStrictEqual(mapError(new coreErrors.RateLimitExceededError(7)), {
+    statusCode: 429,
+    headers: { 'Retry-After': '7' },
+    body: {
+      error: 'RATE_LIMIT_EXCEEDED',
+      message: 'Rate limit exceeded',
+      retry_after_seconds: 7,
+    },
+  });
+}
 await import('@borecount/http/mappers');
 await import('@borecount/http/query/pagination');
 await import('@borecount/http/route-core');

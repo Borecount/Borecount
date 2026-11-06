@@ -1,4 +1,4 @@
-import { DomainError } from '../base/';
+import { DomainError } from './domain-error';
 
 export class NotEnoughEntriesError extends DomainError {
   public constructor() {
@@ -20,7 +20,7 @@ export class InvalidAmountError extends DomainError {
 
 export class CurrencyMismatchError extends DomainError {
   public constructor() {
-    super('currency must match', 'CURRENCY_MISMATCH');
+    super('Currency mismatch', 'CURRENCY_MISMATCH');
   }
 }
 
@@ -42,12 +42,6 @@ export class InvalidTransactionRelationError extends DomainError {
       'transaction relation id and relation type must be provided together',
       'INVALID_TRANSACTION_RELATION',
     );
-  }
-}
-
-export class AccountNotFoundError extends DomainError {
-  public constructor(accountId: string) {
-    super(`account not found: ${accountId}`, 'ACCOUNT_NOT_FOUND');
   }
 }
 

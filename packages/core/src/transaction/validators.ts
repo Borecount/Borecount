@@ -5,7 +5,7 @@ import {
   MissingReferenceError,
   NotEnoughEntriesError,
   UnbalancedTransactionError,
-} from './errors';
+} from '../errors';
 
 type EntryAmountLine = {
   money: {

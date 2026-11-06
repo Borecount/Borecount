@@ -1,6 +1,14 @@
 export * from './contracts';
-export type { ErrorResponse, HttpErrorDto } from './errors';
-export { errorResponseSchema, mapDomainErrorToHttp } from './errors';
+export type {
+  ErrorResponse,
+  HttpErrorPayload,
+  RateLimitExceededResponse,
+} from './errors';
+export {
+  errorResponseSchema,
+  rateLimitExceededResponseSchema,
+  toHttpErrorPayload,
+} from './errors';
 export * from './mappers';
 export * from './query/list-filter';
 export * from './query/list-filter-fields';

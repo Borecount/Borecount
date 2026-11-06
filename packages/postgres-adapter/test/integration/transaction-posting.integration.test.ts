@@ -1,16 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-
+import type { JsonObject } from '@borecount/core/base';
 import {
+  AccountNotFoundError,
+  BulkTransactionError,
+  CrossLedgerAccountError,
+  CurrencyMismatchError,
   InvariantViolationError,
   OverdraftPolicyViolationError,
   RepositoryError,
-} from '@borecount/core/application';
-import type { JsonObject } from '@borecount/core/base';
-import {
-  CrossLedgerAccountError,
-  CurrencyMismatchError,
   UnbalancedTransactionError,
-} from '@borecount/core/transaction';
+} from '@borecount/core/errors';
 import { and, eq, sql } from 'drizzle-orm';
 import { createDbClient } from '../../src/client';
 import { DrizzleAccountRepository } from '../../src/repositories/account-repository';
@@ -49,6 +48,76 @@ describe('Drizzle transaction repository posting', () => {
   beforeAll(() => migrateTestDatabase(db));
   beforeEach(() => truncateTestDatabase(db));
   afterAll(() => client.sql.end({ timeout: 5 }));
+
+  for (const bulk of [false, true]) {
+    it(`rejects a missing account with 404 and rolls back ${bulk ? 'the entire bulk' : 'the posting'}`, async () => {
+      const tenantId = await createTenant('Tenant A');
+      const ledgerId = await createLedger(tenantId, 'Main');
+      const accountId = await createAccount({
+        tenantId,
+        ledgerId,
+        name: 'Cash',
+        currency: 'USD',
+        balanceMinor: 0n,
+      });
+      const otherAccountId = await createAccount({
+        tenantId,
+        ledgerId,
+        name: 'Revenue',
+        currency: 'USD',
+        balanceMinor: 0n,
+      });
+      const missingAccountId = '00000000-0000-4000-8000-000000000999';
+      const input = {
+        tenantId,
+        ledgerId,
+        reference: 'missing-account-ref',
+        currency: 'USD',
+        entries: [
+          { accountId, signedAmountMinor: 100n, currency: 'USD' },
+          { accountId: missingAccountId, signedAmountMinor: -100n, currency: 'USD' },
+        ],
+      };
+      const attempt = bulk
+        ? transactionRepository.createBulk({
+            tenantId,
+            transactions: [
+              {
+                ...input,
+                reference: 'valid-first-ref',
+                entries: [
+                  input.entries[0],
+                  { accountId: otherAccountId, signedAmountMinor: -100n, currency: 'USD' },
+                ],
+              },
+              input,
+            ],
+          })
+        : transactionRepository.create(input);
+      const error = await attempt.catch((error: unknown) => error);
+      if (bulk) {
+        expect(error).toBeInstanceOf(BulkTransactionError);
+        expect(error).toMatchObject({
+          code: 'BULK_TRANSACTION_FAILED',
+          httpStatus: 404,
+          details: { item_index: 1, category: 'VALIDATION' },
+        });
+      } else {
+        expect(error).toBeInstanceOf(AccountNotFoundError);
+        expect(error).toMatchObject({
+          code: 'ACCOUNT_NOT_FOUND',
+          httpStatus: 404,
+          accountId: missingAccountId,
+        });
+      }
+      expect(
+        await db.select().from(transactions).where(eq(transactions.tenantId, tenantId)),
+      ).toEqual([]);
+      expect(await db.select().from(entries).where(eq(entries.tenantId, tenantId))).toEqual([]);
+      const rows = await db.select().from(accounts).where(eq(accounts.tenantId, tenantId));
+      expect(rows.every((row) => row.balanceMinor === 0n)).toBe(true);
+    });
+  }
 
   it('createTransaction persists transaction, entries, and balances on successful transaction creation', async () => {
     const tenantId = await createTenant('Tenant A');

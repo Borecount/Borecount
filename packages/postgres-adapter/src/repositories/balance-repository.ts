@@ -1,4 +1,4 @@
-import { AccountSide, calculateAvailableMinor, isUuidV7, parseAccountSide } from '@borecount/core';
+import { AccountSide, calculateAvailableMinor, parseAccountSide } from '@borecount/core';
 import {
   type BalanceApplicationRepository,
   type BalanceAtQuery,
@@ -6,20 +6,21 @@ import {
   type BalanceSnapshotEvent,
   balanceHistoryListFilter,
   type HistoricalBalance,
-  InvariantViolationError,
-  LedgerNotFoundError,
   type LedgerTrialBalanceQuery,
   type PaginatedResult,
-  RepositoryError,
   type TrialBalance,
   type TrialBalanceAccount,
 } from '@borecount/core/application';
-import { and, asc, desc, eq, getTableColumns, gt, gte, lte, or, sql } from 'drizzle-orm';
-import stringify from 'safe-stable-stringify';
+import {
+  InvariantViolationError,
+  LedgerNotFoundError,
+  RepositoryError,
+} from '@borecount/core/errors';
+import { and, asc, desc, eq, getTableColumns, gte, lte } from 'drizzle-orm';
 import type { DbClient } from '../client';
 import { exactTimestamp } from '../exact-timestamp';
 import { listWhereScope, listWhereSql } from '../list-where';
-import { isValidCursorTimestamp } from '../paginate-by-cursor';
+import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
 
 export class DrizzleBalanceRepository implements BalanceApplicationRepository {
@@ -137,47 +138,53 @@ export class DrizzleBalanceRepository implements BalanceApplicationRepository {
         balanceHistoryListFilter,
         query.where,
       );
-      const filterScope = listWhereScope(query.where);
-      const scope = JSON.stringify({
-        tenantId: query.tenantId,
-        accountId: query.accountId,
-        from: query.from.toISOString(),
-        to: query.to.toISOString(),
-        ...filterScope,
+      const page = await paginateByCursor({
+        query,
+        scope: {
+          resource: 'balance-history',
+          tenantId: query.tenantId,
+          accountId: query.accountId,
+          from: query.from.toISOString(),
+          to: query.to.toISOString(),
+          ...listWhereScope(query.where),
+        },
+        order: [
+          {
+            column: schema.balanceSnapshots.effectiveAt,
+            key: 'effective_at',
+            type: 'timestamp',
+            getValue: (
+              row: typeof schema.balanceSnapshots.$inferSelect & { cursorEffectiveAt: string },
+            ) => row.cursorEffectiveAt,
+          },
+          {
+            column: schema.balanceSnapshots.id,
+            key: 'id',
+            type: 'uuid',
+            getValue: (row) => row.id,
+          },
+        ],
+        selectRows: ({ cursorPredicate, limit, orderBy }) =>
+          tx
+            .select({
+              ...getTableColumns(schema.balanceSnapshots),
+              cursorEffectiveAt: exactTimestamp(schema.balanceSnapshots.effectiveAt),
+            })
+            .from(schema.balanceSnapshots)
+            .where(
+              and(
+                eq(schema.balanceSnapshots.tenantId, query.tenantId),
+                eq(schema.balanceSnapshots.accountId, query.accountId),
+                gte(schema.balanceSnapshots.effectiveAt, query.from),
+                lte(schema.balanceSnapshots.effectiveAt, query.to),
+                where,
+                cursorPredicate,
+              ),
+            )
+            .orderBy(...orderBy)
+            .limit(limit),
       });
-      const filtered = Object.keys(filterScope).length > 0;
-      const cursor = this.decodeCursor(query.cursor, filtered ? scope : undefined);
-      const cursorTime = cursor ? sql`${cursor.effectiveAt}::timestamptz` : undefined;
-      const rows = await tx
-        .select({
-          ...getTableColumns(schema.balanceSnapshots),
-          cursorEffectiveAt: exactTimestamp(schema.balanceSnapshots.effectiveAt),
-        })
-        .from(schema.balanceSnapshots)
-        .where(
-          and(
-            eq(schema.balanceSnapshots.tenantId, query.tenantId),
-            eq(schema.balanceSnapshots.accountId, query.accountId),
-            where,
-            gte(schema.balanceSnapshots.effectiveAt, query.from),
-            lte(schema.balanceSnapshots.effectiveAt, query.to),
-            cursor && cursorTime
-              ? or(
-                  gt(schema.balanceSnapshots.effectiveAt, cursorTime),
-                  and(
-                    eq(schema.balanceSnapshots.effectiveAt, cursorTime),
-                    gt(schema.balanceSnapshots.id, cursor.id),
-                  ),
-                )
-              : sql`true`,
-          ),
-        )
-        .orderBy(asc(schema.balanceSnapshots.effectiveAt), asc(schema.balanceSnapshots.id))
-        .limit(query.limit + 1);
-
-      const hasMore = rows.length > query.limit;
-      const dataRows = hasMore ? rows.slice(0, query.limit) : rows;
-      const data = dataRows.map((row) => ({
+      const data = page.rows.map((row) => ({
         id: row.id,
         tenantId: row.tenantId,
         ledgerId: row.ledgerId,
@@ -189,52 +196,7 @@ export class DrizzleBalanceRepository implements BalanceApplicationRepository {
         effectiveAt: row.effectiveAt,
         createdAt: row.createdAt,
       }));
-      const last = dataRows.at(-1);
-      return {
-        data,
-        nextCursor:
-          hasMore && last
-            ? this.encodeCursor(last.cursorEffectiveAt, last.id, filtered ? scope : undefined)
-            : null,
-      };
+      return { data, nextCursor: page.nextCursor };
     });
-  }
-
-  private encodeCursor(effectiveAt: string, id: string, scope?: string): string {
-    const serialized = stringify({
-      effectiveAt,
-      id,
-      ...(scope === undefined ? {} : { scope }),
-    });
-    if (serialized === undefined) {
-      throw new InvariantViolationError('Invalid cursor');
-    }
-    return Buffer.from(serialized, 'utf8').toString('base64url');
-  }
-
-  private decodeCursor(
-    cursor: string | undefined,
-    scope?: string,
-  ): { effectiveAt: string; id: string } | null {
-    if (!cursor) {
-      return null;
-    }
-    try {
-      const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as Record<
-        string,
-        unknown
-      >;
-      if (
-        parsed.scope !== scope ||
-        !isValidCursorTimestamp(parsed.effectiveAt) ||
-        typeof parsed.id !== 'string' ||
-        !isUuidV7(parsed.id)
-      ) {
-        throw new InvariantViolationError('Invalid cursor');
-      }
-      return { effectiveAt: parsed.effectiveAt, id: parsed.id };
-    } catch {
-      throw new InvariantViolationError('Invalid cursor');
-    }
   }
 }

@@ -1,19 +1,13 @@
-import { invalidInputPayload, toHttpErrorPayload } from '@borecount/http/errors';
+import { toHttpErrorPayload } from '@borecount/http/errors';
 import type { FastifyReply } from 'fastify';
+import { sendInvalidInput } from './send-invalid-input';
+import { isQuerystringValidationError } from './validation-error-handler';
 
 export const sendDomainError = (reply: FastifyReply, error: unknown): FastifyReply => {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    Array.isArray((error as { validation?: unknown }).validation) &&
-    (error as { validationContext?: unknown }).validationContext === 'querystring'
-  ) {
-    return reply.status(400).send(invalidInputPayload('Invalid querystring'));
+  if (isQuerystringValidationError(error)) {
+    return sendInvalidInput(reply, 'Invalid querystring');
   }
-  const payload = toHttpErrorPayload(error);
-  return reply.status(payload.statusCode).send({
-    error: payload.error,
-    message: payload.message,
-    ...(payload.details === undefined ? {} : { details: payload.details }),
-  });
+  const { statusCode, headers, body } = toHttpErrorPayload(error);
+  if (headers) reply.headers(headers);
+  return reply.status(statusCode).send(body);
 };

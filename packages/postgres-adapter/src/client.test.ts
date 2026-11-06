@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { InvariantViolationError, RepositoryError } from '@borecount/core/application';
+import { InvariantViolationError, RepositoryError } from '@borecount/core/errors';
 import { createDbClient } from './client';
 
 describe('db client module', () => {
@@ -49,7 +49,7 @@ describe('db client module', () => {
     }
   });
 
-  it('execute preserves a domain error from a different bundled public export identity', async () => {
+  it('execute sanitizes an error that only imitates domain metadata', async () => {
     const client = createDbClient({ databaseUrl: 'postgresql://unused:unused@127.0.0.1:1/unused' });
     const error = Object.assign(new Error('total debits must equal total credits'), {
       code: 'UNBALANCED_TRANSACTION',
@@ -61,7 +61,12 @@ describe('db client module', () => {
         client.execute('test operation', async () => {
           throw error;
         }),
-      ).rejects.toBe(error);
+      ).rejects.toMatchObject({
+        code: 'INTERNAL_ERROR',
+        httpStatus: 500,
+        message: 'Internal server error',
+        cause: error,
+      });
     } finally {
       await client.sql.end({ timeout: 0 });
     }

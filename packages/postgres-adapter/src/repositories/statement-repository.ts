@@ -1,17 +1,17 @@
 import { type AccountSide, calculateAvailableMinor, parseAccountSide } from '@borecount/core';
-import {
-  AccountNotFoundError,
-  type AccountStatement,
-  type AccountStatementQuery,
-  type CreditLotMovement,
-  type CreditLotStatement,
-  type CreditLotStatementQuery,
-  RepositoryError,
-  type StatementBalance,
-  type StatementRepository,
+import type {
+  AccountStatement,
+  AccountStatementQuery,
+  CreditLotMovement,
+  CreditLotStatement,
+  CreditLotStatementQuery,
+  StatementBalance,
+  StatementRepository,
 } from '@borecount/core/application';
-import { type AnyColumn, and, desc, eq, gt, lt, lte, or, sql } from 'drizzle-orm';
+import { AccountNotFoundError, RepositoryError } from '@borecount/core/errors';
+import { and, desc, eq, gt, lt, lte, or, sql } from 'drizzle-orm';
 import type { DbClient, DrizzleDatabase } from '../client';
+import { exactTimestamp } from '../exact-timestamp';
 import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
 
@@ -34,9 +34,6 @@ type CapacityRow = {
 };
 
 const INITIAL_CAPACITY_VERSION = 1n;
-
-const exactTimestamp = (column: AnyColumn) =>
-  sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 export class DrizzleStatementRepository implements StatementRepository {
   public constructor(private readonly client: DbClient) {}

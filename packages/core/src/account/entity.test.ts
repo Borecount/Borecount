@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import { InvalidAccountSideError, InvalidOverdraftPolicyError } from '../errors';
 import { AccountEntity, AccountSide, OverdraftPolicy } from './entity';
-import { InvalidAccountSideError, InvalidOverdraftPolicyError } from './errors';
 
 describe('AccountEntity', () => {
   it('accepts DEBIT and CREDIT sides', () => {

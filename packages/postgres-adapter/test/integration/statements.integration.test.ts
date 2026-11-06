@@ -4,7 +4,7 @@ import {
   AccountNotFoundError,
   InvariantViolationError,
   RepositoryError,
-} from '@borecount/core/application';
+} from '@borecount/core/errors';
 import { type SQL, sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import {

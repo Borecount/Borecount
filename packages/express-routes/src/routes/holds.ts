@@ -10,7 +10,7 @@ import {
   holdCaptureFilterFields,
   holdCreditAllocationFilterFields,
   holdEntryFilterFields,
-  holdFilterFields,
+  holdSummaryFilterFields,
   readWhereParameter,
 } from '@borecount/http';
 import {
@@ -20,7 +20,7 @@ import {
   type CreateHoldResponse,
   commitHoldRequestSchema,
   createHoldRequestSchema,
-  type HoldByIdParams,
+  type HoldIdParams,
   listHoldCapturesQuerySchema,
   listHoldCreditAllocationsQuerySchema,
   listHoldEntriesQuerySchema,
@@ -47,7 +47,7 @@ type HoldRouteServices = Pick<ApplicationServices, 'holds'>;
 export const registerHoldRoutes = (app: Application, services: HoldRouteServices): void => {
   app.get('/v1/holds/:id', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
-      const params = parseUuidParam<keyof HoldByIdParams>(req.params.id, 'id');
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
       if (params === null) {
         sendInvalidInput(res, 'Invalid path parameter');
         return;
@@ -70,7 +70,7 @@ export const registerHoldRoutes = (app: Application, services: HoldRouteServices
       }
       const where = readWhereParameter<WhereFor<typeof holdListFilter>>(
         req.originalUrl,
-        holdFilterFields,
+        holdSummaryFilterFields,
       );
       if (where === null) {
         sendInvalidInput(res, 'Invalid querystring');
@@ -84,7 +84,7 @@ export const registerHoldRoutes = (app: Application, services: HoldRouteServices
 
   app.get('/v1/holds/:id/entries', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
-      const params = parseUuidParam<keyof HoldByIdParams>(req.params.id, 'id');
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
       if (params === null) {
         sendInvalidInput(res, 'Invalid path parameter');
         return;
@@ -118,7 +118,7 @@ export const registerHoldRoutes = (app: Application, services: HoldRouteServices
 
   app.get('/v1/holds/:id/captures', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
-      const params = parseUuidParam<keyof HoldByIdParams>(req.params.id, 'id');
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
       if (params === null) {
         sendInvalidInput(res, 'Invalid path parameter');
         return;
@@ -152,7 +152,7 @@ export const registerHoldRoutes = (app: Application, services: HoldRouteServices
 
   app.get('/v1/holds/:id/credit-allocations', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
-      const params = parseUuidParam<keyof HoldByIdParams>(req.params.id, 'id');
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
       if (params === null) {
         sendInvalidInput(res, 'Invalid path parameter');
         return;
@@ -219,7 +219,7 @@ export const registerHoldRoutes = (app: Application, services: HoldRouteServices
 
   app.post('/v1/holds/:id/commit', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
-      const params = parseUuidParam<keyof HoldByIdParams>(req.params.id, 'id');
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
       const body = validate<CommitHoldRequest>(commitHoldRequestSchema, req.body);
       if (params === null || body === null) {
         sendInvalidInput(res, params === null ? 'Invalid path parameter' : 'Invalid request body');
@@ -245,7 +245,7 @@ export const registerHoldRoutes = (app: Application, services: HoldRouteServices
 
   app.post('/v1/holds/:id/void', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
-      const params = parseUuidParam<keyof HoldByIdParams>(req.params.id, 'id');
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
       if (params === null) {
         sendInvalidInput(res, 'Invalid path parameter');
         return;

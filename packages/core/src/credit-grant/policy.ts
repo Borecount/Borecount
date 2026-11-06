@@ -1,10 +1,4 @@
-import { DomainError } from '../base/domain-error';
-
-export class InvalidCreditGrantError extends DomainError {
-  public constructor(message: string) {
-    super(message, 'INVALID_CREDIT_GRANT');
-  }
-}
+import { InvalidCreditGrantError } from '../errors';
 
 export const validateCreditGrant = (input: { amountMinor: bigint }): void => {
   if (input.amountMinor <= 0n || input.amountMinor > 9223372036854775807n) {

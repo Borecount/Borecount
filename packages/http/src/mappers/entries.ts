@@ -1,4 +1,5 @@
-import { type EntryEntity, InvariantViolationError } from '@borecount/core';
+import type { EntryEntity } from '@borecount/core';
+import { InvariantViolationError } from '@borecount/core/errors';
 import type { EntryResponse } from '../contracts/entries';
 
 export const toEntryResponse = (entry: EntryEntity): EntryResponse => {

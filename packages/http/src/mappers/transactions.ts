@@ -1,5 +1,6 @@
-import { InvariantViolationError, type TransactionEntity } from '@borecount/core';
+import type { TransactionEntity } from '@borecount/core';
 import type { CreateTransactionResult } from '@borecount/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import type { CreateTransactionResponse, TransactionResponse } from '../contracts/transactions';
 
 export const toTransactionResponse = (transaction: TransactionEntity): TransactionResponse => {

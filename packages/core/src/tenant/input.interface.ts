@@ -1,7 +1,7 @@
 import type { ApiKeyRole } from '../api-key/entity';
 
 export interface ProvisionTenantInput {
-  /** Stable, host-generated UUID used for every retry of this onboarding operation. */
+  /** Stable, host-generated lowercase UUIDv7 used for every retry of this onboarding operation. */
   tenantId: string;
   tenantName: string;
   keyName: string;

@@ -1,4 +1,4 @@
-import { DomainError } from '../base/domain-error';
+import { DomainError } from './domain-error';
 
 export class LedgerNotFoundError extends DomainError {
   public readonly ledgerId: string;
@@ -100,7 +100,7 @@ export class InsufficientReservedCapacityError extends InvariantViolationError {
 }
 
 export class BulkTransactionError extends DomainError {
-  public readonly details: {
+  public override readonly details: {
     item_index: number;
     reference: string;
     category: BulkTransactionErrorCategory;

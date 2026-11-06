@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { InvalidAmountError } from '../transaction/errors';
+import { InvalidAmountError } from '../errors';
 import { validateSignedEntryAmount } from './validators';
 
 describe('validateSignedEntryAmount', () => {

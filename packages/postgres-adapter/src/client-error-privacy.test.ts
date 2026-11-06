@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { InvariantViolationError } from '@borecount/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import { toHttpErrorPayload } from '../../http/src/errors';
 import { createDbClient } from './client';
 
@@ -20,9 +20,10 @@ test('keeps tenant relationship diagnostics internal and exposes a generic const
     expect((error as Error).cause).toBe(databaseError);
     expect(toHttpErrorPayload(error)).toEqual({
       statusCode: 400,
-      error: 'INVARIANT_VIOLATION',
-      message: 'Unable to reserve grant allocations: data constraints violated',
-      details: undefined,
+      body: {
+        error: 'INVARIANT_VIOLATION',
+        message: 'Unable to reserve grant allocations: data constraints violated',
+      },
     });
     expect(JSON.stringify(toHttpErrorPayload(error))).not.toContain('LL003');
     expect(JSON.stringify(toHttpErrorPayload(error))).not.toContain(databaseError.detail);

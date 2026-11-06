@@ -1,8 +1,9 @@
-import { randomUUID } from 'node:crypto';
 import { hashApiKey } from '../api-key/credentials';
 import type { ApiKeyEntity } from '../api-key/entity';
 import { ApiKeyRole } from '../api-key/entity';
-import { InvariantViolationError } from '../application/errors';
+import { type Clock, SystemClock } from '../base/clock';
+import { generateUuidV7, isUuidV7 } from '../base/uuid';
+import { InvariantViolationError } from '../errors';
 import { assertNonEmpty } from '../utils';
 import type { BootstrapInitialAdminInput, ProvisionTenantInput } from './input.interface';
 import type {
@@ -18,7 +19,10 @@ export interface ProvisionTenantResult {
 
 /** Trusted host capability. Host authorization must precede every invocation. */
 export class TenantProvisioningService {
-  public constructor(private readonly transaction: TenantProvisioningTransaction) {}
+  public constructor(
+    private readonly transaction: TenantProvisioningTransaction,
+    private readonly clock: Clock = new SystemClock(),
+  ) {}
 
   public async provisionTenant(input: ProvisionTenantInput): Promise<ProvisionTenantResult> {
     const validated = this.validateInput(input);
@@ -29,7 +33,7 @@ export class TenantProvisioningService {
     input: BootstrapInitialAdminInput,
   ): Promise<ProvisionTenantResult | null> {
     const validated = this.validateInput({
-      tenantId: randomUUID(),
+      tenantId: generateUuidV7(this.clock.now()),
       tenantName: input.tenantName,
       keyName: input.keyName,
       role: ApiKeyRole.ADMIN,
@@ -41,8 +45,8 @@ export class TenantProvisioningService {
   }
 
   private validateInput(input: ProvisionTenantInput): ProvisionTenantInput & { keyHash: string } {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(input.tenantId)) {
-      throw new InvariantViolationError('tenantId must be a canonical UUID');
+    if (!isUuidV7(input.tenantId) || input.tenantId !== input.tenantId.toLowerCase()) {
+      throw new InvariantViolationError('tenantId must be a canonical lowercase UUIDv7');
     }
     assertNonEmpty(input.tenantName, 'tenantName is required');
     assertNonEmpty(input.keyName, 'keyName is required');

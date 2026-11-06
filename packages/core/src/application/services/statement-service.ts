@@ -1,5 +1,5 @@
+import { InvariantViolationError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
-import { InvariantViolationError } from '../errors';
 import { validatePaginationQuery } from '../pagination-query';
 import type { StatementRepository } from '../repositories.interface';
 import type {

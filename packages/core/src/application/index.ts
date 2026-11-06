@@ -16,7 +16,6 @@ export {
 } from '../tenant';
 export { transactionListFilter } from '../transaction/list-filter';
 export * from './available-balance';
-export * from './errors';
 export type {
   HoldCapture,
   HoldCapturesQuery,

@@ -1,5 +1,5 @@
+import { InvariantViolationError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
-import { InvariantViolationError } from '../errors';
 import type { AdjustmentRepository } from '../repositories.interface';
 import type { AdjustmentResult, CreateAdjustmentInput } from '../types';
 

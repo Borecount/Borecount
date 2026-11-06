@@ -5,16 +5,20 @@ Domain-first ledger library for Borecount.
 ## Design goals
 
 - Explicit invariants in domain classes/use-cases.
-- Zero framework/runtime dependencies in core domain model.
+- Zero external runtime dependencies; framework-free domain model.
+- The current package targets Node-compatible server runtimes (including Bun). Credential and UUID
+  generation use built-in `node:crypto`; browser and edge runtimes without that API are not supported.
 - Stable contracts (`input.interface.ts` / `repository.interface.ts` / use-case result contracts).
 - Deterministic behavior: same input -> same domain decision.
 
 ## Package structure
 
 - `src/base`
-  - Shared primitives and abstractions: `DomainError`, `Result`, `UnitOfWork`, `Clock`, `Id`, `Money`.
+  - Shared primitives and abstractions: `Result`, `UnitOfWork`, `Clock`, `Id`, `Money`.
 - `src/application`
-  - App-facing contracts and error types for service/repository boundaries.
+  - App-facing contracts and services for service/repository boundaries.
+- `src/errors`
+  - All reusable error classes, `DomainError`, and classification helpers; import from `@borecount/core/errors`.
 - `src/utils`
   - Shared helper utilities such as `assertNonEmpty`.
 - `src/tenant`
@@ -192,7 +196,9 @@ PostgreSQL applies these predicates before pagination, alongside mandatory tenan
 ledger/account, time range, fixed filters, and cursor conditions. Filters cannot override
 these scopes. Keep the same `where` when following a cursor: changing or removing it is
 rejected. Field/operator key order does not matter; `in` value order must remain the same.
-Existing unfiltered cursor formats remain compatible (including the legacy history codec).
+Every cursor is bound to its tenant, resource, range and normalized filter. Balance history uses the
+same current cursor format as other paginated reads; timestamp keys preserve all six PostgreSQL
+fractional digits.
 HTTP adapters expose pagination as `limit`/`cursor` and serialize typed filters through `where`.
 
 Reconciliation result pages use `reconResultListFilter`; candidate ID arrays are excluded
@@ -208,3 +214,42 @@ then pass a stable tenant UUID, tenant/key names and explicit ADMIN or SERVICE r
 port owns serialization and atomic rollback. The capability is reserved for trusted hosts,
 separate from tenant-facing application services. See the [adapter provisioning example](../postgres-adapter/README.md#host-invoked-tenant-provisioning)
 for host composition, recovery and administrative HTTP ownership.
+
+## Error imports
+
+Import all custom error classes and guards from the single `@borecount/core/errors` entry point:
+
+```ts
+import { AccountNotFoundError, DomainError, RateLimitExceededError } from '@borecount/core/errors';
+```
+
+Error declarations do not install policy. Hosts still own rate limiting and decide when to throw
+`RateLimitExceededError`; `@borecount/http` owns its HTTP response schema and status/body/header mapping.
+
+Missing accounts during posting and lookups use the same `AccountNotFoundError` with status `404`.
+Money and transaction validation use the same `CurrencyMismatchError` class and message.
+
+## Shared query bounds
+
+`MAX_PAGE_LIMIT` (200) and `MAX_FILTER_IN_VALUES` (100) are exported from
+`@borecount/core/application`. Core service validation and HTTP contracts/parsers use these same
+constants; the HTTP page-size default of 50 remains transport policy.
+
+Error guards use validated `Symbol.for` brands so separately loaded copies of core remain
+recognizable without trusting arbitrary `code`/`httpStatus` objects. Brands classify errors;
+they are not an authentication or trust boundary for hostile code running inside the process.
+
+`isUuid` and `UUID_PATTERN` from `@borecount/core/base` validate canonical PostgreSQL UUID
+text (case-insensitive hex groups, with no version or variant restriction). HTTP parameters,
+filters and persistence cursors share this predicate. Creation uses the separate UUIDv7 policy below.
+
+Core uses relative imports internally. Its ESM build shares modules between entry points using
+code splitting, so errors thrown by core retain the same class identity as exports from
+`@borecount/core/errors`. All generated chunks are included in the published package.
+
+New entity identifiers use UUIDv7. `generateUuidV7(now)` and `isUuidV7(value)` are available
+from `@borecount/core/base`; the generator takes an explicit `Date` and uses cryptographic
+randomness, without promising ordering within one millisecond or across clock regressions.
+Tenant provisioning requires a lowercase UUIDv7 retained by the host for retries; bootstrap
+uses its injected `Clock` to generate one. Existing-resource references and cursors continue
+to accept any canonical PostgreSQL UUID. Database-generated primary keys use `uuid_v7()`.

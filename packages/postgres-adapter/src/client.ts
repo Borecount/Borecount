@@ -1,10 +1,11 @@
-import { isDomainError, type UnknownRecord } from '@borecount/core';
+import type { UnknownRecord } from '@borecount/core';
 import {
   HoldLifecycleMismatchError,
   InsufficientReservedCapacityError,
   InvariantViolationError,
+  isDomainError,
   RepositoryError,
-} from '@borecount/core/application';
+} from '@borecount/core/errors';
 import { sql as drizzleSql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { drizzle } from 'drizzle-orm/postgres-js';
