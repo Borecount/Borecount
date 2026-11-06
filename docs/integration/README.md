@@ -37,9 +37,13 @@ Create a ledger, create two same-currency accounts, post one balanced transactio
 
 Before production use, review [invariants](../product/invariants.md), [limitations](../product/limitations.md), [operations runbooks](../runbooks/operations-auth-mvp.md), and [versioning](./versioning.md).
 
+For self-hosted PostgreSQL role separation, tenant RLS, credential lookup, and disposable-database
+verification, follow the [self-hosted security runbook](./self-hosted-security.md).
+
 For credit and debit adjustments, the host must authenticate and authorize each request. Configure
-the optional adapter callback using the [trusted actor integration pattern](./adjustment-authorization.md);
-without it, the adapters do not authorize direction or verify the actor claim.
+the required adapter option using the [trusted actor integration pattern](./adjustment-authorization.md):
+provide an authorization callback, or explicitly opt out with `authorizeAdjustment: false` only for a
+trusted service that owns actor authorization. Missing options fail adapter registration.
 
 ## Troubleshooting
 

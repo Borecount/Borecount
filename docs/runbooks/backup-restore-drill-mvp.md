@@ -2,7 +2,7 @@
 
 ## Scope
 
-This runbook defines the MVP local backup/restore drill baseline for LL-35.
+This runbook defines the MVP local backup/restore drill baseline.
 
 Recovery targets in scope:
 
@@ -114,7 +114,6 @@ Use helper script:
 ## Execution Baseline (Observed)
 
 - Drill date: `2026-05-14`
-- Branch: `codex/LL-35-backup-restore-drill`
 - Backup artifacts:
   - `./tmp/backups/luxledger.dump` (`13K`)
   - `./tmp/backups/luxledger_test.dump` (`20K`)

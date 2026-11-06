@@ -34,8 +34,10 @@ export const createAdjustmentService = (client: DbClient): AdjustmentService =>
 export const createAssetService = (client: DbClient): AssetService =>
   new AssetService(new DrizzleAssetRepository(client));
 
-export const createApiKeyService = (client: DbClient): ApiKeyService =>
-  new ApiKeyService(new DrizzleApiKeyRepository(client));
+export const createApiKeyService = (
+  client: DbClient,
+  credentialLookupClient?: DbClient,
+): ApiKeyService => new ApiKeyService(new DrizzleApiKeyRepository(client, credentialLookupClient));
 
 export const createBalanceService = (client: DbClient): BalanceService =>
   new BalanceService(new DrizzleBalanceRepository(client));

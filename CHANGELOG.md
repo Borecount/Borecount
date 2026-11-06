@@ -12,19 +12,19 @@ notes and implement the new methods before upgrading.
 
 ### Added
 
-- LL-134: shared `429` response schema and type, shared `RateLimitExceededError` and safe status/body/header mapping in both adapters, plus generic `413` error documentation, with canonical OpenAPI responses and matching `Retry-After` semantics. Enforcement remains host-owned; no database migrations or commercial checks are introduced.
+- shared `429` response schema and type, shared `RateLimitExceededError` and safe status/body/header mapping in both adapters, plus generic `413` error documentation, with canonical OpenAPI responses and matching `Retry-After` semantics. Enforcement remains host-owned; no database migrations or commercial checks are introduced.
 
 ### Changed
 
-- LL-134: share constructor/brand validation predicates, type domain error details and omit malformed detail values, consolidate Fastify invalid-input responses, and document explicit parser-size handling and retry-delay policy.
+- share constructor/brand validation predicates, type domain error details and omit malformed detail values, consolidate Fastify invalid-input responses, and document explicit parser-size handling and retry-delay policy.
 
-- LL-134 (breaking): require UUIDv7 tenant IDs for provisioning and generate UUIDv7 during bootstrap with an injected clock. Share the cryptographically random core UUIDv7 generator with PostgreSQL workflows; existing-resource UUID validation stays version-neutral.
+- (breaking): require UUIDv7 tenant IDs for provisioning and generate UUIDv7 during bootstrap with an injected clock. Share the cryptographically random core UUIDv7 generator with PostgreSQL workflows; existing-resource UUID validation stays version-neutral.
 
-- LL-134: replace core error self-imports with relative imports and share ESM modules across entry points to preserve constructor identity in published packages.
+- replace core error self-imports with relative imports and share ESM modules across entry points to preserve constructor identity in published packages.
 
-- LL-134: classify errors across package copies using validated global symbol brands. Share canonical PostgreSQL UUID validation without version/variant restrictions; remove the unused UUIDv7-only helper.
+- classify errors across package copies using validated global symbol brands. Share canonical PostgreSQL UUID validation without version/variant restrictions; remove the unused UUIDv7-only helper.
 
-- LL-134 (breaking): error mapping returns `{ statusCode, headers, body }`; status 429 requires the canonical rate-limit error. Domain error statuses must be integers from 400 through 599. Invalid identifier messages omit input values. Express hosts can supply a JSON parser or disable the adapter parser explicitly.
+- (breaking): error mapping returns `{ statusCode, headers, body }`; status 429 requires the canonical rate-limit error. Domain error statuses must be integers from 400 through 599. Invalid identifier messages omit input values. Express hosts can supply a JSON parser or disable the adapter parser explicitly.
 
 - Removed adapter registration aliases, Fastify pagination renaming wrappers and unused HTTP route base classes. Hold reads use `holdSummaryFilterFields` and `holdIdParamsSchema`; string validation uses core `isNonEmptyString`.
 - Error classification requires the canonical `DomainError` instance; the constructor accepts an explicit status and options without the old argument overload.

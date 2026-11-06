@@ -14,9 +14,44 @@ import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
 
 export class DrizzleApiKeyRepository implements ApiKeyRepository {
-  public constructor(private readonly client: DbClient) {}
+  public constructor(
+    private readonly client: DbClient,
+    private readonly credentialLookupClient?: DbClient,
+  ) {}
+
+  private async lookupCredential(query: ReturnType<typeof sql>): Promise<ApiKeyEntity | null> {
+    const client = this.credentialLookupClient;
+    if (!client) throw new Error('Credential lookup client is required');
+    return client.execute('lookup api key', async (db) => {
+      const [row] = await db.execute<{
+        id: string;
+        tenant_id: string;
+        name: string;
+        role: string;
+        key_hash: string;
+        created_at: string | Date;
+        revoked_at: string | Date | null;
+      }>(query);
+      return row
+        ? toApiKeyEntity({
+            id: row.id,
+            tenantId: row.tenant_id,
+            name: row.name,
+            role: row.role,
+            keyHash: row.key_hash,
+            createdAt: new Date(row.created_at),
+            revokedAt: row.revoked_at === null ? null : new Date(row.revoked_at),
+          })
+        : null;
+    });
+  }
 
   public async findActiveByHash(keyHash: string): Promise<ApiKeyEntity | null> {
+    if (this.credentialLookupClient) {
+      return this.lookupCredential(
+        sql`select * from borecount_security.find_active_api_key(${keyHash})`,
+      );
+    }
     return this.client.execute('find api key by hash', async (db) => {
       const [row] = await db
         .select()
@@ -28,6 +63,11 @@ export class DrizzleApiKeyRepository implements ApiKeyRepository {
   }
 
   public async findById(apiKeyId: string): Promise<ApiKeyEntity | null> {
+    if (this.credentialLookupClient) {
+      return this.lookupCredential(
+        sql`select * from borecount_security.find_api_key(${apiKeyId}::uuid)`,
+      );
+    }
     return this.client.execute('find api key by id', async (db) => {
       const [row] = await db
         .select()

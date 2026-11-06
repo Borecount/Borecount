@@ -37,4 +37,4 @@
 - This is efficient for typical account activity patterns.
 - For very high-volume accounts with very long histories, query latency can increase due to deeper index traversal and larger historical windows.
 - Backdated write cost is `O(later snapshots)` for each affected account because later materialized states are updated in the posting transaction.
-- Current LL-56 design intentionally avoids a secondary snapshot compaction layer; introduce it only if production latency/SLO data requires it.
+- The current snapshot design intentionally avoids a secondary snapshot compaction layer; introduce it only if production latency/SLO data requires it.

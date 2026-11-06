@@ -19,6 +19,25 @@ Transaction metadata is stored as nullable PostgreSQL `jsonb` on the immutable t
 
 Use metadata for stable external IDs, provider references, flags, and other compact context needed to interpret a transaction. Do not embed full provider payloads, audit histories, documents, binary data, or mutable records. Store large data in the owning system and keep only its stable reference in transaction metadata.
 
+## Least-privilege self-hosted deployment
+
+The host-owned [security baseline](../../docs/integration/self-hosted-security.md) supplies an
+executable role/RLS overlay and real-login isolation tests. Apply it after migrations; it is not
+installed by the package migrator. With that overlay, configure separate runtime and credential
+lookup clients:
+
+```ts
+const services = createApplicationServices(runtimeClient);
+services.apiKeys = createApiKeyService(runtimeClient, credentialLookupClient);
+```
+
+Import both factories from `@borecount/postgres-adapter`. The optional second client uses only
+`borecount_security.find_active_api_key` and `find_api_key`; tenant key creation/list/revocation
+continue through the runtime client. Without that argument the existing direct-table lookup remains
+unchanged, and requires a deployment that permits global credential lookup. Never use a migration
+or provisioning connection as the runtime or lookup client. Provisioning requires a separate trusted
+operator connection. See the runbook for TLS, secrets, privileges, host authorization and limitations.
+
 ## Host-composable unit of work
 
 Use `createUnitOfWork` when a host row or outbox record must commit atomically with Borecount operations:

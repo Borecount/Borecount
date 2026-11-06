@@ -1,8 +1,8 @@
-# Credit grant lots and allocation lineage (LL-84, LL-66)
+# Credit grant lots and allocation lineage
 
 See the [transaction write-path overview](./transaction-flows.md) for record creation, grant-specific branches and transaction boundaries.
 
-## Reservation atomicity and recovery (LL-101)
+## Reservation atomicity and recovery
 
 Each partial commit is its own atomic transaction: a failed commit preserves the previous reservation and creates no posting or consumption lineage. A successful partial commit leaves the remainder reserved until a later commit or explicit void by the caller. Reversal compensates the committed posting; it never reopens the hold or replenishes its reservation. When that grant has expired, only unreserved restored capacity is expired in the reversal transaction; outstanding reservations remain commit-safe.
 
@@ -10,7 +10,7 @@ The latest `credit_grant_capacity_versions` row stores both `remaining_minor` an
 
 Adapter writers acquire grant-enabled account locks in ID order before grant locks; ordinary account balance updates follow afterward. Commit and void additionally serialize on the hold row before taking account locks. The transaction-local allocation projection avoids repeatedly allocating the same capacity within one posting, not a second persistence authority. Commit/void still derive the unconsumed allocation of the specific hold/grant from its provenance; they do not replay every active hold for a grant. Tests independently replay provenance after each scenario and compare it to the latest reservation snapshot.
 
-LL-101 uses one migration (0004), one reservation snapshot model and no transitional reads, writes or backfills. Migration DDL and lifecycle mutations are transactional. Integration tests verify failed-migration rollback; `bun run migration:verify` verifies clean installation and backup/restore.
+Grant reservation persistence uses one migration (0004), one reservation snapshot model and no transitional reads, writes or backfills. Migration DDL and lifecycle mutations are transactional. Integration tests verify failed-migration rollback; `bun run migration:verify` verifies clean installation and backup/restore.
 
 Hold lifecycle is `HELD -> HELD` for partial commit, `HELD -> APPLIED` for full commit, and `HELD -> VOIDED` for release. Final states cannot be updated or reopened. Remaining amount is positive while HELD and zero in a final state. For grant-backed holds, a partial-commit update must match the committed posting total and proportional entries; direct SQL cannot change the remainder independently. Violations fail the transaction with internal SQLSTATE `LL001`, mapped to `HOLD_LIFECYCLE_MISMATCH`. Insufficient reserved capacity uses `LL002`, mapped to `INSUFFICIENT_RESERVED_CAPACITY`. Invalid allocation relationships use internal `LL003`, exposed only as generic `INVARIANT_VIOLATION`, without database diagnostics or tenant identifiers. An identical commit retry returns the original posting with the current hold state, including `VOIDED` if the remainder was subsequently released.
 
@@ -66,4 +66,4 @@ Expiration preview and run accept explicit `as_of` and a limit from 1 through 10
 
 A database boundary rejects incomplete or mismatched attribution, unallocated grant-account holds, allocation mutation, over-reservation, spending reserved capacity through an unrelated transaction, and expiration of reserved capacity. Ordinary accounts and their transaction payloads remain unaffected.
 
-Allocation, consumption policy, provenance metadata, and transfer/refund rules are intentionally deferred until a concrete product flow requires them. LL-66 owns deterministic allocation and consumption lineage. LL-85 owns expiration fields, entries, and eligibility enforcement. LL-67 and LL-89 may introduce organization ownership and spending authority around accounts, but LL-84 deliberately adds no user, organization, membership, or permission model.
+Allocation, consumption policy, provenance metadata, and transfer/refund rules are intentionally deferred until a concrete product flow requires them. The allocation model owns deterministic allocation and consumption lineage. Expiration owns its fields, entries, and eligibility enforcement. Separate organization ownership and spending-authority features may extend accounts, but credit grants deliberately add no user, organization, membership, or permission model.
