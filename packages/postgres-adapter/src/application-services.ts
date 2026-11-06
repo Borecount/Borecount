@@ -60,11 +60,14 @@ export const createStatementService = (client: DbClient): StatementService =>
 export const createTransactionService = (client: DbClient): TransactionService =>
   new TransactionService(new DrizzleTransactionRepository(client));
 
-export const createApplicationServices = (client: DbClient): ApplicationServices => ({
+export const createApplicationServices = (
+  client: DbClient,
+  credentialLookupClient?: DbClient,
+): ApplicationServices => ({
   accounts: createAccountService(client),
   adjustments: createAdjustmentService(client),
   assets: createAssetService(client),
-  apiKeys: createApiKeyService(client),
+  apiKeys: createApiKeyService(client, credentialLookupClient),
   balances: createBalanceService(client),
   creditGrants: createCreditGrantService(client),
   holds: createHoldService(client),

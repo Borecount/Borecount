@@ -298,8 +298,9 @@ it('uses the invoker runtime role for valid writes and makes hidden and absent r
         sql`GRANT UPDATE ON accounts, holds, balance_snapshots TO ll101_test_runtime`,
       );
       // PostgreSQL requires UPDATE on at least one column for SELECT FOR UPDATE.
-      // Immutable-table triggers still reject actual changes to these identifiers.
-      await tx.execute(sql`GRANT UPDATE (id) ON credit_grants, transactions TO ll101_test_runtime`);
+      // Grant-row and transaction-metadata triggers reject changes to the lock columns.
+      await tx.execute(sql`GRANT UPDATE (id) ON credit_grants TO ll101_test_runtime`);
+      await tx.execute(sql`GRANT UPDATE (metadata) ON transactions TO ll101_test_runtime`);
       await tx.execute(sql`SET LOCAL ROLE ll101_test_runtime`);
       await tx.execute(sql`select set_config('app.tenant_id', ${own.tenantId}, true)`);
       const runtime = createApplicationServices(scopedClient(tx));

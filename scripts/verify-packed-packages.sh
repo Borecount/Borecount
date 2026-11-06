@@ -25,6 +25,39 @@ npm init --yes >/dev/null
 npm install --ignore-scripts --no-package-lock "$TARBALL_DIR"/*.tgz
 
 node --input-type=module <<'NODE'
+import { access, readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { strictEqual } from 'node:assert';
+
+const packageRoot = resolve('node_modules/@borecount/postgres-adapter');
+const readmePath = resolve(packageRoot, 'README.md');
+const runbookPath = resolve(packageRoot, 'dist/security/self-hosted-security.md');
+const overlayPath = resolve(packageRoot, 'dist/security/least-privilege.sql');
+const readme = await readFile(readmePath, 'utf8');
+const runbook = await readFile(runbookPath, 'utf8');
+const overlay = await readFile(overlayPath, 'utf8');
+
+for (const [label, markdown, sourcePath] of [
+  ['package README', readme, readmePath],
+  ['security runbook', runbook, runbookPath],
+]) {
+  const links = [...markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)];
+  for (const [, href] of links) {
+    if (/^(?:[a-z]+:|#)/i.test(href)) continue;
+    const target = resolve(dirname(sourcePath), href.split('#', 1)[0]);
+    await access(target).catch(() => {
+      throw new Error(`${label} has a broken packaged link: ${href}`);
+    });
+  }
+}
+
+strictEqual(overlay.includes('CREATE ROLE %I NOLOGIN'), true, 'Packed security SQL is missing no-login role creation');
+strictEqual(overlay.includes('borecount_runtime'), true, 'Packed security SQL is missing the runtime role');
+strictEqual(overlay.includes('find_active_api_key'), true, 'Packed security SQL is missing credential lookup functions');
+strictEqual(runbook.includes('--file dist/security/least-privilege.sql'), true, 'Packed runbook does not point to the packaged overlay');
+NODE
+
+node --input-type=module <<'NODE'
 const core = await import('@borecount/core');
 const application = await import('@borecount/core/application');
 const base = await import('@borecount/core/base');

@@ -55,8 +55,11 @@ GRANT UPDATE (balance_minor, reserved_delta_minor, updated_at) ON accounts TO bo
 GRANT UPDATE (state, remaining_amount_minor, applied_at, voided_at) ON holds TO borecount_runtime;
 GRANT UPDATE (posted_minor) ON balance_snapshots TO borecount_runtime;
 GRANT UPDATE (revoked_at) ON api_keys TO borecount_runtime;
--- SELECT FOR UPDATE needs UPDATE on at least one column; immutable triggers remain active.
-GRANT UPDATE (id) ON transactions, credit_grants TO borecount_runtime;
+-- SELECT FOR UPDATE needs UPDATE on at least one column. Metadata is immutable on
+-- every transaction; IDs are only protected on grant-linked transactions.
+REVOKE UPDATE (id) ON transactions FROM borecount_runtime;
+GRANT UPDATE (metadata) ON transactions TO borecount_runtime;
+GRANT UPDATE (id) ON credit_grants TO borecount_runtime;
 
 GRANT SELECT ON api_keys TO borecount_credential_owner;
 DROP POLICY IF EXISTS borecount_credential_lookup ON api_keys;
@@ -120,12 +123,15 @@ BEGIN
     RAISE EXCEPTION 'Credential function owner must have no members';
   END IF;
   FOR member_role IN
-    WITH RECURSIVE members AS (
+    WITH RECURSIVE runtime_members AS (
       SELECT oid FROM pg_roles WHERE rolname = 'borecount_runtime'
-      UNION SELECT m.member FROM pg_auth_members m JOIN members r ON m.roleid = r.oid
-    ) SELECT r.* FROM pg_roles r JOIN members m USING (oid)
+      UNION SELECT m.member FROM pg_auth_members m JOIN runtime_members r ON m.roleid = r.oid
+    ), reachable_roles AS (
+      SELECT oid FROM runtime_members
+      UNION SELECT m.roleid FROM pg_auth_members m JOIN reachable_roles r ON m.member = r.oid
+    ) SELECT r.* FROM pg_roles r JOIN reachable_roles m USING (oid)
   LOOP
-    IF member_role.rolsuper OR member_role.rolbypassrls OR member_role.rolcreaterole OR member_role.rolcreatedb
+    IF member_role.rolsuper OR member_role.rolbypassrls OR member_role.rolcreaterole OR member_role.rolcreatedb OR member_role.rolreplication
       OR pg_has_role(member_role.oid, 'borecount_operator', 'MEMBER')
       OR pg_has_role(member_role.oid, 'borecount_authenticator', 'MEMBER')
       OR pg_has_role(member_role.oid, 'borecount_credential_owner', 'MEMBER')
@@ -147,7 +153,7 @@ BEGIN
         WHEN 'holds' THEN ARRAY['state', 'remaining_amount_minor', 'applied_at', 'voided_at']
         WHEN 'balance_snapshots' THEN ARRAY['posted_minor']
         WHEN 'api_keys' THEN ARRAY['revoked_at']
-        WHEN 'transactions' THEN ARRAY['id']
+        WHEN 'transactions' THEN ARRAY['metadata']
         WHEN 'credit_grants' THEN ARRAY['id'] ELSE ARRAY[]::text[] END;
       IF EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = protected_table.oid
         AND a.attnum > 0 AND NOT a.attisdropped AND (

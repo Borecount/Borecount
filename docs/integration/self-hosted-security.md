@@ -54,8 +54,7 @@ out of URLs and logs, store only their hashes, return a newly issued secret only
 separate authenticator connection for lookup. With the overlay, `borecount_security.find_active_api_key(hash text)`
 and `borecount_security.find_api_key(id uuid)` are `SECURITY DEFINER` functions that return only the
 matching credential row; the authenticator role receives `EXECUTE`, not table access. Compose
-services with `createApplicationServices(runtimeClient)` and override `apiKeys` with
-`createApiKeyService(runtimeClient, lookupClient)`. Use the operator connection only for trusted
+services with `createApplicationServices(runtimeClient, lookupClient)`. Use the operator connection only for trusted
 provisioning flows.
 
 The returned lookup row contains credential metadata and its hash, never a stored raw key.
@@ -104,10 +103,11 @@ not grant PUBLIC table access or executable privileged functions.
 | SELECT | All 19 listed package tables, under tenant RLS |
 | INSERT | All except `tenants`; provisioning uses the operator |
 | UPDATE selected columns | Account balance/reservation/updated timestamp; hold state/remaining amount/applied/void timestamps; snapshot posted amount; `api_keys.revoked_at` |
-| Row-lock privilege | UPDATE on `transactions.id` and `credit_grants.id` only |
+| Row-lock privilege | UPDATE on `transactions.metadata` and `credit_grants.id` only |
 | DELETE / TRUNCATE / DDL | None |
 
-Immutable-table triggers still reject mutation despite the row-lock grants. Package routines receive
+The `transactions.metadata` UPDATE grant exists for row locking; the global metadata immutability
+trigger rejects metadata changes. Package routines receive
 explicit EXECUTE grants; new tables and host routines need a separate review. The operator has
 SELECT/INSERT/UPDATE and an explicit policy on package tables, but no destructive table grants.
 The function owner has SELECT on `api_keys` only; the authenticator has no package table grants.

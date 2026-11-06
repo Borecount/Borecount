@@ -5,7 +5,7 @@ import { ApiKeyRole } from '@borecount/core';
 import { generateApiKey } from '@borecount/core/application';
 import { generateUuidV7, TenantId } from '@borecount/core/base';
 import { sql } from 'drizzle-orm';
-import { createApiKeyService, createApplicationServices } from '../../src/application-services';
+import { createApplicationServices } from '../../src/application-services';
 import { createDbClient, type DbClient } from '../../src/client';
 import { assets } from '../../src/schema';
 import { createTenantProvisioningService } from '../../src/tenant-provisioning';
@@ -115,7 +115,7 @@ const fixture = async () => {
   };
   const provisioned = await provisioner.provisionTenant(command);
   expect((await provisioner.provisionTenant(command)).created).toBe(false);
-  const services = createApplicationServices(runtime);
+  const services = createApplicationServices(runtime, lookup);
   await runtime.runTenantTx(tenantId, 'create asset fixture', (tx) =>
     tx.insert(assets).values({ tenantId, code: 'USD', scale: 2 }),
   );
@@ -268,7 +268,7 @@ it('runs all data families as a real non-owner login, isolates raw SQL and rejec
   await expect(
     own.services.accounts.getById(own.tenantId, foreign.wallet.id),
   ).rejects.toMatchObject({ code: 'ACCOUNT_NOT_FOUND' });
-  const apiKeys = createApiKeyService(runtime, lookup);
+  const apiKeys = own.services.apiKeys;
   await expect(apiKeys.authenticate(generateApiKey())).rejects.toMatchObject({
     code: 'UNAUTHORIZED',
   });
@@ -349,6 +349,33 @@ it('clears context after commit/rollback, separates simultaneous tenants and pre
   await expect(
     own.services.transactions.create({ ...command, description: 'conflict' }),
   ).rejects.toThrow();
+  await runtime.runTenantTx(own.tenantId, 'verify immutable ordinary transaction', async (tx) => {
+    const [before] = await tx.execute(
+      sql`select * from transactions where id = ${first.transactionId}`,
+    );
+    await expect(
+      tx.transaction(async (nested) => {
+        await nested.execute(
+          sql`update transactions set id = ${generateUuidV7(new Date())} where id = ${first.transactionId}`,
+        );
+      }),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    await expect(
+      tx.transaction(async (nested) => {
+        await nested.execute(
+          sql`update transactions set metadata = '{"tampered":true}'::jsonb where id = ${first.transactionId}`,
+        );
+      }),
+    ).rejects.toMatchObject({ cause: { code: 'P0001' } });
+    const [after] = await tx.execute(
+      sql`select * from transactions where id = ${first.transactionId}`,
+    );
+    expect(after).toEqual(before);
+    const entries = await tx.execute(
+      sql`select id from entries where transaction_id = ${first.transactionId}`,
+    );
+    expect(entries).toHaveLength(2);
+  });
   await own.services.transactions.reverse({
     tenantId: own.tenantId,
     transactionId: first.transactionId,
@@ -403,4 +430,27 @@ it('rejects unsafe inherited runtime capabilities when reapplying the deployment
   expect(role).toMatchObject({ name: 'll136_migrator', rolsuper: false, rolbypassrls: false });
   await migration.sql`create table public.ll136_migration_probe(id int)`;
   await migration.sql`drop table public.ll136_migration_probe`;
+});
+
+it('rejects BYPASSRLS and destructive privileges reachable only through SET ROLE', async () => {
+  for (const bypass of [true, false]) {
+    await expect(
+      admin.sql.begin(async (tx) => {
+        await tx.unsafe(
+          `CREATE ROLE ll136_alternate NOLOGIN ${bypass ? 'BYPASSRLS' : 'NOBYPASSRLS'}`,
+        );
+        await tx.unsafe(
+          `GRANT ${bypass ? 'SELECT' : 'TRUNCATE'} ON public.accounts TO ll136_alternate`,
+        );
+        await tx.unsafe('GRANT USAGE ON SCHEMA public TO ll136_alternate');
+        await tx.unsafe('GRANT ll136_alternate TO ll136_runtime WITH INHERIT FALSE, SET TRUE');
+        const [capabilities] = await tx.unsafe(`select
+        pg_has_role('ll136_runtime', 'll136_alternate', 'SET') as can_set,
+        pg_has_role('ll136_runtime', 'll136_alternate', 'USAGE') as inherits`);
+        expect(capabilities).toMatchObject({ can_set: true, inherits: false });
+        // No inherited table privileges or runtime role attributes reveal this capability.
+        await tx.unsafe(overlay);
+      }),
+    ).rejects.toMatchObject({ code: 'P0001' });
+  }
 });
