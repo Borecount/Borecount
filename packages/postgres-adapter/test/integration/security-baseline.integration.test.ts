@@ -458,6 +458,8 @@ it('rejects BYPASSRLS and destructive privileges reachable only through SET ROLE
 it('keeps API-key reads and writes in the tenant unit-of-work transaction under split roles', async () => {
   const own = await fixture();
   const foreign = await fixture();
+  const originalAuth = await own.services.apiKeys.authenticate(own.rawApiKey);
+  expect(originalAuth.apiKeyId).toBe(own.key.id);
   const rollback = new Error('rollback credential changes');
   let createdRawKey: string | undefined;
   await expect(
@@ -487,8 +489,9 @@ it('keeps API-key reads and writes in the tenant unit-of-work transaction under 
     }),
   ).rejects.toBe(rollback);
   expect((await own.services.apiKeys.authenticate(own.rawApiKey)).tenantId).toBe(own.tenantId);
-  expect(createdRawKey).toBeDefined();
-  await expect(own.services.apiKeys.authenticate(createdRawKey!)).rejects.toMatchObject({
+  await own.services.apiKeys.assertAccessTokenIsActive(originalAuth);
+  if (typeof createdRawKey !== 'string') throw new Error('Transactional key was not created');
+  await expect(own.services.apiKeys.authenticate(createdRawKey)).rejects.toMatchObject({
     code: 'UNAUTHORIZED',
   });
 });
