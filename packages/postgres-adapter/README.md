@@ -63,6 +63,13 @@ await unitOfWork.run(new TenantId(tenantId), async ({ tx, services }) => {
 
 The callback's Drizzle `tx` and tenant-scoped services share one transaction and RLS context. Register host tables through `hostSchema` to use the typed relational API such as `tx.query.purchaseOutbox`; use `tx.execute(sql\`...\`)` for raw parameterized SQL. A callback failure rolls back every write. Do not retain `tx` after the callback completes. Nested unit-of-work calls, cross-tenant service inputs, and unscoped service operations are rejected. Existing repository/service calls outside this API keep their current transaction behavior.
 
+Authenticate requests before entering the unit of work using
+`createApplicationServices(runtimeClient, credentialLookupClient)`. Inside the callback,
+`services.apiKeys` deliberately uses the tenant-bound transaction: it can authenticate that tenant's
+keys, sees uncommitted key creation/revocation, and rejects foreign-tenant credentials. It does not
+use the global lookup connection. An independent connection could miss those uncommitted changes
+and therefore cannot provide the unit of work's read-your-writes guarantee.
+
 Hosts must preserve the documented account/grant lock order when doing their own locking before ledger calls. The unit of work does not retry transactions or provide distributed transaction/outbox delivery.
 
 ## Host-invoked tenant provisioning

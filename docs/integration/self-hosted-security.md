@@ -57,6 +57,13 @@ matching credential row; the authenticator role receives `EXECUTE`, not table ac
 services with `createApplicationServices(runtimeClient, lookupClient)`. Use the operator connection only for trusted
 provisioning flows.
 
+Perform global authentication before entering `createUnitOfWork(runtimeClient)`. Inside a unit of
+work, `services.apiKeys` uses the existing tenant-scoped transaction, so runtime RLS permits lookup
+of that tenant's keys without the separate lookup connection. Newly created keys and revocations
+are visible immediately inside that transaction; rollback also rolls back those changes. Foreign
+tenant credentials are rejected there. Passing an independent lookup connection into the unit of
+work would lose this read-your-writes behavior, so it intentionally has no lookup-client option.
+
 The returned lookup row contains credential metadata and its hash, never a stored raw key.
 The authenticator can look up any known key ID or hash across tenants; it is a trusted authentication
 capability, not a tenant API. Never expose these functions directly to clients. Runtime key-management

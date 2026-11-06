@@ -454,3 +454,41 @@ it('rejects BYPASSRLS and destructive privileges reachable only through SET ROLE
     ).rejects.toMatchObject({ code: 'P0001' });
   }
 });
+
+it('keeps API-key reads and writes in the tenant unit-of-work transaction under split roles', async () => {
+  const own = await fixture();
+  const foreign = await fixture();
+  const rollback = new Error('rollback credential changes');
+  let createdRawKey: string | undefined;
+  await expect(
+    createUnitOfWork(runtime).run(new TenantId(own.tenantId), async ({ services }) => {
+      const auth = await services.apiKeys.authenticate(own.rawApiKey);
+      expect(auth.tenantId).toBe(own.tenantId);
+      await services.apiKeys.assertAccessTokenIsActive(auth);
+      await expect(services.apiKeys.authenticate(foreign.rawApiKey)).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+      const created = await services.apiKeys.createApiKey(auth, {
+        tenantId: own.tenantId,
+        name: 'Transactional key',
+        role: ApiKeyRole.SERVICE,
+      });
+      createdRawKey = created.apiKey;
+      const createdAuth = await services.apiKeys.authenticate(created.apiKey);
+      expect(createdAuth.apiKeyId).toBe(created.key.id);
+      await services.apiKeys.revokeApiKey(auth, own.key.id);
+      await expect(services.apiKeys.authenticate(own.rawApiKey)).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+      await expect(services.apiKeys.assertAccessTokenIsActive(auth)).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+      throw rollback;
+    }),
+  ).rejects.toBe(rollback);
+  expect((await own.services.apiKeys.authenticate(own.rawApiKey)).tenantId).toBe(own.tenantId);
+  expect(createdRawKey).toBeDefined();
+  await expect(own.services.apiKeys.authenticate(createdRawKey!)).rejects.toMatchObject({
+    code: 'UNAUTHORIZED',
+  });
+});
