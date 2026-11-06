@@ -100,7 +100,8 @@ For Fastify:
 if (error instanceof Error && 'code' in error && error.code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
   return reply.code(413).send({ error: 'REQUEST_TOO_LARGE', message: 'Request too large' });
 }
-if (error instanceof Error && 'code' in error && error.code === 'FST_ERR_CTP_INVALID_JSON_BODY') {
+if (error instanceof Error && 'code' in error &&
+    ['FST_ERR_CTP_INVALID_JSON_BODY', 'FST_ERR_CTP_EMPTY_JSON_BODY'].includes(String(error.code))) {
   return reply.code(400).send({ error: 'INVALID_INPUT', message: 'Invalid request body' });
 }
 const { statusCode, headers, body } = toHttpErrorPayload(error);
