@@ -48,6 +48,6 @@
     "safe-stable-stringify": "^2.5.0"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/schema.ts src/drizzle-config.ts --target=node --format=esm --packages=external --root=src --outdir=dist && bunx tsc -p tsconfig.build.json --emitDeclarationOnly && node ../../scripts/fix-dts-relative-imports.mjs packages/postgres-adapter/dist"
+    "build": "rm -rf dist && bun build src/index.ts src/schema.ts src/drizzle-config.ts --target=node --format=esm --packages=external --root=src --outdir=dist && bunx tsc -p tsconfig.build.json --emitDeclarationOnly && node ../../scripts/fix-dts-relative-imports.mjs packages/postgres-adapter/dist && mkdir -p dist/security && cp ../../examples/security/least-privilege.sql dist/security/least-privilege.sql && sed -e 's#../../examples/security/least-privilege.sql#./least-privilege.sql#g' -e 's#./adjustment-authorization.md#https://github.com/Borecount/Borecount/blob/main/docs/integration/adjustment-authorization.md#g' -e 's#../product/invariants.md#https://github.com/Borecount/Borecount/blob/main/docs/product/invariants.md#g' -e 's#examples/security/least-privilege.sql#dist/security/least-privilege.sql#g' ../../docs/integration/self-hosted-security.md > dist/security/self-hosted-security.md"
   }
 }

@@ -50,6 +50,8 @@ export const createUnitOfWorkContext = <THostSchema extends Record<string, unkno
   const transactionClient = bindClientToTransaction(client, transaction, tenantId.value);
   return {
     tenantId,
+    // Credential reads stay tenant-scoped and see uncommitted key creation/revocation.
+    // A separate global lookup connection would not share this transaction's state.
     services: createApplicationServices(transactionClient),
     provisioning: createTenantProvisioningService(transactionClient),
     tx: transaction,

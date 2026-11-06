@@ -25,8 +25,8 @@
 ## Governance
 
 - [Release Policy](./governance/release-policy.md)
-- [OpenAPI Contract Governance (LL-35B)](./governance/openapi-contract-governance.md)
-- [OpenAPI Contract Governance Gap Analysis (LL-35A Prep)](./governance/openapi-contract-governance-gap-analysis.md)
+- [OpenAPI Contract Governance](./governance/openapi-contract-governance.md)
+- [OpenAPI Contract Governance Gap Analysis](./governance/openapi-contract-governance-gap-analysis.md)
 
 ## Runbooks
 

@@ -1,8 +1,8 @@
-# OpenAPI Contract Governance Gap Analysis (LL-35A Prep)
+# OpenAPI Contract Governance Gap Analysis
 
 ## Current State
 
-The LL-35A governance gaps are closed by deterministic verification:
+The previously identified governance gaps are closed by deterministic verification:
 
 - CI workflow: `.github/workflows/ci.yml`
 - Governance check script: `.github/scripts/check-openapi-contract-governance.sh`
