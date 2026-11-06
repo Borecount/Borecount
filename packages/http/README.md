@@ -100,6 +100,9 @@ For Fastify:
 if (error instanceof Error && 'code' in error && error.code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
   return reply.code(413).send({ error: 'REQUEST_TOO_LARGE', message: 'Request too large' });
 }
+if (error instanceof Error && 'code' in error && error.code === 'FST_ERR_CTP_INVALID_JSON_BODY') {
+  return reply.code(400).send({ error: 'INVALID_INPUT', message: 'Invalid request body' });
+}
 const { statusCode, headers, body } = toHttpErrorPayload(error);
 if (headers) reply.headers(headers);
 return reply.code(statusCode).send(body);
@@ -114,6 +117,11 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     res.status(413).json({ error: 'REQUEST_TOO_LARGE', message: 'Request too large' });
     return;
   }
+  if (error instanceof Error && 'type' in error && error.type === 'entity.parse.failed' &&
+      'status' in error && error.status === 400) {
+    res.status(400).json({ error: 'INVALID_INPUT', message: 'Invalid request body' });
+    return;
+  }
   const { statusCode, headers, body } = toHttpErrorPayload(error);
   if (headers) res.set(headers);
   res.status(statusCode).json(body);
@@ -121,8 +129,8 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 ```
 
 Import `Request`, `Response`, and `NextFunction` as types from `express`. These branches use the
-[Fastify size-error code](https://fastify.dev/docs/latest/Reference/Errors/#fst_err_ctp_body_too_large)
-and [body-parser error type](https://expressjs.com/en/resources/middleware/body-parser/#request-entity-too-large);
+[Fastify content parser errors](https://fastify.dev/docs/latest/Reference/Errors/#fst_err_ctp_body_too_large)
+and [body-parser error types](https://expressjs.com/en/resources/middleware/body-parser/#errors);
 do not map arbitrary objects solely because they expose status 413.
 
 Hosts explicitly map their known body-parser size errors to `413 REQUEST_TOO_LARGE`; unknown or
