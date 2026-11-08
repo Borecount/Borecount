@@ -13,11 +13,31 @@ It is intentionally tied to Drizzle and Postgres.
 
 PostgreSQL 16 is the supported persistence model.
 
-State-changing repository operations use explicit PostgreSQL transactions. The adapter enforces persistence-level tenant scoping, atomicity, and transaction-reference idempotency required by the repository [invariants guide](../../docs/product/invariants.md).
+State-changing repository operations use explicit PostgreSQL transactions. The adapter enforces persistence-level tenant scoping, atomicity, and transaction-reference idempotency required by the repository [invariants guide](https://github.com/Borecount/Borecount/blob/main/docs/product/invariants.md).
 
 Transaction metadata is stored as nullable PostgreSQL `jsonb` on the immutable transaction header. Omitted metadata is SQL `NULL`, which remains distinct from an empty object. Metadata must be a JSON object no larger than 16 KiB in PostgreSQL's canonical JSON text representation and cannot be updated after insertion. The limit keeps idempotency comparisons and transaction reads bounded while leaving room for compact integration context. Idempotent retries use PostgreSQL `jsonb` equality: object key order is ignored, array order is significant, and any semantic metadata difference is a payload conflict.
 
 Use metadata for stable external IDs, provider references, flags, and other compact context needed to interpret a transaction. Do not embed full provider payloads, audit histories, documents, binary data, or mutable records. Store large data in the owning system and keep only its stable reference in transaction metadata.
+
+## Least-privilege self-hosted deployment
+
+The packaged [self-hosted security runbook](https://github.com/Borecount/Borecount/blob/main/docs/integration/self-hosted-security.md) and
+[least-privilege SQL overlay](https://github.com/Borecount/Borecount/blob/main/examples/security/least-privilege.sql) supply the role/RLS setup.
+Both assets ship in this package at `dist/security/self-hosted-security.md` and
+`dist/security/least-privilege.sql`; the links above also work in the repository and npm README.
+Apply the overlay after migrations; it is not installed by the package migrator. With that overlay, configure
+separate runtime and credential lookup clients:
+
+```ts
+const services = createApplicationServices(runtimeClient, credentialLookupClient);
+```
+
+Import `createApplicationServices` from `@borecount/postgres-adapter`. The optional second client uses only
+`borecount_security.find_active_api_key` and `find_api_key`; tenant key creation/list/revocation
+continue through the runtime client. Without that argument the existing direct-table lookup remains
+unchanged, and requires a deployment that permits global credential lookup. Never use a migration
+or provisioning connection as the runtime or lookup client. Provisioning requires a separate trusted
+operator connection. See the runbook for TLS, secrets, privileges, host authorization and limitations.
 
 ## Host-composable unit of work
 
@@ -42,6 +62,13 @@ await unitOfWork.run(new TenantId(tenantId), async ({ tx, services }) => {
 ```
 
 The callback's Drizzle `tx` and tenant-scoped services share one transaction and RLS context. Register host tables through `hostSchema` to use the typed relational API such as `tx.query.purchaseOutbox`; use `tx.execute(sql\`...\`)` for raw parameterized SQL. A callback failure rolls back every write. Do not retain `tx` after the callback completes. Nested unit-of-work calls, cross-tenant service inputs, and unscoped service operations are rejected. Existing repository/service calls outside this API keep their current transaction behavior.
+
+Authenticate requests before entering the unit of work using
+`createApplicationServices(runtimeClient, credentialLookupClient)`. Inside the callback,
+`services.apiKeys` deliberately uses the tenant-bound transaction: it can authenticate that tenant's
+keys, sees uncommitted key creation/revocation, and rejects foreign-tenant credentials. It does not
+use the global lookup connection. An independent connection could miss those uncommitted changes
+and therefore cannot provide the unit of work's read-your-writes guarantee.
 
 Hosts must preserve the documented account/grant lock order when doing their own locking before ledger calls. The unit of work does not retry transactions or provide distributed transaction/outbox delivery.
 
@@ -137,6 +164,6 @@ export default defineConfig({
 });
 ```
 
-Apply migrations before starting application code that depends on a newer adapter schema. Numbered migrations upgrade the consolidated `0000` baseline in place; reset databases created by the retired history that predates that baseline. Package downgrade does not roll back a database; follow the repository [upgrade procedure](../../docs/integration/versioning.md).
+Apply migrations before starting application code that depends on a newer adapter schema. Numbered migrations upgrade the consolidated `0000` baseline in place; reset databases created by the retired history that predates that baseline. Package downgrade does not roll back a database; follow the repository [upgrade procedure](https://github.com/Borecount/Borecount/blob/main/docs/integration/versioning.md).
 
-Before production use, pin compatible Borecount package versions and review the [documentation publication checklist](../../docs/integration/versioning.md#documentation-publication-checklist).
+Before production use, pin compatible Borecount package versions and review the [documentation publication checklist](https://github.com/Borecount/Borecount/blob/main/docs/integration/versioning.md#documentation-publication-checklist).

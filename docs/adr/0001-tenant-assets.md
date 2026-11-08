@@ -12,7 +12,7 @@ Use an immutable `assets.id` as the accounting unit identity. An asset belongs t
 | B. Tenant assets and `asset_id` | Stable identity, scoped FKs, immutable code/scale | Existing currency requests continue for known codes | One additive backfill and validation migration | Fits CREDIT, EUR/USD, USDC and explicit future assets |
 | C. Constrained text code with a scale registry | Scale is explicit, but account identity still changes in a later ID migration | Mostly compatible | Smaller now, repeats B later | Adequate until first rename or code collision |
 
-B avoids a later rewrite of financial identity. Economically distinct purchased, promotional, reward, or trial units belong in separate assets when their accounting or spending semantics differ. LL-84 grants are issuance lots within one account asset, not a substitute for asset identity. Asset is an accounting unit, not a provider, wallet, user balance, custody object, or payment instrument.
+B avoids a later rewrite of financial identity. Economically distinct purchased, promotional, reward, or trial units belong in separate assets when their accounting or spending semantics differ. Credit grants are issuance lots within one account asset, not a substitute for asset identity. Asset is an accounting unit, not a provider, wallet, user balance, custody object, or payment instrument.
 
 ## Compatibility and boundaries
 
@@ -30,4 +30,4 @@ Assets are part of the single clean-install baseline. There is no legacy currenc
 
 Once durable user data exists, future asset changes require additive migrations and an explicit rollback or restore plan. The baseline must not be rewritten after that point.
 
-Future multi-asset workflows need an explicit conversion model with rates, rounding, and separate balanced postings per asset. Grant lot issuance remains LL-84; allocation and fund lineage remain LL-66, and expiration remains LL-85.
+Future multi-asset workflows need an explicit conversion model with rates, rounding, and separate balanced postings per asset. Grant lot issuance, allocation and fund lineage, and expiration remain separate concerns; see [credit grants](../product/credit-grants.md).
