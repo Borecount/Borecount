@@ -16,6 +16,8 @@ notes and implement the new methods before upgrading.
 
 ### Changed
 
+- **Breaking database change:** consolidated the pre-production migration history into a single clean-install baseline. Recreate existing dev/test databases before applying it.
+
 - share constructor/brand validation predicates, type domain error details and omit malformed detail values, consolidate Fastify invalid-input responses, and document explicit parser-size handling and retry-delay policy.
 
 - (breaking): require UUIDv7 tenant IDs for provisioning and generate UUIDv7 during bootstrap with an injected clock. Share the cryptographically random core UUIDv7 generator with PostgreSQL workflows; existing-resource UUID validation stays version-neutral.

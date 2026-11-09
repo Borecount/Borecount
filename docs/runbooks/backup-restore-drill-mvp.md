@@ -71,7 +71,9 @@ Use helper script:
 
 ## Restore Commands (Local MVP)
 
-Note: this drill restores schema + data into the same local DB names.
+This drill restores schema and data into the same local database names. Use a
+backup taken with the current migration chain. Restore a backup from a retired
+chain only with its matching release and migration history.
 
 Use helper script:
 

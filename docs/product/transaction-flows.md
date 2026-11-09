@@ -54,4 +54,4 @@ Grant-specific records in this table apply only to grant-backed accounts. Partia
 
 Account-level `balance_snapshots` do not replace grant-level snapshots: they do not identify which grant has free capacity.
 
-Diagram source is editable Mermaid. Keep it synchronized with the [posting implementation](../../packages/postgres-adapter/src/repositories/transaction-repository.ts), [hold implementation](../../packages/postgres-adapter/src/repositories/hold-repository.ts) and [SQL guards](../../drizzle/0004_grant_hold_allocations.sql) when behavior changes.
+Diagram source is editable Mermaid. Keep it synchronized with the [posting implementation](../../packages/postgres-adapter/src/repositories/transaction-repository.ts), [hold implementation](../../packages/postgres-adapter/src/repositories/hold-repository.ts) and [SQL guards](../../drizzle/0000_2026-11-09-baseline.sql) when behavior changes.

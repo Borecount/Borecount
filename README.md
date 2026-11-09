@@ -15,7 +15,7 @@ Financial core infrastructure: double-entry ledger domain packages, transport co
 4. Migrate the local database:
    `bun run db:migrate`
 
-The current migration chain starts with the consolidated pre-production baseline in `drizzle/0000_initial-schema.sql`. Later numbered migrations upgrade that baseline in place; databases created from the retired history that predates `0000` must still be reset.
+The current schema installs from [one baseline](drizzle/0000_2026-11-09-baseline.sql). Recreate existing development and test databases initialized from any earlier migration chain before running the current migration command. See the [migration policy](docs/integration/versioning.md).
 
 The [reference API demo](https://github.com/Borecount/Borecount-demo) is maintained separately so this repository can stay focused on reusable packages. Start with the [product overview](docs/product/overview.md), then use the [integration guide](docs/integration/README.md) before running the demo.
 
