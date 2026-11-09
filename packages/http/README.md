@@ -156,6 +156,13 @@ to the host. These free protection contracts require no subscription or commerci
 
 The source-of-truth HTTP contract is [`openapi/openapi.yaml`](./openapi/openapi.yaml). Runtime contract definitions and OpenAPI must change together and pass `bun run contract:verify`. See the repository [integration guide](../../docs/integration/README.md) for host responsibilities and conventions.
 
+Asset contracts cover `POST /v1/assets`, `GET /v1/assets/{id}`, and `GET /v1/assets`.
+An authenticated tenant ADMIN can register an asset using `{ code, scale }`. Codes are trimmed
+and uppercased, and duplicate codes within the tenant return 409. Scale is the number of decimal
+places in a major unit and must be an integer from 0 through 18. Tenant ADMIN and SERVICE principals
+can read assets and discover their scales. Lists use the shared pagination contract and support
+`id`, `code`, `scale`, and `created_at` filters. A cursor is scoped to the tenant and filters.
+
 The shared statement contracts cover `GET /v1/accounts/{id}/statement` and
 `GET /v1/accounts/{id}/credit-statement`; both require explicit `from` and `as_of` boundaries and
 use the common opaque cursor/limit contract.

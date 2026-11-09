@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import { AccountSide } from '@borecount/core';
-import { InvariantViolationError } from '@borecount/core/errors';
+import {
+  AssetCodeConflictError,
+  AssetNotFoundError,
+  InvariantViolationError,
+} from '@borecount/core/errors';
 import { eq } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import { accounts, assets, entries, transactions } from '../../src/schema';
@@ -35,18 +39,46 @@ describe('tenant assets', () => {
     expect(credit.id).not.toBe(otherCredit.id);
     expect((await services.assets.list({ tenantId, limit: 50 })).data).toHaveLength(3);
     expect((await services.assets.getById(tenantId, euro.id)).scale).toBe(2);
-    await expect(services.assets.getById(otherTenantId, euro.id)).rejects.toThrow();
+    await expect(services.assets.getById(otherTenantId, euro.id)).rejects.toBeInstanceOf(
+      AssetNotFoundError,
+    );
     await expect(
       services.assets.create({ tenantId, code: 'CREDIT', scale: 0 }),
-    ).rejects.toBeInstanceOf(InvariantViolationError);
+    ).rejects.toBeInstanceOf(AssetCodeConflictError);
     await expect(
       services.assets.create({ tenantId, code: 'eur', scale: 2 }),
-    ).rejects.toBeInstanceOf(InvariantViolationError);
+    ).rejects.toBeInstanceOf(AssetCodeConflictError);
     await expect(
       (async () => {
         await db.update(assets).set({ scale: 3 }).where(eq(assets.id, euro.id));
       })(),
     ).rejects.toThrow();
+  });
+
+  it('scopes asset cursors to the tenant, filters, and resource', async () => {
+    const tenantId = await createTenant(db, 'A');
+    const otherTenantId = await createTenant(db, 'B');
+    await services.assets.create({ tenantId, code: ' euR ', scale: 2 });
+    await services.assets.create({ tenantId, code: 'CREDIT', scale: 0 });
+    await services.assets.create({ tenantId: otherTenantId, code: 'JPY', scale: 0 });
+
+    const query = { tenantId, limit: 1, where: { scale: { eq: 2 } } };
+    const first = await services.assets.list(query);
+    expect(first.data.map((asset) => asset.code)).toEqual(['EUR']);
+    if (!first.nextCursor) throw new Error('Expected an asset cursor');
+    const cursor = first.nextCursor;
+    const second = await services.assets.list({ ...query, cursor });
+    expect(second.data.map((asset) => asset.code)).toEqual(['USD']);
+    expect(second.nextCursor).toBeNull();
+    await expect(
+      services.assets.list({ ...query, tenantId: otherTenantId, cursor }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
+    await expect(
+      services.assets.list({ ...query, where: { scale: { eq: 0 } }, cursor }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
+    await expect(services.ledgers.list({ tenantId, limit: 1, cursor })).rejects.toBeInstanceOf(
+      InvariantViolationError,
+    );
   });
 
   it('posts and retries one asset, rejects mixed and cross-tenant identities', async () => {

@@ -31,6 +31,18 @@ Authentication, rate limiting, bootstrap, server `PORT`, and `SHUTDOWN_TIMEOUT_M
 - Follow cursor pagination fields from the OpenAPI schemas rather than constructing cursors.
 - Persist returned resource identifiers; do not derive IDs from names or references.
 
+## Asset provisioning and discovery
+
+Provision a code and its minor-unit scale with `POST /v1/assets` using an authenticated tenant
+ADMIN. For example, `{"code":"EUR","scale":2}` registers EUR with two decimal places. The adapter
+takes the tenant and role from the authenticated request context supplied by the host.
+
+Use an authenticated tenant SERVICE token to discover scales from `GET /v1/assets` or
+`GET /v1/assets/{id}`. Read the returned scale before converting amounts to or from minor units.
+To find one code in a list, pass a URL-encoded `where` value such as `{"code":{"eq":"EUR"}}`.
+Reuse the same filters when following `next_cursor`. The reference demo can use its existing
+session token for these reads after upgrading to packages that include the asset routes.
+
 ## Recommended first scenario
 
 Create a ledger, create two same-currency accounts, post one balanced transaction, retry it with the same reference, list its entries, and verify the trial balance. The reference demo provides the runnable commands; the request and response schemas remain canonical in [`openapi.yaml`](../../packages/http/openapi/openapi.yaml).

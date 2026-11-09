@@ -10,16 +10,19 @@ export type FilterKind =
   | 'uuid'
   | 'boolean'
   | 'number'
+  | 'integer'
   | 'integer-string'
   | 'date-time'
   | 'enum';
 export type FilterField = {
-  kind: FilterKind;
   target?: string;
   nullable?: boolean;
   values?: readonly (string | number)[];
   ordered?: boolean;
-};
+} & (
+  | { kind: 'integer'; minimum: number; maximum: number }
+  | { kind: Exclude<FilterKind, 'integer'>; minimum?: never; maximum?: never }
+);
 export type FilterFields = Readonly<Record<string, FilterField>>;
 
 const record = (v: unknown): v is Record<string, unknown> =>
@@ -48,6 +51,13 @@ const parseValue = (value: unknown, field: FilterField): unknown => {
       return typeof value === 'boolean' ? value : undefined;
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+    case 'integer':
+      return typeof value === 'number' &&
+        Number.isInteger(value) &&
+        value >= field.minimum &&
+        value <= field.maximum
+        ? value
+        : undefined;
     case 'integer-string':
       if (typeof value !== 'string' || !/^-?(?:0|[1-9]\d*)$/.test(value)) return undefined;
       {
@@ -194,6 +204,7 @@ const scalarSchema = (field: FilterField): UnknownRecord => ({
               enum: field.nullable ? [...(field.values ?? []), null] : field.values,
             }
           : { type: field.kind }),
+  ...(field.kind === 'integer' ? { minimum: field.minimum, maximum: field.maximum } : {}),
   ...(field.nullable && field.kind !== 'enum'
     ? {
         type: [

@@ -55,7 +55,13 @@ The complete and versioned route surface is defined by [`@borecount/http` OpenAP
 
 Pass host policy in the third argument, `LedgerAdapterOptions`. `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. For an explicitly trusted service integration, pass `{ authorizeAdjustment: false }`; schema validation and auth-context checks still apply, but the adapter does not authorize direction or verify the actor claim. Missing, `undefined`, `null`, or another invalid option value fails registration synchronously. Existing hosts must add a callback or explicitly opt out before upgrading. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).
 
-Ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
+Asset, ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
+
+Tenant clients can discover asset scales with `GET /v1/assets` and `GET /v1/assets/{id}`.
+`POST /v1/assets` requires an authenticated `ADMIN` context supplied by the host.
+The create body takes `code` and `scale`. Codes are trimmed and uppercased, scales are integers
+from 0 through 18, and duplicate codes within a tenant return `409 ASSET_CODE_CONFLICT`.
+Clients can reuse the same SERVICE credentials they use for other tenant reads.
 
 Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
 

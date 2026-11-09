@@ -13,9 +13,13 @@ import {
   accountResponseSchema,
   accountStatementResponseSchema,
   adjustmentResponseSchema,
+  assetByIdParamsSchema,
+  assetResponseSchema,
+  assetsListResponseSchema,
   createAccountBodySchema,
   createAdjustmentBodySchema,
   createApiKeyBodySchema,
+  createAssetBodySchema,
   createCreditGrantBodySchema,
   createLedgerBodySchema,
   createTransactionRequestSchema,
@@ -32,6 +36,7 @@ import {
   holdEntryResponseSchema,
   holdSummaryResponseSchema,
   holdsPageResponseSchema,
+  listAssetsQuerySchema,
   listHoldCapturesQuerySchema,
   listHoldCreditAllocationsQuerySchema,
   listHoldEntriesQuerySchema,
@@ -46,6 +51,7 @@ import { parseWhere, whereFieldsToJsonSchema, whereQueryProperty } from '../quer
 import {
   accountFilterFields,
   apiKeyFilterFields,
+  assetFilterFields,
   balanceHistoryFilterFields,
   creditGrantFilterFields,
   creditLineageFilterFields,
@@ -511,11 +517,60 @@ describe('framework-agnostic contract suite', () => {
     assertPostContract('/v1/adjustments/debit', 'CreateAdjustmentRequest', 'Adjustment');
   });
 
+  it('keeps the asset schemas, parameters, and responses aligned with OpenAPI', () => {
+    const document = Bun.YAML.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocument;
+    const schemas = document.components?.schemas;
+    expect(schemas?.CreateAssetRequest).toEqual(createAssetBodySchema);
+    expect(schemas?.Asset).toEqual(assetResponseSchema);
+    expect(schemas?.AssetsListResponse).toEqual({
+      ...assetsListResponseSchema,
+      properties: {
+        ...assetsListResponseSchema.properties,
+        data: { type: 'array', items: { $ref: '#/components/schemas/Asset' } },
+      },
+    });
+
+    const create = document.paths?.['/v1/assets']?.post;
+    const list = document.paths?.['/v1/assets']?.get;
+    const read = document.paths?.['/v1/assets/{id}']?.get;
+    expect(create?.requestBody).toEqual({
+      required: true,
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/CreateAssetRequest' } },
+      },
+    });
+    const responses = [
+      [create, '201', 'Asset', ['400', '401', '403', '409', '413', '429']],
+      [list, '200', 'AssetsListResponse', ['400', '401', '429']],
+      [read, '200', 'Asset', ['400', '401', '404', '429']],
+    ] as const;
+    for (const [operation, status, schema, errors] of responses) {
+      expect(Object.keys(operation?.responses ?? {}).sort()).toEqual([status, ...errors]);
+      expect(operation?.responses?.[status]?.content).toEqual({
+        'application/json': { schema: { $ref: `#/components/schemas/${schema}` } },
+      });
+    }
+    expect(create?.responses?.['403']).toEqual({ $ref: '#/components/responses/ForbiddenError' });
+    expect(create?.responses?.['409']).toEqual({ $ref: '#/components/responses/ConflictError' });
+    expect(read?.responses?.['404']).toEqual({ $ref: '#/components/responses/NotFoundError' });
+    expect(read?.parameters).toEqual([
+      { name: 'id', in: 'path', required: true, schema: assetByIdParamsSchema.properties.id },
+    ]);
+    for (const name of ['limit', 'cursor'] as const) {
+      expect(list?.parameters?.find((parameter) => parameter.name === name)).toMatchObject({
+        in: 'query',
+        required: false,
+        schema: listAssetsQuerySchema.properties[name],
+      });
+    }
+  });
+
   it('documents typed where parameters on every scoped list operation', () => {
     const document = Bun.YAML.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocument;
     const ajv = new Ajv({ allErrors: true, strict: false, validateFormats: false });
     const routes: Record<string, [string, FilterFields]> = {
       '/v1/accounts': ['AccountsWhere', accountFilterFields],
+      '/v1/assets': ['AssetsWhere', assetFilterFields],
       '/v1/transactions': ['TransactionsWhere', transactionFilterFields],
       '/v1/entries': ['EntriesWhere', entryFilterFields],
       '/v1/ledgers': ['LedgersWhere', ledgerFilterFields],

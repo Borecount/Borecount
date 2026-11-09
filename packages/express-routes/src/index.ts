@@ -4,6 +4,7 @@ import express, { type Application, type RequestHandler } from 'express';
 import { registerAccountRoutes } from './routes/accounts';
 import { registerAdjustmentRoutes } from './routes/adjustments';
 import { registerAdminApiKeyRoutes } from './routes/admin-api-keys';
+import { registerAssetRoutes } from './routes/assets';
 import { registerCreditGrantRoutes } from './routes/credit-grants';
 import { registerEntryRoutes } from './routes/entries';
 import { registerHoldRoutes } from './routes/holds';
@@ -35,6 +36,7 @@ export const registerLedgerAdapter = (
   registerLedgerRoutes(app, services);
   registerTransactionRoutes(app, services);
   registerAccountRoutes(app, services);
+  registerAssetRoutes(app, services.assets);
   registerCreditGrantRoutes(app, services);
   registerAdjustmentRoutes(
     app,

@@ -1,15 +1,20 @@
-import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { EventEmitter } from 'node:events';
 import { createServer } from 'node:http';
 import {
   ApiKeyRole,
   type ApiKeyService,
   type ApplicationServices,
+  type Asset,
+  type AssetRepository,
+  AssetService,
   type CreateAdjustmentInput,
   type CreditGrant,
 } from '@borecount/core/application';
 import type { UnknownRecord } from '@borecount/core/base';
 import {
   AdjustmentConflictError,
+  AssetCodeConflictError,
   CreditGrantConflictError,
   DomainError,
   ForbiddenError,
@@ -2649,6 +2654,187 @@ describe('host adjustment authorization parity', () => {
       expect(hosts.calls).toEqual([[], []]);
     } finally {
       await hosts.close();
+    }
+  });
+});
+
+describe('asset route parity', () => {
+  const assetId = '00000000-0000-4000-8000-000000000903';
+  const otherTenantId = '22222222-2222-4222-8222-222222222222';
+  const createdAt = new Date('2026-01-01T00:00:00.000Z');
+  const expectedAsset = {
+    id: assetId,
+    tenant_id: tenantId,
+    code: 'USD',
+    scale: 2,
+    created_at: createdAt.toISOString(),
+  };
+  const listCalls: Parameters<AssetRepository['list']>[0][] = [];
+  const fastifyAssets: Asset[] = [];
+  const expressAssets: Asset[] = [];
+
+  beforeEach(() => {
+    fastifyAssets.length = 0;
+    expressAssets.length = 0;
+    listCalls.length = 0;
+  });
+
+  const makeServices = (assets: Asset[]) => {
+    return {
+      assets: new AssetService({
+        async create(input) {
+          if (input.code === 'FAIL') throw new Error('private database detail');
+          if (
+            assets.some((asset) => asset.tenantId === input.tenantId && asset.code === input.code)
+          ) {
+            throw new AssetCodeConflictError(input.code);
+          }
+          const asset = { ...input, id: assetId, createdAt };
+          assets.push(asset);
+          return asset;
+        },
+        async findById(tenantId, assetId) {
+          return (
+            assets.find((asset) => asset.tenantId === tenantId && asset.id === assetId) ?? null
+          );
+        },
+        async list(query) {
+          listCalls.push(query);
+          const data = assets.filter((asset) => asset.tenantId === query.tenantId);
+          return { data, nextCursor: data.length ? 'opaque-cursor' : null };
+        },
+      }),
+    } as unknown as ApplicationServices;
+  };
+
+  type Principal = 'admin' | 'service' | 'other-tenant';
+  const authenticate = (request: object, principal: string | undefined) => {
+    if (!principal) return;
+    Object.assign(request, {
+      tenantId: principal === 'other-tenant' ? otherTenantId : tenantId,
+      apiKeyId: 'trusted-test-key',
+      apiKeyRole: principal === 'admin' ? ApiKeyRole.ADMIN : ApiKeyRole.SERVICE,
+    });
+  };
+
+  const server = Fastify();
+  server.addHook('onRequest', async (request) => {
+    authenticate(request, request.headers['x-test-principal']?.toString());
+  });
+  registerFastifyLedgerAdapter(server, makeServices(fastifyAssets), { authorizeAdjustment: false });
+
+  const app = express();
+  app.use((request, _response, next) => {
+    authenticate(request, request.header('x-test-principal'));
+    next();
+  });
+  registerExpressLedgerAdapter(app, makeServices(expressAssets), { authorizeAdjustment: false });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  const request = async (
+    method: 'GET' | 'POST',
+    url: string,
+    principal?: Principal,
+    payload?: UnknownRecord,
+  ): Promise<RequestResult> => {
+    const headers = principal ? { 'x-test-principal': principal } : {};
+    const fastify = await server.inject({ method, url, headers, payload });
+    const req = httpMocks.createRequest({ method, url, headers, body: payload });
+    const res = httpMocks.createResponse({ eventEmitter: EventEmitter });
+    await new Promise<void>((resolve, reject) => {
+      res.on('finish', resolve);
+      app(req, res, (error?: unknown) => (error ? reject(error) : resolve()));
+    });
+    const actual = { status: fastify.statusCode, json: fastify.json() };
+    expect({ status: res.statusCode, json: res._getJSONData() }).toEqual(actual);
+    return actual;
+  };
+
+  it('provisions as admin and exposes asset scales and typed pagination to tenant service keys', async () => {
+    expect(await request('POST', '/v1/assets', 'admin', { code: ' usd ', scale: 2 })).toEqual({
+      status: 201,
+      json: expectedAsset,
+    });
+    expect(await request('GET', `/v1/assets/${assetId}`, 'service')).toEqual({
+      status: 200,
+      json: expectedAsset,
+    });
+
+    const where = encodeURIComponent(
+      JSON.stringify({
+        code: { eq: 'USD' },
+        scale: { gte: 2 },
+        created_at: { lte: createdAt.toISOString() },
+      }),
+    );
+    expect(await request('GET', `/v1/assets?limit=1&where=${where}`, 'service')).toEqual({
+      status: 200,
+      json: { data: [expectedAsset], next_cursor: 'opaque-cursor' },
+    });
+    const expectedQuery = {
+      tenantId,
+      limit: 1,
+      cursor: undefined,
+      where: { code: { eq: 'USD' }, scale: { gte: 2 }, createdAt: { lte: createdAt } },
+    };
+    expect(listCalls.slice(-2)).toEqual([expectedQuery, expectedQuery]);
+    await request('GET', `/v1/assets?cursor=opaque-cursor&where=${where}`, 'service');
+    const nextQuery = { ...expectedQuery, limit: 50, cursor: 'opaque-cursor' };
+    expect(listCalls.slice(-2)).toEqual([nextQuery, nextQuery]);
+  });
+
+  it('restricts access by trusted principal and maps duplicates and failures safely', async () => {
+    const payload = { code: 'EUR', scale: 2 };
+    expect((await request('POST', '/v1/assets', undefined, payload)).status).toBe(401);
+    expect((await request('POST', '/v1/assets', 'service', payload)).status).toBe(403);
+    expect((await request('GET', '/v1/assets')).status).toBe(401);
+    expect((await request('GET', `/v1/assets/${assetId}`)).status).toBe(401);
+    expect((await request('POST', '/v1/assets', 'admin', payload)).status).toBe(201);
+    expect((await request('GET', `/v1/assets/${assetId}`, 'other-tenant')).status).toBe(404);
+    expect(await request('GET', '/v1/assets', 'other-tenant')).toEqual({
+      status: 200,
+      json: { data: [], next_cursor: null },
+    });
+    expect(await request('POST', '/v1/assets', 'admin', payload)).toMatchObject({
+      status: 409,
+      json: { error: 'ASSET_CODE_CONFLICT' },
+    });
+    expect(await request('POST', '/v1/assets', 'admin', { code: 'FAIL', scale: 2 })).toEqual({
+      status: 500,
+      json: { error: 'INTERNAL_ERROR', message: 'Internal server error' },
+    });
+  });
+
+  it('rejects malformed body, UUID, limit, cursor and filter inputs', async () => {
+    for (const payload of [
+      { code: 'USD' },
+      { code: 'USD', scale: -1 },
+      { code: 'USD', scale: 19 },
+      { code: 'USD', scale: 2.5 },
+      { code: 'USD', scale: '2' },
+      { code: 'USD', scale: true },
+      { code: 'USD', scale: null },
+      { code: ['USD'], scale: 2 },
+      { code: 'USD', scale: 2, tenant_id: otherTenantId },
+      { code: '$', scale: 2 },
+    ]) {
+      expect((await request('POST', '/v1/assets', 'admin', payload)).status).toBe(400);
+    }
+    for (const path of [
+      '/v1/assets/invalid',
+      '/v1/assets?limit=0',
+      '/v1/assets?limit=201',
+      '/v1/assets?limit=1&limit=2',
+      '/v1/assets?cursor=',
+      '/v1/assets?cursor=a&cursor=b',
+      `/v1/assets?tenant_id=${otherTenantId}`,
+      `/v1/assets?where=${encodeURIComponent('{"scale":{"eq":"2"}}')}`,
+      `/v1/assets?where=${encodeURIComponent('{"tenant_id":{"eq":"other"}}')}`,
+    ]) {
+      expect((await request('GET', path, 'service')).status).toBe(400);
     }
   });
 });
