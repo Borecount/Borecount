@@ -51,8 +51,8 @@ until all five package versions are present.
 1. Choose a SemVer version, update all package manifests, internal dependency
    ranges, OpenAPI, `CHANGELOG.md`, and `docs/releases/<version>.md` in one PR.
 2. Document breaking changes, deprecations, idempotency changes, and operator
-   migration steps. Add an upgrade test from the latest published version when
-   the schema changes.
+   migration steps. For schema changes, follow the [migration verification
+   policy](../integration/versioning.md#upgrade-verification).
 3. Pass unit and PostgreSQL integration tests, lint, typecheck, build,
    `contract:verify`, `release:verify`, `migration:verify`, and `pack:verify`.
 4. Run the `Release` workflow with publication disabled. Download and inspect

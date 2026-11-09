@@ -26,7 +26,7 @@ Idempotency remains keyed by `(tenant_id, reference)` and compares the existing 
 
 ## Migration and deployment
 
-Assets are part of the single clean-install baseline. There is no legacy currency-to-asset backfill or in-place upgrade path because the project has no database state that must be preserved. Reset databases created from the former migration history, apply `0000_initial-schema.sql`, and create each tenant's assets through `AssetService` before creating accounts or posting.
+Assets are part of the single clean-install baseline. There is no legacy currency-to-asset backfill or in-place upgrade path because the project has no database state that must be preserved. Reset databases created from the former migration history, apply the current baseline with `bun run db:migrate`, and create each tenant's assets through `AssetService` before creating accounts or posting.
 
 Once durable user data exists, future asset changes require additive migrations and an explicit rollback or restore plan. The baseline must not be rewritten after that point.
 

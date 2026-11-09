@@ -10,8 +10,9 @@ The current coordinated release is `0.7.0`; see its
 
 ## Migration policy
 
-Migrations in `drizzle/` are ordered by the numeric filename prefix and are
-append-only after publication. A release may add a new migration but must not
+After the pre-production baseline reset described below, migrations in
+`drizzle/` are ordered by the numeric filename prefix and are append-only after
+publication. A release may add a new migration but must not
 edit, reorder, or delete a migration shipped in an earlier version. Production
 migrations are forward-only: application rollback does not roll the database
 back. A corrective schema change is a new migration.
@@ -22,13 +23,17 @@ For a rolling deployment, every intermediate schema must support both the old
 and new application versions; otherwise use a maintenance deployment. Database
 downgrades are unsupported.
 
-The current pre-production chain starts at `0000_initial-schema.sql`. Databases
-created from the retired history that predates that baseline must be recreated;
-there is no supported in-place bridge from the retired chain.
+The current pre-production baseline is
+[`0000_2026-11-09-baseline.sql`](../../drizzle/0000_2026-11-09-baseline.sql). It replaces all
+previous migrations. Recreate any development or test database initialized
+with a previous chain, then apply the current baseline to the empty database.
+Backups from a previous chain belong with the matching release and migration
+history. Historical release notes describe the migrations shipped at the time.
 
 ## Upgrade verification
 
-Every schema-changing release must add a real-PostgreSQL test that starts from
+For releases following this baseline reset, every schema-changing release must
+add a real-PostgreSQL test that starts from
 the latest published version's complete migration chain and representative data,
 applies only the candidate migrations, and verifies both data preservation and
 new constraints. Clean-install migration and backup/restore verification remain
@@ -44,7 +49,8 @@ sufficient.
 1. Read every intervening release note and the changelog.
 2. Back up PostgreSQL and verify the backup can be restored.
 3. Upgrade the complete `@borecount/*` set and commit the lockfile.
-4. Apply new migrations in numeric order; never run down migrations.
+4. Recreate dev/test databases when adopting the new pre-production baseline.
+   For subsequent upgrades, apply new migrations in numeric order.
 5. Run application smoke tests and ledger reconciliation before resuming writes.
 
 The [idempotency reference](./idempotency.md) defines retry behavior for every
