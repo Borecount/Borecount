@@ -27,7 +27,7 @@ ledger history, reconciliation inputs and API key hashes.
 
 ## Create a bundle
 
-Use Python 3.11+, matching PostgreSQL 16 `psql`, `pg_dump` and `pg_restore` binaries from a patch
+Use Bun, matching PostgreSQL 16 `psql`, `pg_dump` and `pg_restore` binaries from a patch
 at least as recent as the source server, and the checkout matching the deployed Borecount package
 versions and lockfile. Use UTF-8. The trusted backup role needs full data access through RLS,
 including FORCE RLS, and permission to call `pg_control_system()`. Supply the source through a
@@ -39,7 +39,7 @@ for the operation.
 umask 077
 mkdir -p /srv/private-bundles
 bundle=/srv/private-bundles/"$(date -u +%Y%m%dT%H%M%SZ)"
-python3 scripts/portable-backup.py backup --source ledger_backup "$bundle"
+bun run scripts/portable-backup.ts backup --source ledger_backup "$bundle"
 ```
 
 The dump and SQL checks import the same exported repeatable-read snapshot. The bundle is published
@@ -49,7 +49,7 @@ hashes, a UTC snapshot acquisition interval, and private verification fingerprin
 committed after snapshot acquisition is outside that recovery boundary. PostgreSQL sequences have
 nontransactional state and may retain gaps. Back up only completed bundle names and exclude
 `.incomplete-*` staging directories. Plan disk capacity for the dump, a restore-side private copy,
-and verification sort/output scratch space. Set `TMPDIR` to a private encrypted volume if needed.
+and PostgreSQL verification sort space. Set `TMPDIR` to a private encrypted volume if needed.
 
 ## Store off-host
 
@@ -103,7 +103,7 @@ trusted privileged input. [restic repository checks and retention](https://resti
    target_database=ledger_recovery
    target_user=recovery_admin
    for step in preflight restore; do
-     python3 scripts/portable-backup.py "$step" "$bundle" --socket "$target_socket" \
+     bun run scripts/portable-backup.ts "$step" "$bundle" --socket "$target_socket" \
        --port "$target_port" --database "$target_database" --user "$target_user" || break
    done
    ```
@@ -114,7 +114,9 @@ trusted privileged input. [restic repository checks and retention](https://resti
    Never edit migration history to force a match. If interrupted before commit, wait for the
    restore backend to exit and run preflight again. If commit may have completed, run `verify`
    with the same arguments. Keep a failed verification target offline and create a separate empty
-   recovery target for another attempt.
+   recovery target for another attempt. A hard kill can leave a `.borecount-recovery.lock` directory
+   beside the private socket. Remove it only after confirming that the previous tool and its
+   PostgreSQL restore backend have exited and the cluster is still offline.
 4. SQL verification compares the schema (including owners and ACLs), exact Drizzle history, table
    contents and ledger totals against the backup. It checks balanced postings, tests tenant reads
    as a non-owner, and probes immutable metadata and grant history when rows are present. The
@@ -129,7 +131,7 @@ trusted privileged input. [restic repository checks and retention](https://resti
 With the checkout's frozen Bun dependencies installed and PostgreSQL 16 binaries on `PATH`, run:
 
 ```sh
-python3 -B scripts/portable-drill.py
+bun run scripts/portable-drill.ts
 ```
 
 The drill starts and stops two new socket-only clusters and seeds two synthetic tenants, balanced

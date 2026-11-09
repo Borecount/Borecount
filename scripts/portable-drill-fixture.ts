@@ -13,10 +13,10 @@ const socket = process.env.PGHOST ?? '';
 assert.ok(
   (action === 'seed' || action === 'replay') &&
     process.env.DATABASE_URL === `postgresql:///${database}` &&
-    /^bc-drill-[a-z0-9_]+$/.test(basename(dirname(socket))) &&
+    /^bc-drill-[A-Za-z0-9_]+$/.test(basename(dirname(socket))) &&
     basename(socket) === (action === 'seed' ? 'src' : 'dst') &&
     (statSync(socket).mode & 0o777) === 0o700,
-  'Run this fixture through portable-drill.py',
+  'Run this fixture through portable-drill.ts',
 );
 const client = createDbClient({ max: 1 });
 const services = createApplicationServices(client);
