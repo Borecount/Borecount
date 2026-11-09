@@ -7,7 +7,7 @@ import type {
 } from '@borecount/core/application';
 import { assetListFilter } from '@borecount/core/application';
 import { AssetCodeConflictError } from '@borecount/core/errors';
-import { and, eq, getTableColumns, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns } from 'drizzle-orm';
 import type { DbClient } from '../client';
 import { listWhereScope, listWhereSql } from '../list-where';
 import { paginateByCursor } from '../paginate-by-cursor';
@@ -45,17 +45,7 @@ export class DrizzleAssetRepository implements AssetRepository {
     return this.client.runTenantTx(query.tenantId, 'list assets', async (tx) => {
       const predicates = [
         eq(schema.assets.tenantId, query.tenantId),
-        listWhereSql(
-          {
-            ...getTableColumns(schema.assets),
-            // Match the precision exposed by Asset.createdAt.
-            createdAt: Object.assign(sql`date_trunc('milliseconds', ${schema.assets.createdAt})`, {
-              mapToDriverValue: (value: Date) => schema.assets.createdAt.mapToDriverValue(value),
-            }),
-          },
-          assetListFilter,
-          query.where,
-        ),
+        listWhereSql(getTableColumns(schema.assets), assetListFilter, query.where),
       ];
       const page = await paginateByCursor<typeof schema.assets.$inferSelect>({
         query,

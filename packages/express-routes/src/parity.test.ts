@@ -1308,6 +1308,7 @@ describe('express adapter parity with fastify adapter', () => {
     const grantId = '00000000-0000-4000-8000-000000000901';
     const transactionId = '00000000-0000-4000-8000-000000000300';
     const date = '2026-01-01T00:00:00.1200Z';
+    const exactDate = { exactTimestamp: '2026-01-01T00:00:00.120000Z' };
     const where = (field: string, operator: string, value: unknown) =>
       `where=${encodeURIComponent(JSON.stringify({ [field]: { [operator]: value } }))}`;
     const cases: Array<{
@@ -1334,7 +1335,7 @@ describe('express adapter parity with fastify adapter', () => {
           limit: 7,
           cursor: 'opaque',
           ledgerId: id,
-          where: { createdAt: { gte: new Date(date) } },
+          where: { createdAt: { gte: exactDate } },
         },
       },
       {
@@ -1354,7 +1355,7 @@ describe('express adapter parity with fastify adapter', () => {
           tenantId,
           limit: 7,
           cursor: 'opaque',
-          where: { createdAt: { gte: new Date(date) } },
+          where: { createdAt: { gte: exactDate } },
         },
       },
       {
@@ -1378,7 +1379,7 @@ describe('express adapter parity with fastify adapter', () => {
           tenantId,
           limit: 7,
           cursor: 'opaque',
-          where: { createdAt: { gte: new Date(date) } },
+          where: { createdAt: { gte: exactDate } },
         },
       },
       {
@@ -1402,7 +1403,7 @@ describe('express adapter parity with fastify adapter', () => {
           externalReference: 'ext-1',
           limit: 7,
           cursor: 'opaque',
-          where: { createdAt: { gte: new Date(date) } },
+          where: { createdAt: { gte: exactDate } },
         },
       },
       {
@@ -1424,7 +1425,7 @@ describe('express adapter parity with fastify adapter', () => {
           transactionId,
           limit: 7,
           cursor: 'opaque',
-          where: { createdAt: { gte: new Date(date) } },
+          where: { createdAt: { gte: exactDate } },
         },
       },
       {
@@ -1435,7 +1436,7 @@ describe('express adapter parity with fastify adapter', () => {
           accountId: id,
           limit: 7,
           cursor: 'opaque',
-          where: { createdAt: { gte: new Date(date) } },
+          where: { createdAt: { gte: exactDate } },
         },
       },
       {
@@ -1491,7 +1492,7 @@ describe('express adapter parity with fastify adapter', () => {
           holdId,
           limit: 7,
           cursor: 'opaque',
-          where: { createdAt: { gte: new Date(date) } },
+          where: { createdAt: { gte: exactDate } },
         },
       },
     ];
@@ -1615,15 +1616,21 @@ describe('express adapter parity with fastify adapter', () => {
     const mixedPrecisionWhere = `where=${encodeURIComponent(
       JSON.stringify({
         created_at: {
-          in: ['2026-01-01T00:00:00.1200Z', '2026-01-01T00:00:00.1234Z'],
+          in: ['2026-01-01T00:00:00.120Z', '2026-01-01T00:00:00.1234Z'],
         },
       }),
     )}`;
     for (const request of [requestFastify, requestExpress]) {
       listObservations.clear();
       const response = await request('GET', `/v1/transactions?${mixedPrecisionWhere}`);
-      expect(response.status).toBe(400);
-      expect(listObservations.has('transactions')).toBeFalse();
+      expect(response.status).toBe(200);
+      expect(listObservations.get('transactions')?.[0]).toMatchObject({
+        where: {
+          createdAt: {
+            in: [new Date(date), { exactTimestamp: '2026-01-01T00:00:00.123400Z' }],
+          },
+        },
+      });
     }
 
     const missingRunPath = '/v1/reconciliation/runs/01900000-0000-7000-8000-000000000999/results';

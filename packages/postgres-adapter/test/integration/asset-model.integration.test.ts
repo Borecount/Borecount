@@ -55,7 +55,7 @@ describe('tenant assets', () => {
     ).rejects.toThrow();
   });
 
-  it('filters creation times at the precision of the returned asset', async () => {
+  it('filters creation times at the requested precision and scopes cursors to that precision', async () => {
     const tenantId = await createTenant(db, 'A');
     const euro = await services.assets.create({ tenantId, code: 'EUR', scale: 2 });
     await db
@@ -74,6 +74,36 @@ describe('tenant assets', () => {
       });
       expect(page.data.map((asset) => asset.id)).toEqual(operator === 'gt' ? [] : [euro.id]);
     }
+    const exactMatch = { exactTimestamp: '2026-01-01T00:00:00.123456Z' };
+    const exactMiss = { exactTimestamp: '2026-01-01T00:00:00.123000Z' };
+    for (const [createdAtFilter, expected] of [
+      [{ eq: exactMatch }, [euro.id]],
+      [{ eq: exactMiss }, []],
+      [{ gt: exactMiss }, [euro.id]],
+      [{ lte: exactMiss }, []],
+      [{ in: [exactMiss, createdAt] }, [euro.id]],
+    ] as const) {
+      const page = await services.assets.list({
+        tenantId,
+        limit: 50,
+        where: { code: { eq: 'EUR' }, createdAt: createdAtFilter },
+      });
+      expect(page.data.map((asset) => asset.id)).toEqual([...expected]);
+    }
+    const first = await services.assets.list({
+      tenantId,
+      limit: 1,
+      where: { createdAt: { gte: createdAt } },
+    });
+    if (!first.nextCursor) throw new Error('Expected an asset cursor');
+    await expect(
+      services.assets.list({
+        tenantId,
+        limit: 1,
+        cursor: first.nextCursor,
+        where: { createdAt: { gte: exactMiss } },
+      }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
   });
 
   it('scopes asset cursors to the tenant, filters, and resource', async () => {

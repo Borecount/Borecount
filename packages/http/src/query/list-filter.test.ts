@@ -45,7 +45,7 @@ describe('typed list filter parsing', () => {
       state: { eq: 'HELD' },
       originalAmountMinor: { gt: 9007199254740993n },
       remainingAmountMinor: { gte: 0n },
-      createdAt: { gte: new Date(instant) },
+      createdAt: { gte: { exactTimestamp: instant } },
       appliedAt: { eq: null },
       voidedAt: { ne: null },
       accountId: { eq: uuid },
@@ -66,7 +66,7 @@ describe('typed list filter parsing', () => {
       accountId: { eq: uuid },
       signedAmountMinor: { lte: -9007199254740993n },
       currency: { eq: 'USD' },
-      createdAt: { eq: new Date(instant) },
+      createdAt: { eq: { exactTimestamp: instant } },
     });
     expect(
       parseWhere<Record<string, unknown>>(
@@ -84,7 +84,7 @@ describe('typed list filter parsing', () => {
       reference: { eq: 'capture-ref' },
       amountMinor: { gt: 3n },
       currency: { eq: 'USD' },
-      createdAt: { eq: new Date(instant) },
+      createdAt: { eq: { exactTimestamp: instant } },
     });
     expect(
       parseWhere<Record<string, unknown>>(
@@ -104,7 +104,7 @@ describe('typed list filter parsing', () => {
       accountId: { eq: uuid },
       grantId: { eq: uuid },
       amountMinor: { eq: 9007199254740993n },
-      createdAt: { eq: new Date(instant) },
+      createdAt: { eq: { exactTimestamp: instant } },
     });
   });
 
@@ -114,14 +114,14 @@ describe('typed list filter parsing', () => {
       ['state', { eq: 'PENDING' }],
       ['description', { contains: 'hold' }],
       ['id', { eq: 'not-a-uuid' }],
-      ['created_at', { gte: '2025-01-01T10:20:30.123001Z' }],
+      ['created_at', { gte: '2025-01-01T10:20:30.1230011Z' }],
       ['account_id', { eq: null }],
     ] as const;
     for (const [field, filter] of forbidden) {
       expect(parseWhere(JSON.stringify({ [field]: filter }), holdSummaryFilterFields)).toBeNull();
     }
     expect(
-      parseWhere('{"created_at":{"eq":"2025-01-01T00:00:00.000001Z"}}', holdCaptureFilterFields),
+      parseWhere('{"created_at":{"eq":"2025-01-01T00:00:00.0000001Z"}}', holdCaptureFilterFields),
     ).toBeNull();
     expect(parseWhere('{"amount_minor":{"eq":"1.5"}}', holdCaptureFilterFields)).toBeNull();
     expect(
@@ -206,27 +206,27 @@ describe('typed list filter parsing', () => {
     });
   });
 
-  it('preserves representable date boundaries and rejects submillisecond precision for every operator', () => {
+  it('preserves the requested precision for every date operator', () => {
     for (const operator of ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'in']) {
-      for (const fraction of ['', '.1', '.12', '.123', '.123000', '.000000']) {
+      for (const [fraction, parsed] of [
+        ['', new Date('2025-01-01T08:20:30Z')],
+        ['.123', new Date('2025-01-01T08:20:30.123Z')],
+        ['.1230', { exactTimestamp: '2025-01-01T08:20:30.123000Z' }],
+        ['.123456', { exactTimestamp: '2025-01-01T08:20:30.123456Z' }],
+        ['.1234560', { exactTimestamp: '2025-01-01T08:20:30.123456Z' }],
+        ['.1234567', null],
+      ] as const) {
         const value = `2025-01-01T10:20:30${fraction}+02:00`;
-        expect(
-          parseWhere<Record<string, unknown>>(
-            JSON.stringify({ created_at: { [operator]: operator === 'in' ? [value] : value } }),
-            accountFilterFields,
-          ),
-        ).toEqual({
-          createdAt: { [operator]: operator === 'in' ? [new Date(value)] : new Date(value) },
+        const where = JSON.stringify({
+          created_at: { [operator]: operator === 'in' ? [value] : value },
         });
-      }
-      for (const fraction of ['.123001', '.0001', '.999999']) {
-        const value = `2025-01-01T10:20:30${fraction}Z`;
-        expect(
-          parseWhere(
-            JSON.stringify({ created_at: { [operator]: operator === 'in' ? [value] : value } }),
-            accountFilterFields,
-          ),
-        ).toBeNull();
+        expect(parseWhere<Record<string, unknown>>(where, accountFilterFields)).toEqual(
+          parsed === null
+            ? null
+            : {
+                createdAt: { [operator]: operator === 'in' ? [parsed] : parsed },
+              },
+        );
       }
     }
   });
@@ -247,7 +247,8 @@ describe('typed list filter parsing', () => {
         expect(pattern).toBeDefined();
         const expression = new RegExp(pattern as string);
         expect(expression.test('2025-01-01T00:00:00.123000Z')).toBe(true);
-        expect(expression.test('2025-01-01T00:00:00.123001Z')).toBe(false);
+        expect(expression.test('2025-01-01T00:00:00.123001Z')).toBe(true);
+        expect(expression.test('2025-01-01T00:00:00.1230011Z')).toBe(false);
       }
     }
   });

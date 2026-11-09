@@ -18,6 +18,8 @@ notes and implement the new methods before upgrading.
 
 ### Changed
 
+- Typed timestamp filters compare at millisecond precision for inputs with up to three fractional digits and at exact PostgreSQL precision for finer inputs. Response timestamps retain millisecond precision. Restart pagination for timestamp-filtered lists after upgrading.
+
 - **Breaking database change:** consolidated the pre-production migration history into a single clean-install baseline. Recreate existing dev/test databases before applying it.
 
 - share constructor/brand validation predicates, type domain error details and omit malformed detail values, consolidate Fastify invalid-input responses, and document explicit parser-size handling and retry-delay policy.

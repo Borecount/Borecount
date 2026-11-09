@@ -29,6 +29,7 @@ Authentication, rate limiting, bootstrap, server `PORT`, and `SHUTDOWN_TIMEOUT_M
 - Entry order is ignored during retry comparison, but every entry and duplicate occurrence must match by account, signed amount, and currency.
 - Preserve `effective_at` separately from record creation time.
 - Follow cursor pagination fields from the OpenAPI schemas rather than constructing cursors.
+- Timestamp responses use milliseconds. A typed `where` timestamp with up to three fractional digits compares at millisecond precision. Four to six digits select an exact comparison, including when the extra digits are zero. This applies to each value in `in`. Cursors from before this change must be restarted when the filter contains a timestamp.
 - Persist returned resource identifiers; do not derive IDs from names or references.
 
 ## Asset provisioning and discovery
