@@ -8,7 +8,7 @@ const minor = { kind: 'integer-string', ordered: true } as const;
 
 export const assetFilterFields = {
   id,
-  code: text,
+  code: { ...text, pattern: '^[^\\u0000]*$' },
   scale: { kind: 'integer', ordered: true, minimum: 0, maximum: 18 },
   created_at: { ...time, target: 'createdAt' },
 } satisfies FilterFields;

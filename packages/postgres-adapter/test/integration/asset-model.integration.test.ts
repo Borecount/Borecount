@@ -5,7 +5,7 @@ import {
   AssetNotFoundError,
   InvariantViolationError,
 } from '@borecount/core/errors';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import { accounts, assets, entries, transactions } from '../../src/schema';
 import {
@@ -53,6 +53,27 @@ describe('tenant assets', () => {
         await db.update(assets).set({ scale: 3 }).where(eq(assets.id, euro.id));
       })(),
     ).rejects.toThrow();
+  });
+
+  it('filters creation times at the precision of the returned asset', async () => {
+    const tenantId = await createTenant(db, 'A');
+    const euro = await services.assets.create({ tenantId, code: 'EUR', scale: 2 });
+    await db
+      .update(assets)
+      .set({ createdAt: sql`TIMESTAMPTZ '2026-01-01 00:00:00.123456+00'` })
+      .where(eq(assets.id, euro.id));
+
+    const { createdAt } = await services.assets.getById(tenantId, euro.id);
+    expect(createdAt.toISOString()).toBe('2026-01-01T00:00:00.123Z');
+    for (const operator of ['eq', 'in', 'lte', 'gt'] as const) {
+      const value = operator === 'in' ? [createdAt] : createdAt;
+      const page = await services.assets.list({
+        tenantId,
+        limit: 50,
+        where: { code: { eq: 'EUR' }, createdAt: { [operator]: value } },
+      });
+      expect(page.data.map((asset) => asset.id)).toEqual(operator === 'gt' ? [] : [euro.id]);
+    }
   });
 
   it('scopes asset cursors to the tenant, filters, and resource', async () => {

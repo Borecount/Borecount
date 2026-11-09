@@ -2832,6 +2832,8 @@ describe('asset route parity', () => {
       '/v1/assets?cursor=a&cursor=b',
       `/v1/assets?tenant_id=${otherTenantId}`,
       `/v1/assets?where=${encodeURIComponent('{"scale":{"eq":"2"}}')}`,
+      `/v1/assets?where=${encodeURIComponent(JSON.stringify({ code: { eq: 'EU\0R' } }))}`,
+      `/v1/assets?where=${encodeURIComponent(JSON.stringify({ code: { in: ['EU\0R'] } }))}`,
       `/v1/assets?where=${encodeURIComponent('{"tenant_id":{"eq":"other"}}')}`,
     ]) {
       expect((await request('GET', path, 'service')).status).toBe(400);

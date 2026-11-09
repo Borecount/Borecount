@@ -21,7 +21,8 @@ export type FilterField = {
   ordered?: boolean;
 } & (
   | { kind: 'integer'; minimum: number; maximum: number }
-  | { kind: Exclude<FilterKind, 'integer'>; minimum?: never; maximum?: never }
+  | { kind: 'string'; pattern?: string }
+  | { kind: Exclude<FilterKind, 'integer' | 'string'>; minimum?: never; maximum?: never }
 );
 export type FilterFields = Readonly<Record<string, FilterField>>;
 
@@ -44,7 +45,9 @@ const parseValue = (value: unknown, field: FilterField): unknown => {
   if (value === null) return field.nullable ? null : undefined;
   switch (field.kind) {
     case 'string':
-      return typeof value === 'string' ? value : undefined;
+      return typeof value === 'string' && (!field.pattern || new RegExp(field.pattern).test(value))
+        ? value
+        : undefined;
     case 'uuid':
       return isUuid(value) ? value : undefined;
     case 'boolean':
@@ -204,6 +207,7 @@ const scalarSchema = (field: FilterField): UnknownRecord => ({
               enum: field.nullable ? [...(field.values ?? []), null] : field.values,
             }
           : { type: field.kind }),
+  ...(field.kind === 'string' && field.pattern ? { pattern: field.pattern } : {}),
   ...(field.kind === 'integer' ? { minimum: field.minimum, maximum: field.maximum } : {}),
   ...(field.nullable && field.kind !== 'enum'
     ? {
