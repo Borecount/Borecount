@@ -2,12 +2,16 @@ import type {
   ApplicationServices,
   reconResultListFilter,
   reconRuleListFilter,
+  reconRunListFilter,
+  reconUploadListFilter,
   WhereFor,
 } from '@borecount/core/application';
 import {
   readWhereParameter,
   reconResultListFilterFields,
   reconRuleFilterFields,
+  reconRunListFilterFields,
+  reconUploadListFilterFields,
 } from '@borecount/http';
 import {
   type CreateReconRuleRequest,
@@ -15,19 +19,28 @@ import {
   type IngestReconRecordsRequest,
   ingestReconRecordsRequestSchema,
   listReconRulesQuerySchema,
+  listReconRunsQuerySchema,
+  listReconUploadsQuerySchema,
+  type ReconRecordsListResponse,
   type ReconRuleResponse,
   type ReconRulesListResponse,
   type ReconRunByIdParams,
   type ReconRunResponse,
+  type ReconRunsListResponse,
+  type ReconUploadByIdParams,
   type ReconUploadResponse,
+  type ReconUploadsListResponse,
   type RunReconRequest,
+  reconRecordsListQuerySchema,
   reconResultsListQuerySchema,
   runReconRequestSchema,
 } from '@borecount/http/contracts';
 import {
+  toReconRecordResponse,
   toReconResultResponse,
   toReconRuleResponse,
   toReconRunResponse,
+  toReconRunSummaryResponse,
   toReconUploadResponse,
 } from '@borecount/http/mappers';
 import { parseUuidParam } from '@borecount/http/validation-utils';
@@ -136,6 +149,115 @@ export const registerReconciliationRoutes = (
       res
         .status(200)
         .json({ data: result.data.map(toReconResultResponse), next_cursor: result.nextCursor });
+    }),
+  );
+
+  app.get('/v1/reconciliation/uploads', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const pagination = parsePaginationQuery(req.query);
+      if (
+        pagination === null ||
+        validate(listReconUploadsQuerySchema, { ...req.query, limit: pagination.limit }) === null
+      ) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const where = readWhereParameter<WhereFor<typeof reconUploadListFilter>>(
+        req.originalUrl,
+        reconUploadListFilterFields,
+      );
+      if (where === null) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const context = requireContext(req);
+      const page = await services.reconciliation.listUploads({
+        tenantId: context.tenantId,
+        ...pagination,
+        where,
+      });
+      const response: ReconUploadsListResponse = {
+        data: page.data.map(toReconUploadResponse),
+        next_cursor: page.nextCursor,
+      };
+      res.status(200).json(response);
+    }),
+  );
+
+  app.get('/v1/reconciliation/uploads/:id', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const params = parseUuidParam<keyof ReconUploadByIdParams>(req.params.id, 'id');
+      if (params === null) {
+        sendInvalidInput(res, 'Invalid path parameter');
+        return;
+      }
+      const context = requireContext(req);
+      const upload = await services.reconciliation.getUpload(context.tenantId, params.id);
+      const response: ReconUploadResponse = toReconUploadResponse(upload);
+      res.status(200).json(response);
+    }),
+  );
+
+  app.get(
+    '/v1/reconciliation/uploads/:id/records',
+    async (req: RequestWithContext, res: Response) =>
+      withDomainErrorHandling(res, async () => {
+        const params = parseUuidParam<keyof ReconUploadByIdParams>(req.params.id, 'id');
+        if (params === null) {
+          sendInvalidInput(res, 'Invalid path parameter');
+          return;
+        }
+        const pagination = parsePaginationQuery(req.query);
+        if (
+          pagination === null ||
+          validate(reconRecordsListQuerySchema, { ...req.query, limit: pagination.limit }) === null
+        ) {
+          sendInvalidInput(res, 'Invalid querystring');
+          return;
+        }
+        const context = requireContext(req);
+        const page = await services.reconciliation.listRecords({
+          tenantId: context.tenantId,
+          uploadId: params.id,
+          ...pagination,
+        });
+        const response: ReconRecordsListResponse = {
+          data: page.data.map(toReconRecordResponse),
+          next_cursor: page.nextCursor,
+        };
+        res.status(200).json(response);
+      }),
+  );
+
+  app.get('/v1/reconciliation/runs', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const pagination = parsePaginationQuery(req.query);
+      if (
+        pagination === null ||
+        validate(listReconRunsQuerySchema, { ...req.query, limit: pagination.limit }) === null
+      ) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const where = readWhereParameter<WhereFor<typeof reconRunListFilter>>(
+        req.originalUrl,
+        reconRunListFilterFields,
+      );
+      if (where === null) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const context = requireContext(req);
+      const page = await services.reconciliation.listRuns({
+        tenantId: context.tenantId,
+        ...pagination,
+        where,
+      });
+      const response: ReconRunsListResponse = {
+        data: page.data.map(toReconRunSummaryResponse),
+        next_cursor: page.nextCursor,
+      };
+      res.status(200).json(response);
     }),
   );
 

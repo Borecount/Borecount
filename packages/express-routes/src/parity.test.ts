@@ -22,6 +22,7 @@ import {
   InvariantViolationError,
   RateLimitExceededError,
   ReconRunNotFoundError,
+  ReconUploadNotFoundError,
   UnauthorizedError,
   UnbalancedTransactionError,
 } from '@borecount/core/errors';
@@ -271,6 +272,48 @@ class FakeLedgerService {
 
   public async listRules(query: unknown) {
     observeList('reconciliation-rules', query);
+    return { data: [], nextCursor: null };
+  }
+
+  public async listUploads(query: unknown) {
+    observeList('reconciliation-uploads', query);
+    return { data: [], nextCursor: null };
+  }
+
+  public async getUpload(_tenantId: string, uploadId: string) {
+    if (uploadId === '01900000-0000-7000-8000-000000000999') {
+      throw new ReconUploadNotFoundError(uploadId);
+    }
+    return {
+      id: uploadId,
+      tenantId,
+      source: 'bank',
+      recordCount: 1,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+  }
+
+  public async listRecords(query: unknown) {
+    observeList('reconciliation-upload-records', query);
+    return {
+      data: [
+        {
+          id: '00000000-0000-4000-8000-000000000501',
+          externalId: 'bank-row-1',
+          amountMinor: 1200n,
+          currency: 'USD',
+          reference: 'invoice-1',
+          description: null,
+          occurredAt: new Date('2026-01-01T00:00:00.000Z'),
+          raw: { account_number: 'private' },
+        },
+      ],
+      nextCursor: null,
+    };
+  }
+
+  public async listRuns(query: unknown) {
+    observeList('reconciliation-runs', query);
     return { data: [], nextCursor: null };
   }
 
@@ -1383,6 +1426,16 @@ describe('express adapter parity with fastify adapter', () => {
         },
       },
       {
+        endpoint: 'reconciliation-uploads',
+        path: `/v1/reconciliation/uploads?limit=7&cursor=opaque&${where('source', 'eq', 'bank')}`,
+        expected: { tenantId, limit: 7, cursor: 'opaque', where: { source: { eq: 'bank' } } },
+      },
+      {
+        endpoint: 'reconciliation-runs',
+        path: `/v1/reconciliation/runs?limit=7&cursor=opaque&${where('status', 'eq', 'completed')}`,
+        expected: { tenantId, limit: 7, cursor: 'opaque', where: { status: { eq: 'completed' } } },
+      },
+      {
         endpoint: 'reconciliation-results',
         path: `/v1/reconciliation/runs/${runIdV7}/results?limit=7&cursor=opaque&${where('status', 'eq', 'matched')}`,
         expected: {
@@ -1552,6 +1605,9 @@ describe('express adapter parity with fastify adapter', () => {
       '/v1/ledgers',
       '/v1/admin/api-keys',
       '/v1/reconciliation/matching-rules',
+      '/v1/reconciliation/uploads',
+      '/v1/reconciliation/runs',
+      `/v1/reconciliation/uploads/${holdId}/records`,
       `/v1/reconciliation/runs/${id}/results`,
     ]) {
       for (const request of [requestFastify, requestExpress]) {
@@ -1566,6 +1622,8 @@ describe('express adapter parity with fastify adapter', () => {
       ['/v1/ledgers', 'ledgers'],
       ['/v1/admin/api-keys', 'api-keys'],
       ['/v1/reconciliation/matching-rules', 'reconciliation-rules'],
+      ['/v1/reconciliation/uploads', 'reconciliation-uploads'],
+      ['/v1/reconciliation/runs', 'reconciliation-runs'],
       [`/v1/reconciliation/runs/${runIdV7}/results`, 'reconciliation-results'],
     ] as const;
     for (const [path, endpoint] of defaultPagePaths) {
@@ -1583,6 +1641,36 @@ describe('express adapter parity with fastify adapter', () => {
         expect(response.status).toBe(400);
         expect(listObservations.has(endpoint)).toBeFalse();
       }
+    }
+
+    for (const request of [requestFastify, requestExpress]) {
+      listObservations.clear();
+      const response = await request(
+        'GET',
+        `/v1/reconciliation/uploads/00000000-0000-4000-8000-000000000500/records?limit=7&cursor=opaque`,
+      );
+      expect(response.status).toBe(200);
+      expect(response.json).toEqual({
+        data: [
+          {
+            id: '00000000-0000-4000-8000-000000000501',
+            external_id: 'bank-row-1',
+            amount_minor: '1200',
+            currency: 'USD',
+            reference: 'invoice-1',
+            description: null,
+            occurred_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        next_cursor: null,
+      });
+      expect(JSON.stringify(response.json)).not.toContain('account_number');
+      expect(listObservations.get('reconciliation-upload-records')?.[0]).toMatchObject({
+        tenantId,
+        uploadId: '00000000-0000-4000-8000-000000000500',
+        limit: 7,
+        cursor: 'opaque',
+      });
     }
 
     const holdDefaultPagePaths = [
@@ -1635,12 +1723,22 @@ describe('express adapter parity with fastify adapter', () => {
 
     const missingRunPath = '/v1/reconciliation/runs/01900000-0000-7000-8000-000000000999/results';
     const invalidRunPath = '/v1/reconciliation/runs/not-a-uuid/results';
+    const missingUploadPath = '/v1/reconciliation/uploads/01900000-0000-7000-8000-000000000999';
+    const invalidUploadPath = '/v1/reconciliation/uploads/not-a-uuid/records';
     for (const request of [requestFastify, requestExpress]) {
       listObservations.clear();
       const missing = await request('GET', missingRunPath);
       expect(missing.status).toBe(404);
       expect(missing.json).toMatchObject({ error: 'RECONCILIATION_RUN_NOT_FOUND' });
       expect(JSON.stringify(missing.json)).not.toContain('database');
+
+      const missingUpload = await request('GET', missingUploadPath);
+      expect(missingUpload.status).toBe(404);
+      expect(missingUpload.json).toMatchObject({ error: 'RECONCILIATION_UPLOAD_NOT_FOUND' });
+      expect(JSON.stringify(missingUpload.json)).not.toContain('database');
+
+      const invalidUpload = await request('GET', invalidUploadPath);
+      expect(invalidUpload.status).toBe(400);
 
       listObservations.clear();
       const invalid = await request('GET', invalidRunPath);

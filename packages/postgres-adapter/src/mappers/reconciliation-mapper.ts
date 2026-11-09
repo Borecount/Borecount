@@ -1,8 +1,16 @@
-import type { ReconMatchCriterion, ReconRecord, ReconRule, ReconStrategy } from '@borecount/core';
-import type { ReconResult, ReconRun } from '@borecount/core/application';
+import type { ReconMatchCriterion, ReconRecord, ReconRule } from '@borecount/core';
+import type {
+  ReconRecordListItem,
+  ReconResult,
+  ReconRun,
+  ReconRunSummary,
+  ReconUpload,
+} from '@borecount/core/application';
 import type * as schema from '../schema';
 
 type ReconRecordRow = typeof schema.reconRecords.$inferSelect;
+type ReconRecordListRow = Omit<ReconRecordRow, 'raw'>;
+type ReconUploadRow = typeof schema.reconUploads.$inferSelect;
 type ReconRuleRow = typeof schema.reconRules.$inferSelect;
 type ReconRunRow = typeof schema.reconRuns.$inferSelect;
 type ReconResultRow = typeof schema.reconResults.$inferSelect;
@@ -37,7 +45,7 @@ export const toReconRule = (row: ReconRuleRow): ReconRule => ({
   createdAt: row.createdAt,
 });
 
-export const toReconRecord = (row: ReconRecordRow): ReconRecord => ({
+export const toReconRecordListItem = (row: ReconRecordListRow): ReconRecordListItem => ({
   id: row.id,
   tenantId: row.tenantId,
   uploadId: row.uploadId,
@@ -48,15 +56,27 @@ export const toReconRecord = (row: ReconRecordRow): ReconRecord => ({
   reference: row.reference,
   description: row.description,
   occurredAt: row.occurredAt,
+});
+
+export const toReconRecord = (row: ReconRecordRow): ReconRecord => ({
+  ...toReconRecordListItem(row),
   raw: row.raw ?? null,
 });
 
-export const toReconRun = (run: ReconRunRow, resultRows: ReconResultRow[]): ReconRun => ({
+export const toReconUpload = (row: ReconUploadRow): ReconUpload => ({
+  id: row.id,
+  tenantId: row.tenantId,
+  source: row.source,
+  recordCount: row.recordCount,
+  createdAt: row.createdAt,
+});
+
+export const toReconRunSummary = (run: ReconRunRow): ReconRunSummary => ({
   id: run.id,
   tenantId: run.tenantId,
   ledgerId: run.ledgerId,
   uploadId: run.uploadId,
-  strategy: run.strategy as ReconStrategy,
+  strategy: run.strategy as ReconRunSummary['strategy'],
   status: run.status,
   dryRun: run.dryRun,
   matchedCount: run.matchedCount,
@@ -66,6 +86,10 @@ export const toReconRun = (run: ReconRunRow, resultRows: ReconResultRow[]): Reco
   conflictCount: run.conflictCount,
   startedAt: run.startedAt,
   completedAt: run.completedAt,
+});
+
+export const toReconRun = (run: ReconRunRow, resultRows: ReconResultRow[]): ReconRun => ({
+  ...toReconRunSummary(run),
   results: resultRows.map(toReconResult),
 });
 

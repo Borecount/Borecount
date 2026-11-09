@@ -60,6 +60,12 @@ export class ReconRunNotFoundError extends DomainError {
   }
 }
 
+export class ReconUploadNotFoundError extends DomainError {
+  public constructor(_uploadId: string) {
+    super('Reconciliation upload not found', 'RECONCILIATION_UPLOAD_NOT_FOUND', 404);
+  }
+}
+
 export class HoldNotFoundError extends DomainError {
   public readonly holdId: string;
 

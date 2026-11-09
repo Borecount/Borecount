@@ -137,6 +137,18 @@ export const reconRuleFilterFields = {
   description: nullableText,
   created_at: { ...time, target: 'createdAt' },
 } satisfies FilterFields;
+export const reconUploadListFilterFields = {
+  id,
+  source: text,
+  created_at: { ...time, target: 'createdAt' },
+} satisfies FilterFields;
+export const reconRunListFilterFields = {
+  id,
+  ledger_id: { ...id, target: 'ledgerId' },
+  upload_id: { ...id, target: 'uploadId' },
+  status: { kind: 'enum', values: ['pending', 'running', 'completed', 'failed'] },
+  started_at: { ...time, target: 'startedAt' },
+} satisfies FilterFields;
 export const reconResultListFilterFields = {
   id,
   run_id: { ...id, target: 'runId' },

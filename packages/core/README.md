@@ -112,6 +112,9 @@ const keys = await services.apiKeys.listApiKeys(adminActor, { limit: 25, where: 
 const results = await services.reconciliation.listResults({
   tenantId, runId, limit: 25, where: { status: { eq: 'conflict' } },
 });
+const uploads = await services.reconciliation.listUploads({ tenantId, limit: 25 });
+const runs = await services.reconciliation.listRuns({ tenantId, limit: 25 });
+const records = await services.reconciliation.listRecords({ tenantId, uploadId, limit: 25 });
 const holds = await services.holds.list({
   tenantId, limit: 25, where: { state: { eq: 'HELD' }, accountId: { eq: 'account-1' } },
 });
@@ -168,6 +171,8 @@ when following `nextCursor`; consume every page instead of assuming the first pa
 | apiKeys.listApiKeys | apiKeyListFilter |
 | reconciliation.listRules | reconRuleListFilter |
 | reconciliation.listResults | reconResultListFilter |
+| reconciliation.listUploads | reconUploadListFilter |
+| reconciliation.listRuns | reconRunListFilter |
 | creditGrants.list, creditGrants.listLots | creditGrantListFilter |
 | creditGrants.listLineageByGrant, creditGrants.listLineageByTransaction | creditLineageListFilter |
 | balances.listHistory | balanceHistoryListFilter |
@@ -202,7 +207,10 @@ fractional digits.
 HTTP adapters expose pagination as `limit`/`cursor` and serialize typed filters through `where`.
 
 Reconciliation result pages use `reconResultListFilter`; candidate ID arrays are excluded
-from filtering. Existing reconciliation run responses and reports are unchanged.
+from filtering. Upload pages use `reconUploadListFilter` (source, createdAt, and id are
+filterable; recordCount is excluded). Run summaries use `reconRunListFilter` and omit result
+arrays. Upload record pages require `uploadId`, omit raw provider payloads, and do not accept
+filters. Missing or cross-tenant upload IDs return the same not-found error.
 
 ## Tenant provisioning
 

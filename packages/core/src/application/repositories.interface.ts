@@ -63,15 +63,20 @@ import type {
   PaginatedResult,
   PaginationQuery,
   ProcessCreditGrantExpirationsInput,
+  ReconRecordListItem,
+  ReconRecordPaginationQuery,
   ReconResult,
   ReconResultPaginationQuery,
   ReconRun,
+  ReconRunSummary,
   ReconUpload,
   RefundCreditGrantInput,
   ReverseCreditGrantInput,
   ReverseTransactionInput,
   ReverseTransactionResult,
   RunReconInput,
+  reconRunListFilter,
+  reconUploadListFilter,
   TransactionPaginationQuery,
   TrialBalance,
   VoidHoldInput,
@@ -164,6 +169,16 @@ export interface StatementRepository {
 
 export interface ReconciliationApplicationRepository {
   ingest(input: IngestReconRecordsInput): Promise<ReconUpload>;
+  getUpload(tenantId: string, uploadId: string): Promise<ReconUpload | null>;
+  listUploads(
+    query: PaginationQuery<typeof reconUploadListFilter>,
+  ): Promise<PaginatedResult<ReconUpload>>;
+  listRuns(
+    query: PaginationQuery<typeof reconRunListFilter>,
+  ): Promise<PaginatedResult<ReconRunSummary>>;
+  listRecords(
+    query: ReconRecordPaginationQuery,
+  ): Promise<PaginatedResult<ReconRecordListItem> | null>;
   createRule(input: CreateReconRuleInput): Promise<ReconRule>;
   listRules(
     query: PaginationQuery<typeof reconRuleListFilter>,

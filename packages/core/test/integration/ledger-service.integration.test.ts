@@ -329,6 +329,10 @@ const createServices = (repository: InMemoryLedgerRepository) => ({
   }),
   reconciliation: new ReconciliationService({
     ingest: (input) => repository.ingestExternalRecords(input),
+    getUpload: async () => null,
+    listUploads: async () => ({ data: [], nextCursor: null }),
+    listRuns: async () => ({ data: [], nextCursor: null }),
+    listRecords: async () => null,
     createRule: (input) => repository.createReconciliationMatchingRule(input),
     listRules: (query) => repository.listReconciliationMatchingRules(query),
     getRule: (tenantId, ruleId) => repository.getReconciliationMatchingRule(tenantId, ruleId),

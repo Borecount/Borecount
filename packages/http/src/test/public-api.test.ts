@@ -15,6 +15,11 @@ test('public API includes shared HTTP contracts and primitives', () => {
   expect(keys).toContain('createLedgerBodySchema');
   expect(keys).toContain('entriesPageResponseSchema');
   expect(keys).toContain('holdsPageResponseSchema');
+  expect(keys).toContain('reconRecordsListResponseSchema');
+  expect(keys).toContain('reconUploadsListResponseSchema');
+  expect(keys).toContain('reconRunsListResponseSchema');
+  expect(keys).toContain('toReconRecordResponse');
+  expect(keys).toContain('toReconRunSummaryResponse');
   expect(keys).toContain('toHoldSummaryResponse');
   expect(keys).toContain('holdSummaryFilterFields');
   expect(keys).toContain('ApiKeyRole');
