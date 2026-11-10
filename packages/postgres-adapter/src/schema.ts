@@ -874,7 +874,18 @@ export const reconRuns = pgTable(
       table.startedAt,
       table.id,
     ),
-    reconRunsUploadIdx: index('recon_runs_upload_idx').on(table.uploadId),
+    reconRunsUploadHistoryIdx: index('recon_runs_upload_history_idx').on(
+      table.uploadId,
+      table.tenantId,
+      table.startedAt,
+      table.id,
+    ),
+    reconRunsLedgerHistoryIdx: index('recon_runs_ledger_history_idx').on(
+      table.tenantId,
+      table.ledgerId,
+      table.startedAt,
+      table.id,
+    ),
     reconRunsStrategyCk: check('recon_runs_strategy_ck', sql`${table.strategy} = 'one_to_one'`),
   }),
 );
