@@ -1,15 +1,19 @@
 import type {
   ReconMatchCriterion,
+  ReconRecordListItem,
   ReconResult,
   ReconRule,
   ReconRun,
+  ReconRunSummary,
   ReconUpload,
 } from '@borecount/core/application';
 import type {
   ReconCriterionRequest,
+  ReconRecordResponse,
   ReconResultResponse,
   ReconRuleResponse,
   ReconRunResponse,
+  ReconRunSummaryResponse,
   ReconUploadResponse,
 } from '../contracts/reconciliation';
 
@@ -37,6 +41,16 @@ export const toReconUploadResponse = (upload: ReconUpload): ReconUploadResponse 
   created_at: upload.createdAt.toISOString(),
 });
 
+export const toReconRecordResponse = (record: ReconRecordListItem): ReconRecordResponse => ({
+  id: record.id,
+  external_id: record.externalId,
+  amount_minor: record.amountMinor.toString(),
+  currency: record.currency,
+  reference: record.reference,
+  description: record.description,
+  occurred_at: record.occurredAt.toISOString(),
+});
+
 export const toReconResultResponse = (result: ReconResult): ReconResultResponse => ({
   id: result.id,
   run_id: result.runId,
@@ -49,20 +63,27 @@ export const toReconResultResponse = (result: ReconResult): ReconResultResponse 
   created_at: result.createdAt.toISOString(),
 });
 
+export const toReconRunSummaryResponse = (run: ReconRunSummary): ReconRunSummaryResponse => {
+  return {
+    id: run.id,
+    tenant_id: run.tenantId,
+    ledger_id: run.ledgerId,
+    upload_id: run.uploadId,
+    matching_rule_ids: run.matchingRuleIds,
+    strategy: run.strategy,
+    status: run.status,
+    dry_run: run.dryRun,
+    matched_count: run.matchedCount,
+    unmatched_external_count: run.unmatchedExternalCount,
+    unmatched_internal_count: run.unmatchedInternalCount,
+    mismatched_count: run.mismatchedCount,
+    conflict_count: run.conflictCount,
+    started_at: run.startedAt.toISOString(),
+    completed_at: run.completedAt?.toISOString() ?? null,
+  };
+};
+
 export const toReconRunResponse = (run: ReconRun): ReconRunResponse => ({
-  id: run.id,
-  tenant_id: run.tenantId,
-  ledger_id: run.ledgerId,
-  upload_id: run.uploadId,
-  strategy: run.strategy,
-  status: run.status,
-  dry_run: run.dryRun,
-  matched_count: run.matchedCount,
-  unmatched_external_count: run.unmatchedExternalCount,
-  unmatched_internal_count: run.unmatchedInternalCount,
-  mismatched_count: run.mismatchedCount,
-  conflict_count: run.conflictCount,
-  started_at: run.startedAt.toISOString(),
-  completed_at: run.completedAt?.toISOString() ?? null,
+  ...toReconRunSummaryResponse(run),
   results: run.results.map(toReconResultResponse),
 });

@@ -459,6 +459,24 @@ export interface ReconUpload {
   createdAt: Date;
 }
 
+export const reconUploadListFilter = defineListFilter<ReconUpload>()(['tenantId', 'recordCount']);
+export type ReconRunSummary = Omit<ReconRun, 'results'>;
+export type ReconRecordListItem = Omit<ReconRecord, 'raw'>;
+export const reconRunListFilter = defineListFilter<ReconRunSummary>()([
+  'tenantId',
+  'strategy',
+  'dryRun',
+  'matchedCount',
+  'unmatchedExternalCount',
+  'unmatchedInternalCount',
+  'mismatchedCount',
+  'conflictCount',
+  'completedAt',
+]);
+export interface ReconRecordPaginationQuery extends PaginationQuery {
+  uploadId: string;
+}
+
 export interface CreateReconRuleInput {
   tenantId: string;
   name: string;
@@ -498,6 +516,7 @@ export interface ReconRun {
   tenantId: string;
   ledgerId: string;
   uploadId: string;
+  matchingRuleIds: string[];
   strategy: ReconStrategy;
   status: ReconRunStatus;
   dryRun: boolean;

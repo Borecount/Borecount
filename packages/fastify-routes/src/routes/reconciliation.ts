@@ -2,6 +2,8 @@ import type {
   ReconciliationService,
   reconResultListFilter,
   reconRuleListFilter,
+  reconRunListFilter,
+  reconUploadListFilter,
   WhereFor,
 } from '@borecount/core/application';
 import {
@@ -9,6 +11,8 @@ import {
   readWhereParameter,
   reconResultListFilterFields,
   reconRuleFilterFields,
+  reconRunListFilterFields,
+  reconUploadListFilterFields,
 } from '@borecount/http';
 import {
   type CreateReconRuleRequest,
@@ -16,21 +20,31 @@ import {
   type IngestReconRecordsRequest,
   ingestReconRecordsRequestSchema,
   listReconRulesQuerySchema,
+  listReconRunsQuerySchema,
+  listReconUploadsQuerySchema,
   type ReconRunByIdParams,
+  type ReconUploadByIdParams,
   type RunReconRequest,
   reconciliationRunByIdParamsSchema,
+  reconciliationUploadByIdParamsSchema,
+  reconRecordsListQuerySchema,
+  reconRecordsListResponseSchema,
   reconResultsListQuerySchema,
   reconResultsListResponseSchema,
   reconRuleResponseSchema,
   reconRulesListResponseSchema,
   reconRunResponseSchema,
+  reconRunsListResponseSchema,
   reconUploadResponseSchema,
+  reconUploadsListResponseSchema,
   runReconRequestSchema,
 } from '@borecount/http/contracts';
 import {
+  toReconRecordResponse,
   toReconResultResponse,
   toReconRuleResponse,
   toReconRunResponse,
+  toReconRunSummaryResponse,
   toReconUploadResponse,
 } from '@borecount/http/mappers';
 import { resolveLimit } from '@borecount/http/query/pagination';
@@ -46,10 +60,124 @@ export class ReconRoutes extends BaseRoute {
   public register(server: FastifyInstance): void {
     this.registerCreateMatchingRule(server);
     this.registerListMatchingRules(server);
+    this.registerListUploads(server);
+    this.registerGetUpload(server);
+    this.registerListUploadRecords(server);
+    this.registerListRuns(server);
     this.registerIngestExternalRecords(server);
     this.registerRunReconciliation(server);
     this.registerGetReconciliationRun(server);
     this.registerListReconciliationResults(server);
+  }
+
+  private registerListUploads(server: FastifyInstance): void {
+    server.get<{ Querystring: { where?: string; limit?: number; cursor?: string } }>(
+      '/v1/reconciliation/uploads',
+      {
+        errorHandler: handleValidationError,
+        schema: {
+          querystring: listReconUploadsQuerySchema,
+          response: { 200: reconUploadsListResponseSchema },
+        },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () => {
+          const where = readWhereParameter<WhereFor<typeof reconUploadListFilter>>(
+            request.raw.url ?? '',
+            reconUploadListFilterFields,
+          );
+          if (where === null) throw invalidWhereError();
+          const page = await this.reconciliation.listUploads({
+            tenantId: request.tenantId as string,
+            limit: resolveLimit(request.query.limit),
+            cursor: request.query.cursor,
+            where,
+          });
+          return reply
+            .status(200)
+            .send({ data: page.data.map(toReconUploadResponse), next_cursor: page.nextCursor });
+        }),
+    );
+  }
+
+  private registerGetUpload(server: FastifyInstance): void {
+    server.get<{ Params: ReconUploadByIdParams }>(
+      '/v1/reconciliation/uploads/:id',
+      {
+        errorHandler: handleValidationError,
+        schema: {
+          params: reconciliationUploadByIdParamsSchema,
+          response: { 200: reconUploadResponseSchema },
+        },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () => {
+          const upload = await this.reconciliation.getUpload(
+            request.tenantId as string,
+            request.params.id,
+          );
+          return reply.status(200).send(toReconUploadResponse(upload));
+        }),
+    );
+  }
+
+  private registerListUploadRecords(server: FastifyInstance): void {
+    server.get<{
+      Params: ReconUploadByIdParams;
+      Querystring: { limit?: number; cursor?: string };
+    }>(
+      '/v1/reconciliation/uploads/:id/records',
+      {
+        errorHandler: handleValidationError,
+        schema: {
+          params: reconciliationUploadByIdParamsSchema,
+          querystring: reconRecordsListQuerySchema,
+          response: { 200: reconRecordsListResponseSchema },
+        },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () => {
+          const page = await this.reconciliation.listRecords({
+            tenantId: request.tenantId as string,
+            uploadId: request.params.id,
+            limit: resolveLimit(request.query.limit),
+            cursor: request.query.cursor,
+          });
+          return reply
+            .status(200)
+            .send({ data: page.data.map(toReconRecordResponse), next_cursor: page.nextCursor });
+        }),
+    );
+  }
+
+  private registerListRuns(server: FastifyInstance): void {
+    server.get<{ Querystring: { where?: string; limit?: number; cursor?: string } }>(
+      '/v1/reconciliation/runs',
+      {
+        errorHandler: handleValidationError,
+        schema: {
+          querystring: listReconRunsQuerySchema,
+          response: { 200: reconRunsListResponseSchema },
+        },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () => {
+          const where = readWhereParameter<WhereFor<typeof reconRunListFilter>>(
+            request.raw.url ?? '',
+            reconRunListFilterFields,
+          );
+          if (where === null) throw invalidWhereError();
+          const page = await this.reconciliation.listRuns({
+            tenantId: request.tenantId as string,
+            limit: resolveLimit(request.query.limit),
+            cursor: request.query.cursor,
+            where,
+          });
+          return reply
+            .status(200)
+            .send({ data: page.data.map(toReconRunSummaryResponse), next_cursor: page.nextCursor });
+        }),
+    );
   }
 
   private registerCreateMatchingRule(server: FastifyInstance): void {

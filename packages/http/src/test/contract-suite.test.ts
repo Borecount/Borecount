@@ -4,9 +4,19 @@ import { resolve } from 'node:path';
 import { CREDIT_LOT_MOVEMENT_KINDS, MAX_PAGE_LIMIT } from '@borecount/core/application';
 import Ajv from 'ajv';
 import {
+  listReconRunsQuerySchema,
+  listReconUploadsQuerySchema,
+  reconRecordResponseSchema,
+  reconRecordsListQuerySchema,
+  reconRecordsListResponseSchema,
   reconResultResponseSchema,
   reconResultsListQuerySchema,
   reconResultsListResponseSchema,
+  reconRunResponseSchema,
+  reconRunSummaryResponseSchema,
+  reconRunsListResponseSchema,
+  reconUploadResponseSchema,
+  reconUploadsListResponseSchema,
 } from '../contracts/reconciliation';
 import { errorResponseSchema, rateLimitExceededResponseSchema } from '../errors';
 import {
@@ -63,6 +73,8 @@ import {
   ledgerFilterFields,
   reconResultListFilterFields,
   reconRuleFilterFields,
+  reconRunListFilterFields,
+  reconUploadListFilterFields,
   transactionFilterFields,
 } from '../query/list-filter-fields';
 import { defaultErrorResponses } from '../route-specs';
@@ -565,6 +577,93 @@ describe('framework-agnostic contract suite', () => {
     }
   });
 
+  it('governs bounded reconciliation history contracts', () => {
+    const document = Bun.YAML.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocument;
+    const schemas = document.components?.schemas;
+    for (const [path, pageName, itemName, query, page] of [
+      [
+        '/v1/reconciliation/uploads',
+        'ReconciliationUploadsPage',
+        'ExternalRecordsUpload',
+        listReconUploadsQuerySchema,
+        reconUploadsListResponseSchema,
+      ],
+      [
+        '/v1/reconciliation/runs',
+        'ReconciliationRunsPage',
+        'ReconciliationRunSummary',
+        listReconRunsQuerySchema,
+        reconRunsListResponseSchema,
+      ],
+      [
+        '/v1/reconciliation/uploads/{id}/records',
+        'ReconciliationRecordsPage',
+        'ReconciliationRecord',
+        reconRecordsListQuerySchema,
+        reconRecordsListResponseSchema,
+      ],
+    ] as const) {
+      const operation = document.paths?.[path]?.get;
+      expect(operation?.responses?.['200']).toMatchObject({
+        content: { 'application/json': { schema: { $ref: `#/components/schemas/${pageName}` } } },
+      });
+      expect(operation?.responses?.['400']?.$ref).toBe('#/components/responses/BadRequestError');
+      expect(schemas?.[pageName]).toEqual({
+        ...page,
+        properties: {
+          ...page.properties,
+          data: { type: 'array', items: { $ref: `#/components/schemas/${itemName}` } },
+        },
+      });
+      expect(schemas?.[itemName]).toEqual(page.properties.data.items);
+      for (const name of ['limit', 'cursor'] as const) {
+        expect(operation?.parameters?.find((parameter) => parameter.name === name)).toMatchObject({
+          in: 'query',
+          required: false,
+          schema: query.properties[name],
+        });
+      }
+    }
+
+    expect(schemas?.ReconciliationRun).toEqual({
+      ...reconRunResponseSchema,
+      properties: {
+        ...reconRunResponseSchema.properties,
+        results: { type: 'array', items: { $ref: '#/components/schemas/ReconciliationResult' } },
+      },
+    });
+    expect(reconUploadsListResponseSchema.properties.data.items).toEqual(reconUploadResponseSchema);
+    expect(reconRunsListResponseSchema.properties.data.items).toEqual(
+      reconRunSummaryResponseSchema,
+    );
+    expect(reconRecordsListResponseSchema.properties.data.items).toEqual(reconRecordResponseSchema);
+    expect(listReconUploadsQuerySchema.properties.where).toEqual(
+      whereQueryProperty(reconUploadListFilterFields),
+    );
+    expect(listReconRunsQuerySchema.properties.where).toEqual(
+      whereQueryProperty(reconRunListFilterFields),
+    );
+    expect(
+      document.paths?.['/v1/reconciliation/uploads/{id}']?.get?.responses?.['200'],
+    ).toMatchObject({
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/ExternalRecordsUpload' } },
+      },
+    });
+    for (const path of [
+      '/v1/reconciliation/uploads/{id}',
+      '/v1/reconciliation/uploads/{id}/records',
+    ]) {
+      const operation = document.paths?.[path]?.get;
+      expect(operation?.responses?.['404']?.$ref).toBe('#/components/responses/NotFoundError');
+      expect(operation?.parameters?.find((parameter) => parameter.name === 'id')).toMatchObject({
+        in: 'path',
+        required: true,
+        schema: { type: 'string', format: 'uuid' },
+      });
+    }
+  });
+
   it('documents typed where parameters on every scoped list operation', () => {
     const document = Bun.YAML.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocument;
     const ajv = new Ajv({ allErrors: true, strict: false, validateFormats: false });
@@ -575,6 +674,8 @@ describe('framework-agnostic contract suite', () => {
       '/v1/entries': ['EntriesWhere', entryFilterFields],
       '/v1/ledgers': ['LedgersWhere', ledgerFilterFields],
       '/v1/admin/api-keys': ['ApiKeysWhere', apiKeyFilterFields],
+      '/v1/reconciliation/uploads': ['ReconciliationUploadsWhere', reconUploadListFilterFields],
+      '/v1/reconciliation/runs': ['ReconciliationRunsWhere', reconRunListFilterFields],
       '/v1/reconciliation/matching-rules': ['ReconciliationRulesWhere', reconRuleFilterFields],
       '/v1/reconciliation/runs/{id}/results': [
         'ReconciliationResultsWhere',

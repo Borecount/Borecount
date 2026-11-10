@@ -355,6 +355,7 @@ class InMemoryLedgerRepository {
       uploadId: input.uploadId,
       strategy: input.strategy,
       status: 'completed',
+      matchingRuleIds: input.matchingRuleIds,
       dryRun: input.dryRun ?? false,
       matchedCount: 0,
       unmatchedExternalCount: 0,
@@ -400,6 +401,10 @@ const createServices = (repository: InMemoryLedgerRepository) => ({
   }),
   reconciliation: new ReconciliationService({
     ingest: (input) => repository.ingestExternalRecords(input),
+    getUpload: async () => null,
+    listUploads: async () => ({ data: [], nextCursor: null }),
+    listRuns: async () => ({ data: [], nextCursor: null }),
+    listRecords: async () => null,
     createRule: (input) => repository.createReconciliationMatchingRule(input),
     listRules: (query) => repository.listReconciliationMatchingRules(query),
     getRule: (tenantId, ruleId) => repository.getReconciliationMatchingRule(tenantId, ruleId),
@@ -507,6 +512,10 @@ describe('application services', () => {
 
     const missingRunService = new ReconciliationService({
       ingest: (input) => repository.ingestExternalRecords(input),
+      getUpload: async () => null,
+      listUploads: async () => ({ data: [], nextCursor: null }),
+      listRuns: async () => ({ data: [], nextCursor: null }),
+      listRecords: async () => null,
       createRule: (input) => repository.createReconciliationMatchingRule(input),
       listRules: (input) => repository.listReconciliationMatchingRules(input),
       getRule: (tenantId, ruleId) => repository.getReconciliationMatchingRule(tenantId, ruleId),

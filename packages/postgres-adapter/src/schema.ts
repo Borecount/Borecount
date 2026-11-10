@@ -743,7 +743,11 @@ export const reconUploads = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    reconUploadsTenantIdIdx: index('recon_uploads_tenant_idx').on(table.tenantId),
+    reconUploadsHistoryIdx: index('recon_uploads_history_idx').on(
+      table.tenantId,
+      table.createdAt,
+      table.id,
+    ),
     reconUploadsSourceIdx: index('recon_uploads_source_idx').on(table.tenantId, table.source),
   }),
 );
@@ -775,7 +779,12 @@ export const reconRecords = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    reconRecordsUploadIdx: index('recon_records_upload_idx').on(table.tenantId, table.uploadId),
+    reconRecordsHistoryIdx: index('recon_records_history_idx').on(
+      table.tenantId,
+      table.uploadId,
+      table.occurredAt,
+      table.id,
+    ),
     reconRecordsSourceExternalUq: uniqueIndex('recon_records_source_external_uq').on(
       table.tenantId,
       table.source,
@@ -840,6 +849,7 @@ export const reconRuns = pgTable(
         onUpdate: 'cascade',
       }),
     strategy: text('strategy').notNull(),
+    matchingRuleIds: uuid('matching_rule_ids').array().notNull(),
     status: reconRunStatusEnum('status').notNull().default('pending'),
     dryRun: boolean('dry_run').notNull().default(false),
     matchedCount: bigint('matched_count', { mode: 'number' }).notNull().default(0),
@@ -859,8 +869,23 @@ export const reconRuns = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true }),
   },
   (table) => ({
-    reconRunsTenantIdx: index('recon_runs_tenant_idx').on(table.tenantId),
-    reconRunsUploadIdx: index('recon_runs_upload_idx').on(table.uploadId),
+    reconRunsHistoryIdx: index('recon_runs_history_idx').on(
+      table.tenantId,
+      table.startedAt,
+      table.id,
+    ),
+    reconRunsUploadHistoryIdx: index('recon_runs_upload_history_idx').on(
+      table.uploadId,
+      table.tenantId,
+      table.startedAt,
+      table.id,
+    ),
+    reconRunsLedgerHistoryIdx: index('recon_runs_ledger_history_idx').on(
+      table.tenantId,
+      table.ledgerId,
+      table.startedAt,
+      table.id,
+    ),
     reconRunsStrategyCk: check('recon_runs_strategy_ck', sql`${table.strategy} = 'one_to_one'`),
   }),
 );

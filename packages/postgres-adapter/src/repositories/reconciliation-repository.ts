@@ -2,9 +2,12 @@ import { type ReconResultStatus, reconcileOneToOne } from '@borecount/core';
 import type {
   PaginatedResult,
   PaginationQuery,
+  ReconRecordListItem,
+  ReconRecordPaginationQuery,
   ReconResult,
   ReconResultPaginationQuery,
   ReconRule,
+  ReconRunSummary,
 } from '@borecount/core/application';
 import {
   type CreateReconRuleInput,
@@ -15,6 +18,8 @@ import {
   type RunReconInput,
   reconResultListFilter,
   reconRuleListFilter,
+  reconRunListFilter,
+  reconUploadListFilter,
 } from '@borecount/core/application';
 import { generateUuidV7 } from '@borecount/core/base';
 import { InvariantViolationError, LedgerNotFoundError } from '@borecount/core/errors';
@@ -25,9 +30,12 @@ import { listWhereScope, listWhereSql } from '../list-where';
 import {
   serializeMatchingCriteria,
   toReconRecord,
+  toReconRecordListItem,
   toReconResult,
   toReconRule,
   toReconRun,
+  toReconRunSummary,
+  toReconUpload,
 } from '../mappers/reconciliation-mapper';
 import { toTransactionEntity } from '../mappers/transaction-mapper';
 import { paginateByCursor } from '../paginate-by-cursor';
@@ -65,13 +73,202 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
             raw: record.raw ?? null,
           })),
         );
-        return {
-          id: upload.id,
-          tenantId: upload.tenantId,
-          source: upload.source,
-          recordCount: upload.recordCount,
-          createdAt: upload.createdAt,
-        };
+        return toReconUpload(upload);
+      },
+    );
+  }
+
+  public async getUpload(tenantId: string, uploadId: string): Promise<ReconUpload | null> {
+    return this.client.runTenantTx(tenantId, 'get reconciliation upload', async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(schema.reconUploads)
+        .where(
+          and(eq(schema.reconUploads.tenantId, tenantId), eq(schema.reconUploads.id, uploadId)),
+        )
+        .limit(1);
+      return row ? toReconUpload(row) : null;
+    });
+  }
+
+  public async listUploads(
+    query: PaginationQuery<typeof reconUploadListFilter>,
+  ): Promise<PaginatedResult<ReconUpload>> {
+    return this.client.runTenantTx(query.tenantId, 'list reconciliation uploads', async (tx) => {
+      const predicates = [
+        eq(schema.reconUploads.tenantId, query.tenantId),
+        listWhereSql(
+          {
+            source: schema.reconUploads.source,
+            createdAt: schema.reconUploads.createdAt,
+            id: schema.reconUploads.id,
+          },
+          reconUploadListFilter,
+          query.where,
+        ),
+      ];
+      const page = await paginateByCursor<
+        typeof schema.reconUploads.$inferSelect & { cursorCreatedAt: string }
+      >({
+        query,
+        useTupleComparison: true,
+        scope: {
+          resource: 'reconciliation-uploads',
+          tenantId: query.tenantId,
+          ...listWhereScope(query.where),
+        },
+        order: [
+          {
+            column: schema.reconUploads.createdAt,
+            key: 'created_at',
+            type: 'timestamp',
+            direction: 'desc',
+            getValue: (row) => row.cursorCreatedAt,
+          },
+          {
+            column: schema.reconUploads.id,
+            key: 'id',
+            type: 'uuid',
+            direction: 'desc',
+            getValue: (row) => row.id,
+          },
+        ],
+        selectRows: async ({ cursorPredicate, limit, orderBy }) =>
+          tx
+            .select({
+              ...getTableColumns(schema.reconUploads),
+              cursorCreatedAt: exactTimestamp(schema.reconUploads.createdAt),
+            })
+            .from(schema.reconUploads)
+            .where(and(...predicates, cursorPredicate))
+            .orderBy(...orderBy)
+            .limit(limit),
+      });
+      return { data: page.rows.map(toReconUpload), nextCursor: page.nextCursor };
+    });
+  }
+
+  public async listRuns(
+    query: PaginationQuery<typeof reconRunListFilter>,
+  ): Promise<PaginatedResult<ReconRunSummary>> {
+    return this.client.runTenantTx(query.tenantId, 'list reconciliation runs', async (tx) => {
+      const predicates = [
+        eq(schema.reconRuns.tenantId, query.tenantId),
+        listWhereSql(
+          {
+            ledgerId: schema.reconRuns.ledgerId,
+            uploadId: schema.reconRuns.uploadId,
+            status: schema.reconRuns.status,
+            startedAt: schema.reconRuns.startedAt,
+            id: schema.reconRuns.id,
+          },
+          reconRunListFilter,
+          query.where,
+        ),
+      ];
+      const page = await paginateByCursor<
+        typeof schema.reconRuns.$inferSelect & { cursorStartedAt: string }
+      >({
+        query,
+        useTupleComparison: true,
+        scope: {
+          resource: 'reconciliation-runs',
+          tenantId: query.tenantId,
+          ...listWhereScope(query.where),
+        },
+        order: [
+          {
+            column: schema.reconRuns.startedAt,
+            key: 'started_at',
+            type: 'timestamp',
+            direction: 'desc',
+            getValue: (row) => row.cursorStartedAt,
+          },
+          {
+            column: schema.reconRuns.id,
+            key: 'id',
+            type: 'uuid',
+            direction: 'desc',
+            getValue: (row) => row.id,
+          },
+        ],
+        selectRows: async ({ cursorPredicate, limit, orderBy }) =>
+          tx
+            .select({
+              ...getTableColumns(schema.reconRuns),
+              cursorStartedAt: exactTimestamp(schema.reconRuns.startedAt),
+            })
+            .from(schema.reconRuns)
+            .where(and(...predicates, cursorPredicate))
+            .orderBy(...orderBy)
+            .limit(limit),
+      });
+      const data: ReconRunSummary[] = page.rows.map(toReconRunSummary);
+      return { data, nextCursor: page.nextCursor };
+    });
+  }
+
+  public async listRecords(
+    query: ReconRecordPaginationQuery,
+  ): Promise<PaginatedResult<ReconRecordListItem> | null> {
+    return this.client.runTenantTx(
+      query.tenantId,
+      'list reconciliation upload records',
+      async (tx) => {
+        const [upload] = await tx
+          .select({ id: schema.reconUploads.id })
+          .from(schema.reconUploads)
+          .where(
+            and(
+              eq(schema.reconUploads.tenantId, query.tenantId),
+              eq(schema.reconUploads.id, query.uploadId),
+            ),
+          )
+          .limit(1);
+        if (!upload) return null;
+        const predicates = [
+          eq(schema.reconRecords.tenantId, query.tenantId),
+          eq(schema.reconRecords.uploadId, query.uploadId),
+        ];
+        const { raw: _rawColumn, ...recordColumns } = getTableColumns(schema.reconRecords);
+        const page = await paginateByCursor<
+          Omit<typeof schema.reconRecords.$inferSelect, 'raw'> & { cursorOccurredAt: string }
+        >({
+          query,
+          useTupleComparison: true,
+          scope: {
+            resource: 'reconciliation-records',
+            tenantId: query.tenantId,
+            uploadId: query.uploadId,
+          },
+          order: [
+            {
+              column: schema.reconRecords.occurredAt,
+              key: 'occurred_at',
+              type: 'timestamp',
+              direction: 'desc',
+              getValue: (row) => row.cursorOccurredAt,
+            },
+            {
+              column: schema.reconRecords.id,
+              key: 'id',
+              type: 'uuid',
+              direction: 'desc',
+              getValue: (row) => row.id,
+            },
+          ],
+          selectRows: async ({ cursorPredicate, limit, orderBy }) =>
+            tx
+              .select({
+                ...recordColumns,
+                cursorOccurredAt: exactTimestamp(schema.reconRecords.occurredAt),
+              })
+              .from(schema.reconRecords)
+              .where(and(...predicates, cursorPredicate))
+              .orderBy(...orderBy)
+              .limit(limit),
+        });
+        return { data: page.rows.map(toReconRecordListItem), nextCursor: page.nextCursor };
       },
     );
   }
@@ -288,6 +485,7 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
         tenantId: input.tenantId,
         ledgerId: input.ledgerId,
         uploadId: input.uploadId,
+        matchingRuleIds: ruleRows.map((rule) => rule.id),
         strategy: input.strategy,
         status: 'completed',
         dryRun: input.dryRun ?? false,
@@ -315,6 +513,7 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
         tenantId: run.tenantId,
         ledgerId: run.ledgerId,
         uploadId: run.uploadId,
+        matchingRuleIds: run.matchingRuleIds,
         strategy: run.strategy,
         status: run.status,
         dryRun: run.dryRun,

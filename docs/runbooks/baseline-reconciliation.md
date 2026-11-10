@@ -28,7 +28,9 @@ Use baseline reconciliation to compare external provider records with posted Bor
 
 3. Run a dry-run first.
 
-   Call `POST /v1/reconciliation/runs` with `dry_run: true`. Dry-run returns the same report shape as a committed run but does not persist run/results rows.
+   Call `POST /v1/reconciliation/runs` with `dry_run: true`. A dry run returns a transient report.
+   Save the response if you need it later. Its run ID cannot be retrieved through the run history
+   or results endpoints. The original upload remains discoverable.
    When multiple `matching_rule_ids` are supplied, rules are evaluated as alternatives: a transaction matches if it fully satisfies any one rule.
 
 4. Review statuses.
@@ -46,6 +48,18 @@ Use baseline reconciliation to compare external provider records with posted Bor
 6. Triage exceptions.
 
    Resolve `conflict` first because it blocks deterministic matching. Then investigate `mismatched`, followed by unmatched external/internal rows.
+
+## Find prior work
+
+- Use `GET /v1/reconciliation/uploads` to find uploads by `source` and `created_at`. Use `GET /v1/reconciliation/uploads/{id}` for metadata and `GET /v1/reconciliation/uploads/{id}/records` to inspect normalized records. Match result `external_record_id` to record `id`.
+- Use `GET /v1/reconciliation/runs` to find persisted runs by `ledger_id`, `upload_id`, `status`, and `started_at`. Use `GET /v1/reconciliation/runs/{id}/results` to inspect result rows a page at a time.
+- For paginated endpoints, send `limit` (default 50, maximum 200). Pass `next_cursor` as `cursor` on the next request with the same tenant, endpoint, parent ID, and filters. A null cursor marks the end of the list.
+
+## Recover after a lost response
+
+- **Ingestion.** List uploads for the source and submission window. Compare record counts and the provider IDs in the normalized record pages before reusing an upload. Ingestion is atomic. Repeating a batch with already-ingested record IDs for that source conflicts.
+- **Persisted run.** List runs for the ledger, upload, and submission window. Compare candidates by `matching_rule_ids` and inspect their result pages. Concurrent runs can have identical inputs, and a request can still be in flight when you first check. Retrying a persisted run can create a second report, so resolve ambiguous candidates before resubmitting.
+- **Dry run.** Repeat the dry run to regenerate a report. If ledger transactions have changed, the new report may differ.
 
 ## Example Requests
 
@@ -95,7 +109,6 @@ Run reconciliation:
 
 - Reconciliation never mutates ledger transactions.
 - Committed runs persist immutable result rows for audit.
-- Dry-runs do not persist run/results rows.
 - Empty uploads are rejected before matching.
 - Matching is deterministic: conflicts are reported explicitly instead of selecting a candidate by order.
 - Multiple matching rules use OR semantics; criteria inside one rule use AND semantics.

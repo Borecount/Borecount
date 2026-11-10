@@ -186,6 +186,13 @@ Paginated list endpoints accept `limit` (default 50, maximum 200) and an opaque 
 `{ data, next_cursor }`. Reconciliation results can be fetched from
 `GET /v1/reconciliation/runs/{id}/results` with typed `where` filters.
 
+Reconciliation history exposes upload metadata at `GET /v1/reconciliation/uploads/{id}`,
+normalized input pages at `GET /v1/reconciliation/uploads/{id}/records`, and typed filtered pages
+at `GET /v1/reconciliation/uploads` and `GET /v1/reconciliation/runs`. Run list items contain
+summary counts. Fetch result rows separately through the paginated results endpoint.
+See the [reconciliation runbook](../../docs/runbooks/baseline-reconciliation.md) for recovery after
+a lost response.
+
 Hold reads use `GET /v1/holds` and `GET /v1/holds/{id}`. The nested
 `/entries`, `/captures`, and `/credit-allocations` routes return independently paginated lists;
 all hold list routes use typed `where` filters and the shared cursor and limit contract.
