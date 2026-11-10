@@ -69,6 +69,7 @@ export const toReconRunSummaryResponse = (run: ReconRunSummary): ReconRunSummary
     tenant_id: run.tenantId,
     ledger_id: run.ledgerId,
     upload_id: run.uploadId,
+    matching_rule_ids: run.matchingRuleIds,
     strategy: run.strategy,
     status: run.status,
     dry_run: run.dryRun,

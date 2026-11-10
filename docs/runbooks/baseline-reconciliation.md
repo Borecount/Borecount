@@ -58,7 +58,7 @@ Use baseline reconciliation to compare external provider records with posted Bor
 ## Recover after a lost response
 
 - **Ingestion.** List uploads for the source and submission window. Compare record counts and the provider IDs in the normalized record pages before reusing an upload. Ingestion is atomic. Repeating a batch with already-ingested record IDs for that source conflicts.
-- **Persisted run.** List runs for the ledger, upload, and submission window. Compare candidates and inspect their result pages. Concurrent runs can have identical inputs, and a request can still be in flight when you first check. Retrying a persisted run can create a second report, so resolve ambiguous candidates before resubmitting.
+- **Persisted run.** List runs for the ledger, upload, and submission window. Compare candidates by `matching_rule_ids` and inspect their result pages. Concurrent runs can have identical inputs, and a request can still be in flight when you first check. Retrying a persisted run can create a second report, so resolve ambiguous candidates before resubmitting.
 - **Dry run.** Repeat the dry run to regenerate a report. If ledger transactions have changed, the new report may differ.
 
 ## Example Requests

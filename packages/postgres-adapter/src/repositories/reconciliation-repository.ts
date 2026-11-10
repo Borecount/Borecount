@@ -111,6 +111,7 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
         typeof schema.reconUploads.$inferSelect & { cursorCreatedAt: string }
       >({
         query,
+        useTupleComparison: true,
         scope: {
           resource: 'reconciliation-uploads',
           tenantId: query.tenantId,
@@ -169,6 +170,7 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
         typeof schema.reconRuns.$inferSelect & { cursorStartedAt: string }
       >({
         query,
+        useTupleComparison: true,
         scope: {
           resource: 'reconciliation-runs',
           tenantId: query.tenantId,
@@ -233,6 +235,7 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
           Omit<typeof schema.reconRecords.$inferSelect, 'raw'> & { cursorOccurredAt: string }
         >({
           query,
+          useTupleComparison: true,
           scope: {
             resource: 'reconciliation-records',
             tenantId: query.tenantId,
@@ -482,6 +485,7 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
         tenantId: input.tenantId,
         ledgerId: input.ledgerId,
         uploadId: input.uploadId,
+        matchingRuleIds: ruleRows.map((rule) => rule.id),
         strategy: input.strategy,
         status: 'completed',
         dryRun: input.dryRun ?? false,
@@ -509,6 +513,7 @@ export class DrizzleReconciliationRepository implements ReconciliationApplicatio
         tenantId: run.tenantId,
         ledgerId: run.ledgerId,
         uploadId: run.uploadId,
+        matchingRuleIds: run.matchingRuleIds,
         strategy: run.strategy,
         status: run.status,
         dryRun: run.dryRun,

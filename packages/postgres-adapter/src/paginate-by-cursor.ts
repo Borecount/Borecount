@@ -26,6 +26,8 @@ interface PaginateByCursorOptions<Row> {
   query: BasePaginationQuery;
   scope: UnknownRecord;
   order: [CursorOrderField<Row>, ...CursorOrderField<Row>[]];
+  /** Use only for non-null order columns that all sort in the same direction. */
+  useTupleComparison?: true;
   selectRows: (params: {
     cursorPredicate: SQL<unknown> | SQLWrapper;
     limit: number;
@@ -152,12 +154,34 @@ const encodeCursor = <Row>(
   return Buffer.from(serialized, 'utf8').toString('base64url');
 };
 
+const cursorBound = (value: string, type: CursorValueType): string | SQL =>
+  type === 'timestamp' ? sql`${value}::timestamptz` : value;
+
 const buildCursorPredicate = <Row>(
   cursorValues: Map<string, string> | null,
   order: [CursorOrderField<Row>, ...CursorOrderField<Row>[]],
+  useTupleComparison?: true,
 ): SQL<unknown> | SQLWrapper => {
   if (cursorValues === null) {
     return sql`true`;
+  }
+
+  if (useTupleComparison) {
+    const columns = sql.join(
+      order.map((field) => field.column),
+      sql`, `,
+    );
+    const bounds = sql.join(
+      order.map((field) => {
+        const value = cursorValues.get(field.key);
+        if (value === undefined) throw new InvariantViolationError('Invalid cursor');
+        return sql`${cursorBound(value, field.type)}`;
+      }),
+      sql`, `,
+    );
+    return order[0].direction === 'desc'
+      ? sql`(${columns}) < (${bounds})`
+      : sql`(${columns}) > (${bounds})`;
   }
 
   let previousEquals: SQL<unknown> | undefined;
@@ -173,7 +197,7 @@ const buildCursorPredicate = <Row>(
     const column = field.column as SQL;
     // Raw SQL expressions have no column encoder, and exact timestamps are kept as strings so
     // JavaScript cannot discard PostgreSQL's microseconds.
-    const bound = field.type === 'timestamp' ? sql`${cursorValue}::timestamptz` : cursorValue;
+    const bound = cursorBound(cursorValue, field.type);
     const step = direction === 'desc' ? lt(column, bound) : gt(column, bound);
     const clause = previousEquals ? and(previousEquals, step) : step;
 
@@ -198,7 +222,11 @@ export const paginateByCursor = async <Row>(
   options: PaginateByCursorOptions<Row>,
 ): Promise<CursorPage<Row>> => {
   const cursorValues = parseCursor(options.query.cursor, options.scope, options.order);
-  const cursorPredicate = buildCursorPredicate(cursorValues, options.order);
+  const cursorPredicate = buildCursorPredicate(
+    cursorValues,
+    options.order,
+    options.useTupleComparison,
+  );
   const orderBy = buildOrderBy(options.order);
   const rows = await options.selectRows({
     cursorPredicate,

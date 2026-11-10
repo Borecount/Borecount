@@ -355,6 +355,7 @@ class InMemoryLedgerRepository {
       uploadId: input.uploadId,
       strategy: input.strategy,
       status: 'completed',
+      matchingRuleIds: input.matchingRuleIds,
       dryRun: input.dryRun ?? false,
       matchedCount: 0,
       unmatchedExternalCount: 0,

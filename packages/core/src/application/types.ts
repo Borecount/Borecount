@@ -516,6 +516,7 @@ export interface ReconRun {
   tenantId: string;
   ledgerId: string;
   uploadId: string;
+  matchingRuleIds: string[];
   strategy: ReconStrategy;
   status: ReconRunStatus;
   dryRun: boolean;

@@ -718,6 +718,7 @@ describe('application services integration (services + repositories + real DB)',
     ).toBeTrue();
 
     const persisted = await services.reconciliation.getRun(tenantId, run.id);
+    expect(persisted.matchingRuleIds).toEqual([exactRule.id]);
     expect(persisted.results).toHaveLength(run.results.length);
 
     const collisionTimestamp = new Date('2026-01-01T00:00:00.123Z');
@@ -745,12 +746,17 @@ describe('application services integration (services + repositories + real DB)',
     expect(resultIds.sort()).toEqual(run.results.map((result) => result.id).sort());
     expect(firstCursor).not.toBeNull();
 
+    const referenceRule = await services.reconciliation.createRule({
+      tenantId,
+      name: 'Reference only',
+      criteria: [{ field: 'reference', operator: 'equals' }],
+    });
     const secondRun = await services.reconciliation.run({
       tenantId,
       ledgerId: ledger.id,
       uploadId: upload.id,
       strategy: 'one_to_one',
-      matchingRuleIds: [exactRule.id],
+      matchingRuleIds: [referenceRule.id],
     });
     await db
       .update(reconRuns)
@@ -785,7 +791,13 @@ describe('application services integration (services + repositories + real DB)',
         startedAt: { gte: new Date('2020-01-01T00:00:00.000Z') },
       },
     });
-    expect(combinedRunPage.data.length).toBeGreaterThanOrEqual(2);
+    expect(combinedRunPage.data).toHaveLength(2);
+    expect(combinedRunPage.data.find((item) => item.id === run.id)?.matchingRuleIds).toEqual([
+      exactRule.id,
+    ]);
+    expect(combinedRunPage.data.find((item) => item.id === secondRun.id)?.matchingRuleIds).toEqual([
+      referenceRule.id,
+    ]);
     await expect(
       services.reconciliation.listResults({
         tenantId,
@@ -865,6 +877,7 @@ describe('application services integration (services + repositories + real DB)',
     });
     const afterDryRunRows = await db.select({ id: reconRuns.id }).from(reconRuns);
     expect(dryRun.dryRun).toBeTrue();
+    expect(dryRun.matchingRuleIds).toEqual([exactRule.id]);
     expect(afterDryRunRows).toHaveLength(beforeDryRunRows.length);
     await expect(services.reconciliation.getRun(tenantId, dryRun.id)).rejects.toBeInstanceOf(
       ReconRunNotFoundError,

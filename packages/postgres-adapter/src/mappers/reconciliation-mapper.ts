@@ -76,6 +76,7 @@ export const toReconRunSummary = (run: ReconRunRow): ReconRunSummary => ({
   tenantId: run.tenantId,
   ledgerId: run.ledgerId,
   uploadId: run.uploadId,
+  matchingRuleIds: run.matchingRuleIds,
   strategy: run.strategy as ReconRunSummary['strategy'],
   status: run.status,
   dryRun: run.dryRun,

@@ -12,6 +12,7 @@ import {
   reconResultResponseSchema,
   reconResultsListQuerySchema,
   reconResultsListResponseSchema,
+  reconRunResponseSchema,
   reconRunSummaryResponseSchema,
   reconRunsListResponseSchema,
   reconUploadResponseSchema,
@@ -624,6 +625,13 @@ describe('framework-agnostic contract suite', () => {
       }
     }
 
+    expect(schemas?.ReconciliationRun).toEqual({
+      ...reconRunResponseSchema,
+      properties: {
+        ...reconRunResponseSchema.properties,
+        results: { type: 'array', items: { $ref: '#/components/schemas/ReconciliationResult' } },
+      },
+    });
     expect(reconUploadsListResponseSchema.properties.data.items).toEqual(reconUploadResponseSchema);
     expect(reconRunsListResponseSchema.properties.data.items).toEqual(
       reconRunSummaryResponseSchema,
