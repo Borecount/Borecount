@@ -21,6 +21,15 @@ const client = createRepositoryTestClient();
 const db = createRepositoryTestDatabase(client);
 const services = createApplicationServices(client);
 
+const createAssetAt = async (tenantId: string, code: string, timestamp: string) => {
+  const asset = await services.assets.create({ tenantId, code, scale: 2 });
+  await db
+    .update(assets)
+    .set({ createdAt: sql`${timestamp}::timestamptz` })
+    .where(eq(assets.id, asset.id));
+  return asset;
+};
+
 describe('tenant assets', () => {
   beforeAll(() => migrateTestDatabase(db));
   beforeEach(() => truncateTestDatabase(db));
@@ -57,11 +66,7 @@ describe('tenant assets', () => {
 
   it('filters creation times at the requested precision and scopes cursors to that precision', async () => {
     const tenantId = await createTenant(db, 'A');
-    const euro = await services.assets.create({ tenantId, code: 'EUR', scale: 2 });
-    await db
-      .update(assets)
-      .set({ createdAt: sql`TIMESTAMPTZ '2026-01-01 00:00:00.123456+00'` })
-      .where(eq(assets.id, euro.id));
+    const euro = await createAssetAt(tenantId, 'EUR', '2026-01-01T00:00:00.123456Z');
 
     const { createdAt } = await services.assets.getById(tenantId, euro.id);
     expect(createdAt.toISOString()).toBe('2026-01-01T00:00:00.123Z');
@@ -71,11 +76,7 @@ describe('tenant assets', () => {
       ['CCC', '2026-01-01T00:00:00.123999Z'],
       ['DDD', '2026-01-01T00:00:00.124000Z'],
     ] as const) {
-      const asset = await services.assets.create({ tenantId, code, scale: 2 });
-      await db
-        .update(assets)
-        .set({ createdAt: sql`${timestamp}::timestamptz` })
-        .where(eq(assets.id, asset.id));
+      await createAssetAt(tenantId, code, timestamp);
     }
     for (const [operator, expected] of [
       ['eq', ['BBB', 'CCC', 'EUR']],
@@ -99,6 +100,12 @@ describe('tenant assets', () => {
     for (const [createdAtFilter, expected] of [
       [{ eq: exactMatch }, [euro.id]],
       [{ eq: exactMiss }, []],
+      [{ ne: exactMatch }, []],
+      [{ ne: exactMiss }, [euro.id]],
+      [{ gte: exactMatch }, [euro.id]],
+      [{ gte: { exactTimestamp: '2026-01-01T00:00:00.123457Z' } }, []],
+      [{ lt: exactMatch }, []],
+      [{ lt: { exactTimestamp: '2026-01-01T00:00:00.123457Z' } }, [euro.id]],
       [{ gt: exactMiss }, [euro.id]],
       [{ lte: exactMiss }, []],
       [{ in: [exactMiss, createdAt] }, [euro.id]],
