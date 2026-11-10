@@ -1,4 +1,4 @@
-import { MAX_FILTER_IN_VALUES } from '@borecount/core/application';
+import { type ExactTimestampFilter, MAX_FILTER_IN_VALUES } from '@borecount/core/application';
 import type { UnknownRecord } from '@borecount/core/base';
 import { isUuid } from '../validation-utils';
 
@@ -10,16 +10,20 @@ export type FilterKind =
   | 'uuid'
   | 'boolean'
   | 'number'
+  | 'integer'
   | 'integer-string'
   | 'date-time'
   | 'enum';
 export type FilterField = {
-  kind: FilterKind;
   target?: string;
   nullable?: boolean;
   values?: readonly (string | number)[];
   ordered?: boolean;
-};
+} & (
+  | { kind: 'integer'; minimum: number; maximum: number }
+  | { kind: 'string'; pattern?: string }
+  | { kind: Exclude<FilterKind, 'integer' | 'string'>; minimum?: never; maximum?: never }
+);
 export type FilterFields = Readonly<Record<string, FilterField>>;
 
 const record = (v: unknown): v is Record<string, unknown> =>
@@ -28,7 +32,7 @@ const record = (v: unknown): v is Record<string, unknown> =>
   !Array.isArray(v) &&
   (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
 const dateTime =
-  /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3}0*)?(?:Z|[+-](?:0\d|1\d|2[0-3]):[0-5]\d)$/;
+  /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.(\d{1,6})0*)?(?:Z|[+-](?:0\d|1\d|2[0-3]):[0-5]\d)$/;
 const validCalendarDate = (value: string): boolean => {
   const [year, month, day] = value.slice(0, 10).split('-').map(Number);
   const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
@@ -41,13 +45,22 @@ const parseValue = (value: unknown, field: FilterField): unknown => {
   if (value === null) return field.nullable ? null : undefined;
   switch (field.kind) {
     case 'string':
-      return typeof value === 'string' ? value : undefined;
+      return typeof value === 'string' && (!field.pattern || new RegExp(field.pattern).test(value))
+        ? value
+        : undefined;
     case 'uuid':
       return isUuid(value) ? value : undefined;
     case 'boolean':
       return typeof value === 'boolean' ? value : undefined;
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+    case 'integer':
+      return typeof value === 'number' &&
+        Number.isInteger(value) &&
+        value >= field.minimum &&
+        value <= field.maximum
+        ? value
+        : undefined;
     case 'integer-string':
       if (typeof value !== 'string' || !/^-?(?:0|[1-9]\d*)$/.test(value)) return undefined;
       {
@@ -55,9 +68,11 @@ const parseValue = (value: unknown, field: FilterField): unknown => {
         return parsed >= INT64_MIN && parsed <= INT64_MAX ? parsed : undefined;
       }
     case 'date-time': {
+      if (typeof value !== 'string') return undefined;
+      const match = dateTime.exec(value);
       if (
-        typeof value !== 'string' ||
-        !dateTime.test(value) ||
+        !match ||
+        value.startsWith('0000-') ||
         !validCalendarDate(value) ||
         Number(value.slice(11, 13)) > 23 ||
         Number(value.slice(14, 16)) > 59 ||
@@ -65,7 +80,14 @@ const parseValue = (value: unknown, field: FilterField): unknown => {
       )
         return undefined;
       const parsed = new Date(value);
-      return Number.isFinite(parsed.getTime()) ? parsed : undefined;
+      if (!Number.isFinite(parsed.getTime())) return undefined;
+      const utc = parsed.toISOString();
+      if (utc.length !== 24 || utc.startsWith('0000-')) return undefined;
+      const fraction = match[1] ?? '';
+      if (fraction.length <= 3) return parsed;
+      return {
+        exactTimestamp: `${utc.slice(0, -1)}${fraction.padEnd(6, '0').slice(3)}Z`,
+      } satisfies ExactTimestampFilter;
     }
     case 'enum':
       return typeof value === 'string' && field.values?.includes(value) ? value : undefined;
@@ -184,7 +206,7 @@ const scalarSchema = (field: FilterField): UnknownRecord => ({
           format: 'date-time',
           pattern: dateTime.source,
           description:
-            'Timezone date-time exactly representable in milliseconds; submillisecond digits must be zero.',
+            'Timezone date-time. Up to three fractional digits compare at millisecond precision. Four to six compare exactly; extra trailing zeros are accepted.',
         }
       : field.kind === 'uuid'
         ? { type: 'string', format: 'uuid' }
@@ -194,6 +216,8 @@ const scalarSchema = (field: FilterField): UnknownRecord => ({
               enum: field.nullable ? [...(field.values ?? []), null] : field.values,
             }
           : { type: field.kind }),
+  ...(field.kind === 'string' && field.pattern ? { pattern: field.pattern } : {}),
+  ...(field.kind === 'integer' ? { minimum: field.minimum, maximum: field.maximum } : {}),
   ...(field.nullable && field.kind !== 'enum'
     ? {
         type: [

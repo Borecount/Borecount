@@ -29,7 +29,20 @@ Authentication, rate limiting, bootstrap, server `PORT`, and `SHUTDOWN_TIMEOUT_M
 - Entry order is ignored during retry comparison, but every entry and duplicate occurrence must match by account, signed amount, and currency.
 - Preserve `effective_at` separately from record creation time.
 - Follow cursor pagination fields from the OpenAPI schemas rather than constructing cursors.
+- Timestamp responses use milliseconds. A typed `where` timestamp with up to three fractional digits compares at millisecond precision. Four to six digits select an exact comparison, including when the extra digits are zero. This applies to each value in `in`. Cursors from before this change must be restarted when the filter contains a timestamp.
 - Persist returned resource identifiers; do not derive IDs from names or references.
+
+## Asset provisioning and discovery
+
+Provision a code and its minor-unit scale with `POST /v1/assets` using an authenticated tenant
+ADMIN. For example, `{"code":"EUR","scale":2}` registers EUR with two decimal places. The adapter
+takes the tenant and role from the authenticated request context supplied by the host.
+
+Use an authenticated tenant SERVICE token to discover scales from `GET /v1/assets` or
+`GET /v1/assets/{id}`. Read the returned scale before converting amounts to or from minor units.
+To find one code in a list, pass a URL-encoded `where` value such as `{"code":{"eq":"EUR"}}`.
+Reuse the same filters when following `next_cursor`. The reference demo can use its existing
+session token for these reads after upgrading to packages that include the asset routes.
 
 ## Recommended first scenario
 

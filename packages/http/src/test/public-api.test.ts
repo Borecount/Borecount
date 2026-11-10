@@ -6,6 +6,11 @@ test('public API includes shared HTTP contracts and primitives', () => {
   const keys = Object.keys(publicApi);
   expect(keys).toContain('createTransactionRequestSchema');
   expect(keys).toContain('createAccountBodySchema');
+  expect(keys).toContain('createAssetBodySchema');
+  expect(keys).toContain('assetsListResponseSchema');
+  expect(keys).toContain('assetFilterFields');
+  expect(keys).toContain('parseAssetListQuery');
+  expect(keys).toContain('toAssetResponse');
   expect(keys).toContain('createApiKeyBodySchema');
   expect(keys).toContain('createLedgerBodySchema');
   expect(keys).toContain('entriesPageResponseSchema');

@@ -3,13 +3,23 @@ import { InvariantViolationError } from '../errors';
 
 export const MAX_FILTER_IN_VALUES = 100;
 
+/** UTC timestamp with six fractional digits for exact list comparisons. */
+export type ExactTimestampFilter = { readonly exactTimestamp: string };
+
+type FilterOperand<T> = T extends Date ? T | ExactTimestampFilter : T;
+
 /** Fields and operators are ANDed. Null matches use eq/ne; in accepts up to MAX_FILTER_IN_VALUES non-null values. */
 export type FieldFilter<T> = {
-  eq?: T;
-  ne?: T;
-  in?: readonly NonNullable<T>[];
+  eq?: FilterOperand<T>;
+  ne?: FilterOperand<T>;
+  in?: readonly FilterOperand<NonNullable<T>>[];
 } & (NonNullable<T> extends number | bigint | Date
-  ? { gt?: NonNullable<T>; gte?: NonNullable<T>; lt?: NonNullable<T>; lte?: NonNullable<T> }
+  ? {
+      gt?: FilterOperand<NonNullable<T>>;
+      gte?: FilterOperand<NonNullable<T>>;
+      lt?: FilterOperand<NonNullable<T>>;
+      lte?: FilterOperand<NonNullable<T>>;
+    }
   : unknown);
 
 /** Scalar query values derive from the model; ID value objects use their string value. */
@@ -54,10 +64,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null &&
   !Array.isArray(value) &&
   (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+export const isExactTimestampFilter = (value: unknown): value is ExactTimestampFilter => {
+  if (!isRecord(value) || Object.keys(value).length !== 1) return false;
+  const timestamp = value.exactTimestamp;
+  if (typeof timestamp !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(timestamp))
+    return false;
+  const milliseconds = `${timestamp.slice(0, -4)}Z`;
+  const date = new Date(milliseconds);
+  return (
+    !timestamp.startsWith('0000-') &&
+    Number.isFinite(date.getTime()) &&
+    date.toISOString() === milliseconds
+  );
+};
 const isOrderedValue = (value: unknown): boolean =>
   typeof value === 'bigint' ||
   (typeof value === 'number' && Number.isFinite(value)) ||
-  (value instanceof Date && Number.isFinite(value.getTime()));
+  (value instanceof Date && Number.isFinite(value.getTime())) ||
+  isExactTimestampFilter(value);
 const isScalar = (value: unknown): boolean =>
   value === null ||
   typeof value === 'string' ||
@@ -103,7 +127,7 @@ export const validateListWhere = (policy: ListFilterPolicy, where: unknown): voi
 export const serializeListWhere = (where: unknown): string => {
   const encode = (value: unknown): unknown => {
     if (typeof value === 'bigint') return { bigint: value.toString() };
-    if (value instanceof Date) return { date: value.toISOString() };
+    if (value instanceof Date) return { millisecondTimestamp: value.toISOString() };
     if (Array.isArray(value)) return value.map(encode);
     if (isRecord(value))
       return Object.fromEntries(

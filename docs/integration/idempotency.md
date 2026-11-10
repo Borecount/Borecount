@@ -9,6 +9,7 @@ ambiguous timeout without first reconciling state through a read API.
 | Command | Idempotency key | Identical replay | Conflict or retry rule |
 | --- | --- | --- | --- |
 | `POST /v1/auth/token` | None | Issues a new short-lived token | Safe to request again, but this is not persistence idempotency and the token value may differ. |
+| `POST /v1/assets` | None | Returns `409 ASSET_CODE_CONFLICT` for the same normalized code within a tenant | After an ambiguous timeout, find the code with `GET /v1/assets` and verify its scale before retrying. |
 | `POST /v1/ledgers` | None | Creates another ledger | Non-idempotent; list ledgers and reconcile by ID/name before retrying an ambiguous result. |
 | `POST /v1/accounts` | None | May create another account; a repeated non-null code instead meets the ledger/code unique constraint | Non-idempotent; reconcile with the account list before retrying. |
 | `POST /v1/transactions` | `(tenant_id, reference)` | `200`, original `transaction_id`, `created: false` | Any payload difference is a conflict. Identity includes ledger, currency, normalized description, metadata, effective time, relation fields, and the complete entry multiset. |
@@ -32,11 +33,10 @@ ambiguous timeout without first reconciling state through a read API.
 
 ## Core-only commands
 
-`AssetService.create`, tenant/bootstrap creation, and other host composition
-commands are not exposed by the reusable HTTP adapters. Asset code uniqueness
-and bootstrap database constraints prevent duplicates, but they do not provide
-a replay response contract. Hosts must supply their own durable request key when
-automatic retry is required.
+Tenant/bootstrap creation and other host composition commands are outside the
+reusable HTTP adapters. Bootstrap database constraints prevent duplicates.
+Hosts must supply their own durable request key when automatic retry requires
+a replay response.
 
 ## Payload comparison details
 

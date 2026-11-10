@@ -1,6 +1,7 @@
 export * from './accounts';
 export * from './adjustments';
 export * from './api-keys';
+export * from './assets';
 export * from './credit-grants';
 export * from './entries';
 export * from './holds';

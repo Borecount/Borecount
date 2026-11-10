@@ -42,7 +42,13 @@ The adapter registers these route families:
 
 The complete and versioned route surface, including bulk posting, reversal/correction, historical balances, holds, and reconciliation, is defined by [`@borecount/http` OpenAPI](../http/openapi/openapi.yaml). Hosts must register authentication before these routes and keep business logic in application services.
 
-Ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
+Asset, ledger, API key, and reconciliation matching-rule list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Reconciliation run results are available through `GET /v1/reconciliation/runs/{id}/results`.
+
+Tenant clients can discover asset scales with `GET /v1/assets` and `GET /v1/assets/{id}`.
+`POST /v1/assets` requires an authenticated `ADMIN` context supplied by the host.
+The create body takes `code` and `scale`. Codes are trimmed and uppercased, scales are integers
+from 0 through 18, and duplicate codes within a tenant return `409 ASSET_CODE_CONFLICT`.
+Clients can reuse the same SERVICE credentials they use for other tenant reads.
 
 Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
 

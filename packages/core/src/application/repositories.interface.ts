@@ -100,6 +100,7 @@ export interface CreditGrantRepository {
 }
 
 export interface AssetRepository {
+  /** Reject a duplicate tenant/code pair with AssetCodeConflictError. */
   create(input: CreateAssetInput): Promise<Asset>;
   findById(tenantId: string, assetId: string): Promise<Asset | null>;
   list(query: PaginationQuery<typeof assetListFilter>): Promise<PaginatedResult<Asset>>;

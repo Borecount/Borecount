@@ -6,6 +6,7 @@ import type {
   PaginationQuery,
 } from '@borecount/core/application';
 import { assetListFilter } from '@borecount/core/application';
+import { AssetCodeConflictError } from '@borecount/core/errors';
 import { and, eq, getTableColumns } from 'drizzle-orm';
 import type { DbClient } from '../client';
 import { listWhereScope, listWhereSql } from '../list-where';
@@ -17,7 +18,12 @@ export class DrizzleAssetRepository implements AssetRepository {
 
   public async create(input: CreateAssetInput): Promise<Asset> {
     return this.client.runTenantTx(input.tenantId, 'create asset', async (tx) => {
-      const [asset] = await tx.insert(schema.assets).values(input).returning();
+      const [asset] = await tx
+        .insert(schema.assets)
+        .values(input)
+        .onConflictDoNothing({ target: [schema.assets.tenantId, schema.assets.code] })
+        .returning();
+      if (!asset) throw new AssetCodeConflictError(input.code);
       return asset;
     });
   }

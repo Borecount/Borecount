@@ -81,6 +81,15 @@ export class InvariantViolationError extends DomainError {
   }
 }
 
+export class AssetCodeConflictError extends InvariantViolationError {
+  public override readonly code = 'ASSET_CODE_CONFLICT';
+  public override readonly httpStatus = 409;
+
+  public constructor(code: string) {
+    super(`Asset code already exists: ${code}`);
+  }
+}
+
 export type BulkTransactionErrorCategory = 'VALIDATION' | 'CONFLICT' | 'PERSISTENCE';
 
 export class HoldLifecycleMismatchError extends InvariantViolationError {

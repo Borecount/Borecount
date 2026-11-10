@@ -12,9 +12,13 @@ notes and implement the new methods before upgrading.
 
 ### Added
 
+- Tenant asset provisioning and discovery in both HTTP adapters. Tenant ADMINs can create assets, and authenticated tenant clients can read asset codes and scales. List reads support typed filters and scoped cursors.
+
 - shared `429` response schema and type, shared `RateLimitExceededError` and safe status/body/header mapping in both adapters, plus generic `413` error documentation, with canonical OpenAPI responses and matching `Retry-After` semantics. Enforcement remains host-owned; no database migrations or commercial checks are introduced.
 
 ### Changed
+
+- Typed timestamp filters compare at millisecond precision for inputs with up to three fractional digits and at exact PostgreSQL precision for finer inputs. Response timestamps retain millisecond precision. Restart pagination for timestamp-filtered lists after upgrading.
 
 - **Breaking database change:** consolidated the pre-production migration history into a single clean-install baseline. Recreate existing dev/test databases before applying it.
 

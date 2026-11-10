@@ -6,6 +6,13 @@ const nullableText = { kind: 'string', nullable: true } as const;
 const time = { kind: 'date-time', ordered: true } as const;
 const minor = { kind: 'integer-string', ordered: true } as const;
 
+export const assetFilterFields = {
+  id,
+  code: { ...text, pattern: '^[^\\u0000]*$' },
+  scale: { kind: 'integer', ordered: true, minimum: 0, maximum: 18 },
+  created_at: { ...time, target: 'createdAt' },
+} satisfies FilterFields;
+
 export const accountFilterFields = {
   id,
   ledger_id: { ...id, target: 'ledgerId' },
