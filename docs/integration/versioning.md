@@ -5,8 +5,8 @@ coordinated semantic version. The complete version, breaking-change,
 deprecation, npm tag, provenance, and release checklist policy lives in the
 [release policy](../governance/release-policy.md).
 
-The current coordinated release is `0.7.0`; see its
-[release notes](../releases/0.7.0.md) and the repository [changelog](../../CHANGELOG.md).
+The current coordinated release is `0.8.0`; see its
+[release notes](../releases/0.8.0.md) and the repository [changelog](../../CHANGELOG.md).
 
 ## Migration policy
 

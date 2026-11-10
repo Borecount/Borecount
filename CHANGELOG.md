@@ -6,40 +6,26 @@ are linked from each entry.
 
 ## [Unreleased]
 
-Upgrade notice: the required `HoldApplicationRepository` read methods introduced in
-`0.7.0` are a breaking extension for custom persistence adapters; see the release
-notes and implement the new methods before upgrading.
+## [0.8.0] - 2026-11-10
 
 ### Added
 
-- Tenant asset provisioning and discovery in both HTTP adapters. Tenant ADMINs can create assets, and authenticated tenant clients can read asset codes and scales. List reads support typed filters and scoped cursors.
-
-- shared `429` response schema and type, shared `RateLimitExceededError` and safe status/body/header mapping in both adapters, plus generic `413` error documentation, with canonical OpenAPI responses and matching `Retry-After` semantics. Enforcement remains host-owned; no database migrations or commercial checks are introduced.
+- Host-composable tenant provisioning with atomic tenant and initial admin-key creation.
+- Tenant asset creation, lookup and filtered listing in Fastify and Express.
+- Paginated reconciliation uploads, normalized upload records and run history with persisted rule snapshots.
+- A self-hosted least-privilege PostgreSQL overlay with tenant isolation and a separate credential lookup role.
+- Portable PostgreSQL backup bundles and verified restore into an isolated recovery cluster.
+- Shared HTTP 429 responses with optional `Retry-After` and generic 413 contract documentation.
 
 ### Changed
 
-- Typed timestamp filters compare at millisecond precision for inputs with up to three fractional digits and at exact PostgreSQL precision for finer inputs. Response timestamps retain millisecond precision. Restart pagination for timestamp-filtered lists after upgrading.
+- **Breaking:** both adapters require an explicit `authorizeAdjustment` callback or `false`.
+- **Breaking:** domain errors move to `@borecount/core/errors`. Replace removed HTTP error helpers and adapter registration aliases. Posting against a missing account now returns 404.
+- **Breaking:** tenant provisioning requires UUIDv7 tenant IDs. Custom reconciliation repositories must implement the new history read methods.
+- **Breaking:** restart paginated reads with fresh cursors. Timestamp filters use millisecond precision for inputs with up to three fractional digits and exact PostgreSQL precision for finer inputs.
+- **Breaking database change:** replaced the 0.7.0 migration history with a clean-install baseline and two reconciliation history migrations. Recreate disposable databases and follow the upgrade guidance for existing data.
 
-- **Breaking database change:** consolidated the pre-production migration history into a single clean-install baseline. Recreate existing dev/test databases before applying it.
-
-- share constructor/brand validation predicates, type domain error details and omit malformed detail values, consolidate Fastify invalid-input responses, and document explicit parser-size handling and retry-delay policy.
-
-- (breaking): require UUIDv7 tenant IDs for provisioning and generate UUIDv7 during bootstrap with an injected clock. Share the cryptographically random core UUIDv7 generator with PostgreSQL workflows; existing-resource UUID validation stays version-neutral.
-
-- replace core error self-imports with relative imports and share ESM modules across entry points to preserve constructor identity in published packages.
-
-- classify errors across package copies using validated global symbol brands. Share canonical PostgreSQL UUID validation without version/variant restrictions; remove the unused UUIDv7-only helper.
-
-- (breaking): error mapping returns `{ statusCode, headers, body }`; status 429 requires the canonical rate-limit error. Domain error statuses must be integers from 400 through 599. Invalid identifier messages omit input values. Express hosts can supply a JSON parser or disable the adapter parser explicitly.
-
-- Removed adapter registration aliases, Fastify pagination renaming wrappers and unused HTTP route base classes. Hold reads use `holdSummaryFilterFields` and `holdIdParamsSchema`; string validation uses core `isNonEmptyString`.
-- Error classification requires the canonical `DomainError` instance; the constructor accepts an explicit status and options without the old argument overload.
-- All lists now use the current scoped cursor codec with six-digit timestamps; balance history no longer has a separate codec. Previous cursor encodings are not supported.
-- **Breaking:** removed legacy `mapDomainErrorToHttp` and `HttpErrorDto`; use `toHttpErrorPayload` with declared error statuses, JSON field `error`, and separate status/header metadata.
-- Shared UUID validation now accepts UUIDv7 consistently in Express credit-grant filters, paths and typed filters. Core owns the shared pagination and `in`-filter maximum constants; configured values remain unchanged.
-- Statement pagination reuses the shared exact-timestamp SQL helper; Express query validation reuses the shared non-empty-string predicate.
-- **Breaking:** all custom error classes and guards now live in `@borecount/core/errors`, including `DomainError` and `RateLimitExceededError`. Replace imports from core root/module entry points and HTTP with this subpath. No compatibility re-exports remain. Both `AccountNotFoundError` definitions are consolidated into one class with status `404`; missing accounts during posting change from `400` to `404`.
-- **Breaking:** removed `invalidInputPayload` from `@borecount/http/errors`. Hosts using it should construct `{ error: 'INVALID_INPUT', message }` directly; HTTP response bodies and statuses are unchanged.
+See [the 0.8.0 release notes](docs/releases/0.8.0.md).
 
 ## [0.7.0] - 2026-11-02
 

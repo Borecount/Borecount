@@ -1,6 +1,6 @@
 {
   "name": "@borecount/core",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Double-entry ledger domain primitives and application contracts for Borecount.",
   "type": "module",
   "license": "Apache-2.0",
