@@ -65,14 +65,34 @@ describe('tenant assets', () => {
 
     const { createdAt } = await services.assets.getById(tenantId, euro.id);
     expect(createdAt.toISOString()).toBe('2026-01-01T00:00:00.123Z');
-    for (const operator of ['eq', 'in', 'lte', 'gt'] as const) {
+    for (const [code, timestamp] of [
+      ['AAA', '2026-01-01T00:00:00.122999Z'],
+      ['BBB', '2026-01-01T00:00:00.123000Z'],
+      ['CCC', '2026-01-01T00:00:00.123999Z'],
+      ['DDD', '2026-01-01T00:00:00.124000Z'],
+    ] as const) {
+      const asset = await services.assets.create({ tenantId, code, scale: 2 });
+      await db
+        .update(assets)
+        .set({ createdAt: sql`${timestamp}::timestamptz` })
+        .where(eq(assets.id, asset.id));
+    }
+    for (const [operator, expected] of [
+      ['eq', ['BBB', 'CCC', 'EUR']],
+      ['ne', ['AAA', 'DDD']],
+      ['gt', ['DDD']],
+      ['gte', ['BBB', 'CCC', 'DDD', 'EUR']],
+      ['lt', ['AAA']],
+      ['lte', ['AAA', 'BBB', 'CCC', 'EUR']],
+      ['in', ['BBB', 'CCC', 'EUR']],
+    ] as const) {
       const value = operator === 'in' ? [createdAt] : createdAt;
       const page = await services.assets.list({
         tenantId,
         limit: 50,
-        where: { code: { eq: 'EUR' }, createdAt: { [operator]: value } },
+        where: { code: { ne: 'USD' }, createdAt: { [operator]: value } },
       });
-      expect(page.data.map((asset) => asset.id)).toEqual(operator === 'gt' ? [] : [euro.id]);
+      expect(page.data.map((asset) => asset.code)).toEqual([...expected]);
     }
     const exactMatch = { exactTimestamp: '2026-01-01T00:00:00.123456Z' };
     const exactMiss = { exactTimestamp: '2026-01-01T00:00:00.123000Z' };

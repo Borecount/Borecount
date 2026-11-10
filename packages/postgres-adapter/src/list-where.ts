@@ -23,15 +23,29 @@ import {
   sql,
 } from 'drizzle-orm';
 
-const comparisonOperands = (column: SQL, value: unknown): [SQL, unknown] => {
-  if (value instanceof Date) {
-    return [sql`date_trunc('milliseconds', ${column})`, sql`${value.toISOString()}::timestamptz`];
+const millisecondPredicate = (column: SQL, operator: string, value: Date): SQL | undefined => {
+  const iso = value.toISOString();
+  const lower = sql`${iso}::timestamptz`;
+  const upper = sql`${`${iso.slice(0, -1)}999Z`}::timestamptz`;
+  // Bound the comparison rather than applying a function to the indexed column.
+  switch (operator) {
+    case 'eq':
+      return and(gte(column, lower), lte(column, upper));
+    case 'ne':
+      return or(lt(column, lower), gt(column, upper));
+    case 'gt':
+      return gt(column, upper);
+    case 'gte':
+      return gte(column, lower);
+    case 'lt':
+      return lt(column, lower);
+    case 'lte':
+      return lte(column, upper);
   }
-  if (isExactTimestampFilter(value)) {
-    return [column, sql`${value.exactTimestamp}::timestamptz`];
-  }
-  return [column, value];
 };
+
+const exactOperand = (value: unknown): unknown =>
+  isExactTimestampFilter(value) ? sql`${value.exactTimestamp}::timestamptz` : value;
 
 /** Column maps come from the existing schema; operation policy supplies exclusions. */
 export const listWhereSql = <Policy extends ListFilterPolicy>(
@@ -50,18 +64,29 @@ export const listWhereSql = <Policy extends ListFilterPolicy>(
     // Keep the runtime column encoder; Drizzle overloads cannot accept the union type.
     const column = (columns as Record<string, AnyColumn | SQL>)[field] as SQL;
     for (const [operator, value] of Object.entries(filter)) {
-      const operands = comparisonOperands(column, value);
+      if (value instanceof Date) {
+        const predicate = millisecondPredicate(column, operator, value);
+        if (predicate) clauses.push(predicate);
+        continue;
+      }
+      const operand = exactOperand(value);
       switch (operator) {
         case 'eq':
-          clauses.push(value === null ? isNull(column) : eq(...operands));
+          clauses.push(value === null ? isNull(column) : eq(column, operand));
           break;
         case 'ne':
-          clauses.push(value === null ? isNotNull(column) : ne(...operands));
+          clauses.push(value === null ? isNotNull(column) : ne(column, operand));
           break;
         case 'in': {
           const values = value as unknown[];
           if (values.some((item) => item instanceof Date || isExactTimestampFilter(item))) {
-            const matches = or(...values.map((item) => eq(...comparisonOperands(column, item))));
+            const matches = or(
+              ...values.map((item) =>
+                item instanceof Date
+                  ? millisecondPredicate(column, 'eq', item)
+                  : eq(column, exactOperand(item)),
+              ),
+            );
             if (matches) clauses.push(matches);
           } else {
             clauses.push(inArray(column, values));
@@ -69,16 +94,16 @@ export const listWhereSql = <Policy extends ListFilterPolicy>(
           break;
         }
         case 'gt':
-          clauses.push(gt(...operands));
+          clauses.push(gt(column, operand));
           break;
         case 'gte':
-          clauses.push(gte(...operands));
+          clauses.push(gte(column, operand));
           break;
         case 'lt':
-          clauses.push(lt(...operands));
+          clauses.push(lt(column, operand));
           break;
         case 'lte':
-          clauses.push(lte(...operands));
+          clauses.push(lte(column, operand));
           break;
       }
     }
