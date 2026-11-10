@@ -10,7 +10,7 @@ import {
   createDbClient,
   tenants,
 } from '@borecount/postgres-adapter';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import express from 'express';
 import Fastify from 'fastify';
 
@@ -22,13 +22,28 @@ if (!new URL(databaseUrl).pathname.toLowerCase().includes('test')) {
 
 const client = createDbClient({ databaseUrl, max: 1 });
 const services = createApplicationServices(client);
-afterAll(() => client.sql.end({ timeout: 5 }));
+const fixtureTenantIds: string[] = [];
+afterAll(async () => {
+  try {
+    for (const tenantId of fixtureTenantIds) {
+      await client.runTenantTx(tenantId, 'remove asset HTTP test fixtures', async (tx) => {
+        await tx.delete(assets).where(eq(assets.tenantId, tenantId));
+        await tx.delete(tenants).where(eq(tenants.id, tenantId));
+      });
+    }
+  } finally {
+    await client.sql.end({ timeout: 5 });
+  }
+});
 
-const createTenant = (name: string) =>
-  client.runTx('create asset HTTP test tenant', async (tx) => {
+const createTenant = async (name: string) => {
+  const tenantId = await client.runTx('create asset HTTP test tenant', async (tx) => {
     const [tenant] = await tx.insert(tenants).values({ name }).returning({ id: tenants.id });
     return tenant.id;
   });
+  fixtureTenantIds.push(tenantId);
+  return tenantId;
+};
 
 const createAssetAt = (tenantId: string, code: string, timestamp: string) =>
   client.runTenantTx(tenantId, 'seed asset timestamp', async (tx) => {
