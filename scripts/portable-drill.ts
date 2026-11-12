@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import {
   chmodSync,
@@ -109,10 +110,11 @@ async function drill(scratch: string, source: Env, target: Env) {
   const backupEnv = { ...source, PGSERVICEFILE: service };
   const bundle = join(scratch, 'bundle');
   const migrations = join(scratch, 'host-migrations');
-  cpSync(join(root, 'drizzle'), migrations, { recursive: true });
+  mkdirSync(join(migrations, 'meta'), { recursive: true });
   const journalPath = join(migrations, 'meta/_journal.json');
-  const journal = JSON.parse(readFileSync(journalPath, 'utf8'));
-  const hostTag = `${String(journal.entries.length).padStart(4, '0')}_drill_host_data`;
+  const packageJournal = JSON.parse(readFileSync(join(root, 'drizzle/meta/_journal.json'), 'utf8'));
+  const journal = { ...packageJournal, entries: [] as typeof packageJournal.entries };
+  const hostTag = '0000_drill_host_data';
   const hostSql = join(migrations, `${hostTag}.sql`);
   writeFileSync(
     hostSql,
@@ -121,13 +123,13 @@ async function drill(scratch: string, source: Env, target: Env) {
   journal.entries.push({
     idx: journal.entries.length,
     version: '7',
-    when: journal.entries.at(-1).when + 1,
+    when: packageJournal.entries.at(-1).when + 1000,
     tag: hostTag,
     breakpoints: true,
   });
   const saveJournal = () => writeFileSync(journalPath, JSON.stringify(journal));
   saveJournal();
-  const migrationArgs = ['--migrations', migrations];
+  const migrationArgs = ['--host-migrations', migrations];
   const targetArgs = [
     '--socket',
     target.PGHOST as string,
@@ -150,7 +152,7 @@ async function drill(scratch: string, source: Env, target: Env) {
   const config = join(scratch, 'drizzle.config.ts');
   writeFileSync(
     config,
-    `export default { dialect: 'postgresql', out: ${JSON.stringify(migrations)}, dbCredentials: { url: process.env.DATABASE_URL } };`,
+    `export default { dialect: 'postgresql', out: ${JSON.stringify(migrations)}, migrations: { schema: 'host_migrations', table: '__drizzle_migrations' }, dbCredentials: { url: process.env.DATABASE_URL } };`,
   );
   sql(
     target,
@@ -162,12 +164,81 @@ CREATE ROLE borecount_credential_owner;
 `,
   );
   const baselineBundle = join(scratch, 'baseline-bundle');
+  run(
+    portable('backup', '--source', 'drill', ...migrationArgs, join(scratch, 'absent-host-journal')),
+    backupEnv,
+    'host migration history requires both',
+  );
+  writeFileSync(journalPath, JSON.stringify({ ...journal, entries: [] }));
+  run(['bunx', 'drizzle-kit', 'migrate', '--config', config], source);
+  run(
+    portable('backup', '--source', 'drill', join(scratch, 'empty-host-journal')),
+    backupEnv,
+    'host migration history requires both',
+  );
+  sql(source, 'DROP SCHEMA host_migrations CASCADE');
+  saveJournal();
   run(portable('backup', '--source', 'drill', baselineBundle), backupEnv);
   run(portable('restore', ...targetArgs, baselineBundle), target);
   run(['dropdb', targetDb], target);
   run(['createdb', targetDb], target);
   console.log('Default package-only backup and restore passed.');
+  // Recreate only this drill's database to model an older installed package release.
+  run(['dropdb', sourceDb], source);
+  run(['createdb', sourceDb], source);
+  const baselineMigrations = join(scratch, 'package-baseline');
+  cpSync(join(root, 'drizzle'), baselineMigrations, { recursive: true });
+  writeFileSync(
+    join(baselineMigrations, 'meta/_journal.json'),
+    JSON.stringify({ ...packageJournal, entries: packageJournal.entries.slice(0, 1) }),
+  );
+  const baselineConfig = join(scratch, 'baseline.config.ts');
+  writeFileSync(
+    baselineConfig,
+    `export default { dialect: 'postgresql', out: ${JSON.stringify(baselineMigrations)}, dbCredentials: { url: process.env.DATABASE_URL } };`,
+  );
+  run(['bunx', 'drizzle-kit', 'migrate', '--config', baselineConfig], source);
   run(['bunx', 'drizzle-kit', 'migrate', '--config', config], source);
+  sql(source, "INSERT INTO public.drill_host_data VALUES (0, 'before package upgrade')");
+  const hostHistorySql =
+    'SELECT json_agg(row(hash, created_at) ORDER BY id)::text FROM host_migrations.__drizzle_migrations';
+  const hostHistory = sql(source, hostHistorySql);
+  run(['bun', 'run', 'db:migrate'], source);
+  if (
+    sql(source, 'SELECT count(*) FROM drizzle.__drizzle_migrations') !==
+      String(packageJournal.entries.length) ||
+    sql(
+      source,
+      "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'recon_runs' AND column_name = 'matching_rule_ids'",
+    ) !== '1' ||
+    sql(source, "SELECT to_regclass('public.recon_runs_ledger_history_idx') IS NOT NULL") !== 't' ||
+    sql(source, 'SELECT payload FROM public.drill_host_data WHERE id = 0') !==
+      'before package upgrade' ||
+    sql(source, hostHistorySql) !== hostHistory
+  )
+    throw new Error('independent package upgrade did not preserve host history');
+  const packageHistory = sql(
+    source,
+    'SELECT json_agg(row(hash, created_at) ORDER BY id)::text FROM drizzle.__drizzle_migrations',
+  );
+  run(['bun', 'run', 'db:migrate'], source);
+  run(['bunx', 'drizzle-kit', 'migrate', '--config', config], source);
+  if (
+    sql(source, hostHistorySql) !== hostHistory ||
+    sql(
+      source,
+      'SELECT json_agg(row(hash, created_at) ORDER BY id)::text FROM drizzle.__drizzle_migrations',
+    ) !== packageHistory
+  )
+    throw new Error('migration rerun changed one of the independent journals');
+  console.log(
+    'Package upgrade after a later-dated host migration passed; both reruns were no-ops.',
+  );
+  run(
+    ['psql', '-Xqw', '-v', 'ON_ERROR_STOP=1', '-1', '-f', 'examples/security/least-privilege.sql'],
+    source,
+  );
+  run(['bun', 'run', 'scripts/portable-drill-fixture.ts', 'seed'], source);
   // Unlogged synthetic host rows give the interruption test time to observe COPY.
   sql(
     source,
@@ -179,8 +250,17 @@ SELECT i, repeat(md5(i::text), 256) FROM generate_series(1, 12000) AS i;
   run(
     portable('backup', '--source', 'drill', join(scratch, 'missing-host-history')),
     backupEnv,
-    'database Drizzle history differs',
+    'host migration history requires both',
   );
+  const hostEntry = journal.entries[0];
+  sql(source, "UPDATE host_migrations.__drizzle_migrations SET hash = 'changed-host-history'");
+  run(
+    portable('backup', '--source', 'drill', ...migrationArgs, join(scratch, 'wrong-host-history')),
+    backupEnv,
+    'database host migration history differs',
+  );
+  const originalHostHash = createHash('sha256').update(readFileSync(hostSql)).digest('hex');
+  sql(source, `UPDATE host_migrations.__drizzle_migrations SET hash = '${originalHostHash}'`);
   console.log(run(portable('backup', '--source', 'drill', ...migrationArgs, bundle), backupEnv));
   run(
     portable('preflight', ...targetArgs, bundle),
@@ -191,15 +271,8 @@ SELECT i, repeat(md5(i::text), 256) FROM generate_series(1, 12000) AS i;
   writeFileSync(hostSql, `${originalHostSql}\n-- changed host migration`);
   recovery('preflight', bundle, 'incompatible package versions or Drizzle history');
   writeFileSync(hostSql, originalHostSql);
-  const packageTag = journal.entries[0].tag;
-  const packageSql = join(migrations, `${packageTag}.sql`);
-  const originalPackageSql = readFileSync(packageSql, 'utf8');
-  writeFileSync(packageSql, `${originalPackageSql}\n-- changed package migration`);
-  recovery('preflight', bundle, 'exact package migration history prefix');
-  writeFileSync(packageSql, originalPackageSql);
-  const hostEntry = journal.entries.at(-1);
   const hostWhen = hostEntry.when;
-  hostEntry.when = journal.entries.at(-2).when;
+  hostEntry.when = 0;
   saveJournal();
   recovery('preflight', bundle, 'ordered timestamps');
   hostEntry.when = hostWhen;
@@ -207,8 +280,6 @@ SELECT i, repeat(md5(i::text), 256) FROM generate_series(1, 12000) AS i;
   saveJournal();
   recovery('preflight', bundle, 'unique safe migration tags');
   hostEntry.tag = hostTag;
-  writeFileSync(journalPath, JSON.stringify({ ...journal, entries: journal.entries.slice(0, -2) }));
-  recovery('preflight', bundle, 'exact package migration history prefix');
   saveJournal();
 
   run(

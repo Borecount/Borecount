@@ -84,6 +84,7 @@ type Versions = Record<(typeof toolNames)[number], string>;
 type Identity = { system: string; server: number; locale: string[]; database: string };
 type Compatibility = {
   history: [number, string][];
+  host_history?: [number, string][];
   packages: Record<string, string>;
   lock_sha256: string;
 };
@@ -139,7 +140,10 @@ async function fileHash(path: string) {
   return hash.digest('hex');
 }
 
-async function migrationHistory(migrations: string): Promise<Compatibility['history']> {
+async function migrationHistory(
+  migrations: string,
+  packageJournal = false,
+): Promise<Compatibility['history']> {
   const {
     dialect,
     entries,
@@ -148,7 +152,8 @@ async function migrationHistory(migrations: string): Promise<Compatibility['hist
     entries: { idx: number; when: number; tag: string }[];
   } = JSON.parse(await readFile(join(migrations, 'meta/_journal.json'), 'utf8'));
   requireCheck(dialect === 'postgresql' && Array.isArray(entries), 'invalid Drizzle journal');
-  requireCheck(entries[0]?.tag === baseline, 'current squashed Drizzle baseline required');
+  if (packageJournal)
+    requireCheck(entries[0]?.tag === baseline, 'current squashed Drizzle baseline required');
   const tags = new Set<string>();
   for (const [index, entry] of entries.entries()) {
     requireCheck(
@@ -174,14 +179,10 @@ async function migrationHistory(migrations: string): Promise<Compatibility['hist
   );
 }
 
-async function compatibility(migrations?: string): Promise<Compatibility> {
-  const packageHistory = await migrationHistory(join(root, 'drizzle'));
-  const history =
-    migrations === undefined ? packageHistory : await migrationHistory(resolve(migrations));
-  requireCheck(
-    isDeepStrictEqual(history.slice(0, packageHistory.length), packageHistory),
-    'host migrations must preserve the exact package migration history prefix',
-  );
+async function compatibility(hostMigrations?: string): Promise<Compatibility> {
+  const history = await migrationHistory(join(root, 'drizzle'), true);
+  const hostHistory =
+    hostMigrations === undefined ? undefined : await migrationHistory(resolve(hostMigrations));
   const packages = await Promise.all(
     (await readdir(join(root, 'packages'), { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
@@ -196,6 +197,7 @@ async function compatibility(migrations?: string): Promise<Compatibility> {
   );
   return {
     history,
+    ...(hostHistory === undefined ? {} : { host_history: hostHistory }),
     packages: Object.fromEntries(packages),
     lock_sha256: await fileHash(join(root, 'bun.lock')),
   };
@@ -282,17 +284,29 @@ async function schemaFingerprint(env: Env, token: string) {
   return hash.digest('hex');
 }
 
-async function evidence(
-  env: Env,
-  token: string,
-  expected: Compatibility['history'],
-): Promise<Checks> {
+async function evidence(env: Env, token: string, expected: Compatibility): Promise<Checks> {
   const query = (sql: string, failure?: string) => run(psql, env, snapshotSql(token, sql), failure);
   const history = await query(HISTORY, 'Drizzle migration history is missing or unreadable');
   requireCheck(
-    JSON.stringify(JSON.parse(history)) === JSON.stringify(expected),
+    JSON.stringify(JSON.parse(history)) === JSON.stringify(expected.history),
     'database Drizzle history differs from the squashed checkout',
   );
+  const hostHistoryExists =
+    (await query("SELECT to_regclass('host_migrations.__drizzle_migrations') IS NOT NULL")) === 't';
+  requireCheck(
+    hostHistoryExists === (expected.host_history !== undefined),
+    'host migration history requires both --host-migrations and host_migrations.__drizzle_migrations',
+  );
+  if (expected.host_history !== undefined) {
+    const hostHistory = await query(
+      HISTORY.replace('drizzle.__drizzle_migrations', 'host_migrations.__drizzle_migrations'),
+      'host migration history is missing or unreadable',
+    );
+    requireCheck(
+      JSON.stringify(JSON.parse(hostHistory)) === JSON.stringify(expected.host_history),
+      'database host migration history differs from the selected host directory',
+    );
+  }
   requireCheck((await query(BALANCED)) === 't', 'unbalanced or incomplete ledger transaction');
   const totals = await query(TOTALS);
   const tables: string[] = JSON.parse(await query(TABLES));
@@ -371,7 +385,7 @@ async function backup(
     await mkdir(staging, { mode: 0o700 });
     const archive = join(staging, 'database.dump');
     const { checks, boundary } = await withSnapshot(env, async (token, boundary) => {
-      const checks = await evidence(env, token, local.history);
+      const checks = await evidence(env, token, local);
       await run(
         [
           'pg_dump',
@@ -531,7 +545,7 @@ SELECT inet_server_addr() IS NULL AND current_setting('listen_addresses') = ''
 }
 
 async function verify(env: Env, manifest: Manifest, local: Compatibility) {
-  const actual = await withSnapshot(env, (token) => evidence(env, token, local.history));
+  const actual = await withSnapshot(env, (token) => evidence(env, token, local));
   requireCheck(
     isDeepStrictEqual(actual, manifest.checks),
     'restored schema, contents or ledger totals differ from the backup snapshot',
@@ -556,15 +570,19 @@ async function main() {
       port: { type: 'string' },
       database: { type: 'string' },
       user: { type: 'string' },
-      migrations: { type: 'string' },
+      'host-migrations': { type: 'string' },
     },
   });
   requireCheck(positionals.length === 1, 'supply a single bundle directory');
   const [bundle] = positionals;
-  const [local, tools] = await Promise.all([compatibility(values.migrations), toolVersions()]);
+  const [local, tools] = await Promise.all([
+    compatibility(values['host-migrations']),
+    toolVersions(),
+  ]);
   if (command === 'backup') {
     requireCheck(
-      values.source && Object.keys(values).every((key) => key === 'source' || key === 'migrations'),
+      values.source &&
+        Object.keys(values).every((key) => key === 'source' || key === 'host-migrations'),
       'backup requires --source SERVICE',
     );
     await backup(values.source, bundle, local, tools);

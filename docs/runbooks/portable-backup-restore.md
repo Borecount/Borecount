@@ -35,25 +35,60 @@ libpq service profile and a separate passfile or other secure authentication. Ke
 credentials out of the repository. Avoid concurrent DDL and keep the service bound to one primary
 for the operation.
 
-By default, the tool uses this checkout's `drizzle/` directory. If the host appends its own
-migrations to the same Drizzle journal, pass `--migrations /srv/host-release/drizzle` to **every**
-command (`backup`, `preflight`, `restore`, and `verify`). Supply the complete migration directory,
-including `meta/_journal.json` and all referenced SQL files. Its history must start with the exact
-Borecount migration history from this checkout, followed only by host migrations with later,
-strictly increasing timestamps. Replaced, missing, reordered, or modified package migrations are
-rejected. The bundle records the full selected history and recovery requires the same SQL hashes
-and timestamps; retain this directory with the matching host release. This option does not apply
-migrations or bypass compatibility checks. Independently managed host migration histories remain
-the operator's responsibility.
+The tool always checks this checkout's `drizzle/` history against
+`drizzle.__drizzle_migrations`. Keep library SQL, timestamps and journal unchanged. Host tables
+use a separate migration directory and `host_migrations.__drizzle_migrations`. When that host
+journal exists, pass `--host-migrations /srv/host-release/drizzle` to **every** command
+(`backup`, `preflight`, `restore`, and `verify`). Supply only the host's journal
+(`meta/_journal.json`) and its referenced SQL files; do not copy library migrations into it.
+The bundle records both independent histories and recovery requires their exact SQL hashes and
+timestamps. Retain both migration directories with their matching releases. The backup tool does
+not apply migrations. Other host migration systems require their own compatibility checks.
+
+### Separate migration ownership and upgrades
+
+Generate host migrations from host-owned tables only. The host must not change Borecount tables
+or use a combined schema snapshot that generates library DDL. Keep library and host migration
+generation configurations and snapshots separate. Host foreign keys referencing library tables
+require release compatibility checks; independent journals do not resolve schema conflicts.
+Use separate migration logins and table ownership to enforce this boundary: the host migrator must
+not own Borecount tables or inherit the library owner's role. Grant only the library access needed
+by host dependencies, such as REFERENCES for an approved foreign key.
+
+Run one controlled release process before application traffic, first migrating Borecount and then
+the host. For example, with PostgreSQL Drizzle instances using the respective migration logins:
+
+```ts
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+
+await migrate(borecountMigrationDb, {
+  migrationsFolder: './migrations/borecount',
+  migrationsSchema: 'drizzle',
+  migrationsTable: '__drizzle_migrations',
+});
+await migrate(hostMigrationDb, {
+  migrationsFolder: './migrations/host',
+  migrationsSchema: 'host_migrations',
+  migrationsTable: '__drizzle_migrations',
+});
+```
+
+Each chain advances independently: a host timestamp newer than an upcoming library migration
+cannot cause that library migration to be skipped. Copy the released library chain unchanged when
+upgrading; never renumber or retimestamp applied migrations. Each migrator call has its own
+transaction. If the host step fails after the library step commits, keep traffic stopped, resolve
+the failure and retry the release. Rehearse both steps against a restored copy before deployment.
+The example supports clean installations with separate journals; it does not convert a previously
+combined journal. Recreate disposable demo databases rather than rewriting applied history.
 
 ```sh
 umask 077
 mkdir -p /srv/private-bundles
 bundle=/srv/private-bundles/"$(date -u +%Y%m%dT%H%M%SZ)"
 bun run scripts/portable-backup.ts backup --source ledger_backup "$bundle"
-# Host-owned migrations appended to the Borecount journal:
+# Independent host migration journal:
 # bun run scripts/portable-backup.ts backup --source ledger_backup \
-#   --migrations /srv/host-release/drizzle "$bundle"
+#   --host-migrations /srv/host-release/drizzle "$bundle"
 ```
 
 The dump and SQL checks import the same exported repeatable-read snapshot. The bundle is published
@@ -122,6 +157,22 @@ trusted privileged input. [restic repository checks and retention](https://resti
    done
    ```
 
+   For a database with the independent host journal, use this variant instead, retaining the
+   target variables above and the host migration directory from the backed-up release:
+
+   ```sh
+   host_migrations=/srv/host-release/drizzle
+   for step in preflight restore; do
+     bun run scripts/portable-backup.ts "$step" "$bundle" \
+       --host-migrations "$host_migrations" --socket "$target_socket" \
+       --port "$target_port" --database "$target_database" --user "$target_user" || break
+   done
+   # After isolated host/API checks and retries:
+   bun run scripts/portable-backup.ts verify "$bundle" \
+     --host-migrations "$host_migrations" --socket "$target_socket" \
+     --port "$target_port" --database "$target_database" --user "$target_user"
+   ```
+
 3. Restore checks the private archive copy and uses one PostgreSQL transaction. On corruption,
    missing files, compatibility errors, or a nonempty target, resolve the cause before retrying.
    A Drizzle history mismatch requires the matching historical release and its recovery process.
@@ -149,8 +200,9 @@ bun run scripts/portable-drill.ts
 ```
 
 The drill starts and stops two new socket-only clusters and seeds two synthetic tenants, balanced
-postings, grants, and a host table created by an appended host migration. It rejects missing or
-changed migration inputs before accepting a backup or recovery. It uses the public application services to replay restored
+postings, grants, and a host table managed by an independent host journal. It verifies a library
+upgrade after a newer-timestamped host migration, plus a no-op rerun of both migrators. It rejects
+missing or changed migration inputs before accepting a backup or recovery. It uses the public application services to replay restored
 postings under the runtime role. An exact retry must return the original transaction ID without
 another posting, and a changed payload must fail. The second SQL verification checks that neither
 retry changed the restored snapshot. Record sanitized results, elapsed restore and verification
