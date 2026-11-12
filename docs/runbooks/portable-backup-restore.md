@@ -35,11 +35,25 @@ libpq service profile and a separate passfile or other secure authentication. Ke
 credentials out of the repository. Avoid concurrent DDL and keep the service bound to one primary
 for the operation.
 
+By default, the tool uses this checkout's `drizzle/` directory. If the host appends its own
+migrations to the same Drizzle journal, pass `--migrations /srv/host-release/drizzle` to **every**
+command (`backup`, `preflight`, `restore`, and `verify`). Supply the complete migration directory,
+including `meta/_journal.json` and all referenced SQL files. Its history must start with the exact
+Borecount migration history from this checkout, followed only by host migrations with later,
+strictly increasing timestamps. Replaced, missing, reordered, or modified package migrations are
+rejected. The bundle records the full selected history and recovery requires the same SQL hashes
+and timestamps; retain this directory with the matching host release. This option does not apply
+migrations or bypass compatibility checks. Independently managed host migration histories remain
+the operator's responsibility.
+
 ```sh
 umask 077
 mkdir -p /srv/private-bundles
 bundle=/srv/private-bundles/"$(date -u +%Y%m%dT%H%M%SZ)"
 bun run scripts/portable-backup.ts backup --source ledger_backup "$bundle"
+# Host-owned migrations appended to the Borecount journal:
+# bun run scripts/portable-backup.ts backup --source ledger_backup \
+#   --migrations /srv/host-release/drizzle "$bundle"
 ```
 
 The dump and SQL checks import the same exported repeatable-read snapshot. The bundle is published
@@ -135,7 +149,8 @@ bun run scripts/portable-drill.ts
 ```
 
 The drill starts and stops two new socket-only clusters and seeds two synthetic tenants, balanced
-postings, grants, and a host table. It uses the public application services to replay restored
+postings, grants, and a host table created by an appended host migration. It rejects missing or
+changed migration inputs before accepting a backup or recovery. It uses the public application services to replay restored
 postings under the runtime role. An exact retry must return the original transaction ID without
 another posting, and a changed payload must fail. The second SQL verification checks that neither
 retry changed the restored snapshot. Record sanitized results, elapsed restore and verification

@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import {
   chmodSync,
   copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -107,6 +108,26 @@ async function drill(scratch: string, source: Env, target: Env) {
   );
   const backupEnv = { ...source, PGSERVICEFILE: service };
   const bundle = join(scratch, 'bundle');
+  const migrations = join(scratch, 'host-migrations');
+  cpSync(join(root, 'drizzle'), migrations, { recursive: true });
+  const journalPath = join(migrations, 'meta/_journal.json');
+  const journal = JSON.parse(readFileSync(journalPath, 'utf8'));
+  const hostTag = `${String(journal.entries.length).padStart(4, '0')}_drill_host_data`;
+  const hostSql = join(migrations, `${hostTag}.sql`);
+  writeFileSync(
+    hostSql,
+    'CREATE UNLOGGED TABLE public.drill_host_data (id int PRIMARY KEY, payload text);',
+  );
+  journal.entries.push({
+    idx: journal.entries.length,
+    version: '7',
+    when: journal.entries.at(-1).when + 1,
+    tag: hostTag,
+    breakpoints: true,
+  });
+  const saveJournal = () => writeFileSync(journalPath, JSON.stringify(journal));
+  saveJournal();
+  const migrationArgs = ['--migrations', migrations];
   const targetArgs = [
     '--socket',
     target.PGHOST as string,
@@ -118,7 +139,7 @@ async function drill(scratch: string, source: Env, target: Env) {
     admin,
   ];
   const recovery = (command: string, path = bundle, expected?: string) =>
-    run(portable(command, ...targetArgs, path), target, expected);
+    run(portable(command, ...migrationArgs, ...targetArgs, path), target, expected);
 
   run(['bun', 'run', 'db:migrate'], source);
   run(
@@ -126,6 +147,11 @@ async function drill(scratch: string, source: Env, target: Env) {
     source,
   );
   run(['bun', 'run', 'scripts/portable-drill-fixture.ts', 'seed'], source);
+  const config = join(scratch, 'drizzle.config.ts');
+  writeFileSync(
+    config,
+    `export default { dialect: 'postgresql', out: ${JSON.stringify(migrations)}, dbCredentials: { url: process.env.DATABASE_URL } };`,
+  );
   sql(
     target,
     `
@@ -135,20 +161,60 @@ CREATE ROLE borecount_authenticator;
 CREATE ROLE borecount_credential_owner;
 `,
   );
+  const baselineBundle = join(scratch, 'baseline-bundle');
+  run(portable('backup', '--source', 'drill', baselineBundle), backupEnv);
+  run(portable('restore', ...targetArgs, baselineBundle), target);
+  run(['dropdb', targetDb], target);
+  run(['createdb', targetDb], target);
+  console.log('Default package-only backup and restore passed.');
+  run(['bunx', 'drizzle-kit', 'migrate', '--config', config], source);
   // Unlogged synthetic host rows give the interruption test time to observe COPY.
   sql(
     source,
     `
-CREATE UNLOGGED TABLE public.drill_host_data (id int PRIMARY KEY, payload text);
 INSERT INTO public.drill_host_data
 SELECT i, repeat(md5(i::text), 256) FROM generate_series(1, 12000) AS i;
 `,
   );
-  console.log(run(portable('backup', '--source', 'drill', bundle), backupEnv));
+  run(
+    portable('backup', '--source', 'drill', join(scratch, 'missing-host-history')),
+    backupEnv,
+    'database Drizzle history differs',
+  );
+  console.log(run(portable('backup', '--source', 'drill', ...migrationArgs, bundle), backupEnv));
+  run(
+    portable('preflight', ...targetArgs, bundle),
+    target,
+    'incompatible package versions or Drizzle history',
+  );
+  const originalHostSql = readFileSync(hostSql, 'utf8');
+  writeFileSync(hostSql, `${originalHostSql}\n-- changed host migration`);
+  recovery('preflight', bundle, 'incompatible package versions or Drizzle history');
+  writeFileSync(hostSql, originalHostSql);
+  const packageTag = journal.entries[0].tag;
+  const packageSql = join(migrations, `${packageTag}.sql`);
+  const originalPackageSql = readFileSync(packageSql, 'utf8');
+  writeFileSync(packageSql, `${originalPackageSql}\n-- changed package migration`);
+  recovery('preflight', bundle, 'exact package migration history prefix');
+  writeFileSync(packageSql, originalPackageSql);
+  const hostEntry = journal.entries.at(-1);
+  const hostWhen = hostEntry.when;
+  hostEntry.when = journal.entries.at(-2).when;
+  saveJournal();
+  recovery('preflight', bundle, 'ordered timestamps');
+  hostEntry.when = hostWhen;
+  hostEntry.tag = '../outside';
+  saveJournal();
+  recovery('preflight', bundle, 'unique safe migration tags');
+  hostEntry.tag = hostTag;
+  writeFileSync(journalPath, JSON.stringify({ ...journal, entries: journal.entries.slice(0, -2) }));
+  recovery('preflight', bundle, 'exact package migration history prefix');
+  saveJournal();
 
   run(
     portable(
       'preflight',
+      ...migrationArgs,
       '--socket',
       source.PGHOST as string,
       '--port',
@@ -200,7 +266,7 @@ SELECT i, repeat(md5(i::text), 256) FROM generate_series(1, 12000) AS i;
   sql(source, "UPDATE drizzle.__drizzle_migrations SET created_at = 1, hash = 'retired-chain'");
   const rejected = join(scratch, 'rejected');
   run(
-    portable('backup', '--source', 'drill', rejected),
+    portable('backup', '--source', 'drill', ...migrationArgs, rejected),
     backupEnv,
     'database Drizzle history differs',
   );
@@ -213,7 +279,7 @@ SELECT i, repeat(md5(i::text), 256) FROM generate_series(1, 12000) AS i;
   rmSync(staleLock, { recursive: true });
   console.log(recovery('preflight'));
   const started = performance.now();
-  await interruptRestore(portable('restore', ...targetArgs, bundle), target);
+  await interruptRestore(portable('restore', ...migrationArgs, ...targetArgs, bundle), target);
   console.log(recovery('preflight'));
   console.log('Interrupted COPY rolled back; target passed empty preflight.');
   console.log(recovery('restore'));

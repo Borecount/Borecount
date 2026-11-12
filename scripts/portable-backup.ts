@@ -16,7 +16,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { Readable } from 'node:stream';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
@@ -139,13 +139,32 @@ async function fileHash(path: string) {
   return hash.digest('hex');
 }
 
-async function compatibility(): Promise<Compatibility> {
-  const migrations = join(root, 'drizzle');
-  const { entries }: { entries: { when: number; tag: string }[] } = JSON.parse(
-    await readFile(join(migrations, 'meta/_journal.json'), 'utf8'),
-  );
+async function migrationHistory(migrations: string): Promise<Compatibility['history']> {
+  const {
+    dialect,
+    entries,
+  }: {
+    dialect: string;
+    entries: { idx: number; when: number; tag: string }[];
+  } = JSON.parse(await readFile(join(migrations, 'meta/_journal.json'), 'utf8'));
+  requireCheck(dialect === 'postgresql' && Array.isArray(entries), 'invalid Drizzle journal');
   requireCheck(entries[0]?.tag === baseline, 'current squashed Drizzle baseline required');
-  const history = await Promise.all(
+  const tags = new Set<string>();
+  for (const [index, entry] of entries.entries()) {
+    requireCheck(
+      entry &&
+        entry.idx === index &&
+        Number.isSafeInteger(entry.when) &&
+        entry.when > 0 &&
+        (index === 0 || entry.when > entries[index - 1].when) &&
+        typeof entry.tag === 'string' &&
+        /^[A-Za-z0-9_-]+$/.test(entry.tag) &&
+        !tags.has(entry.tag),
+      'Drizzle journal requires ordered timestamps and unique safe migration tags',
+    );
+    tags.add(entry.tag);
+  }
+  return Promise.all(
     entries.map(
       async ({ when, tag }): Promise<[number, string]> => [
         when,
@@ -153,11 +172,27 @@ async function compatibility(): Promise<Compatibility> {
       ],
     ),
   );
+}
+
+async function compatibility(migrations?: string): Promise<Compatibility> {
+  const packageHistory = await migrationHistory(join(root, 'drizzle'));
+  const history =
+    migrations === undefined ? packageHistory : await migrationHistory(resolve(migrations));
+  requireCheck(
+    isDeepStrictEqual(history.slice(0, packageHistory.length), packageHistory),
+    'host migrations must preserve the exact package migration history prefix',
+  );
   const packages = await Promise.all(
-    (await readdir(join(root, 'packages'))).sort().map(async (name) => {
-      const data = JSON.parse(await readFile(join(root, 'packages', name, 'package.json'), 'utf8'));
-      return [data.name, data.version];
-    }),
+    (await readdir(join(root, 'packages'), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+      .map(async (name) => {
+        const data = JSON.parse(
+          await readFile(join(root, 'packages', name, 'package.json'), 'utf8'),
+        );
+        return [data.name, data.version];
+      }),
   );
   return {
     history,
@@ -521,14 +556,15 @@ async function main() {
       port: { type: 'string' },
       database: { type: 'string' },
       user: { type: 'string' },
+      migrations: { type: 'string' },
     },
   });
   requireCheck(positionals.length === 1, 'supply a single bundle directory');
   const [bundle] = positionals;
-  const [local, tools] = await Promise.all([compatibility(), toolVersions()]);
+  const [local, tools] = await Promise.all([compatibility(values.migrations), toolVersions()]);
   if (command === 'backup') {
     requireCheck(
-      values.source && Object.keys(values).length === 1,
+      values.source && Object.keys(values).every((key) => key === 'source' || key === 'migrations'),
       'backup requires --source SERVICE',
     );
     await backup(values.source, bundle, local, tools);
