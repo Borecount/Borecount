@@ -148,21 +148,67 @@ The client reads these package-owned variables when equivalent constructor optio
 
 JWT, rate-limit, bootstrap, port, and shutdown configuration belongs to the host application, not this package. Environment files must be loaded by the host/runtime before `createDbClient` is called; Node.js does not load `.env` automatically.
 
-## Drizzle config
+## Independent Drizzle migrations
+
+Borecount and the host own separate tables, migration directories, snapshots and database journals.
+Keep the released Borecount SQL and journal from the matching checkout unchanged in
+`./migrations/borecount`, using `drizzle.__drizzle_migrations`. Generate host migrations only from
+host-owned tables, using `host_migrations.__drizzle_migrations`; do not include
+`borecountDrizzleSchemaPath` or re-export library tables in the host generation schema.
+The exported schema path remains available for schema inspection, not combined migration generation.
+
+For example, create `src/db/host-schema.ts`:
 
 ```ts
-import { borecountDrizzleSchemaPath } from '@borecount/postgres-adapter/drizzle-config';
+import { pgTable, text, uuid } from 'drizzle-orm/pg-core';
+
+export const hostEvents = pgTable('host_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  kind: text('kind').notNull(),
+});
+```
+
+This example declares only a host table. Its tenant authorization and RLS are host-owned;
+it does not change Borecount tables or add a cross-package foreign key. Define the host's
+`drizzle.host.config.ts`:
+
+```ts
 import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
-  schema: ['./src/db/schema.ts', borecountDrizzleSchemaPath],
-  out: './drizzle',
+  schema: './src/db/host-schema.ts',
+  out: './migrations/host',
   dialect: 'postgresql',
+  migrations: {
+    schema: 'host_migrations',
+    table: '__drizzle_migrations',
+  },
   dbCredentials: {
     url: process.env.DATABASE_URL!,
   },
 });
 ```
+
+From the host repository root, generate and inspect the host SQL:
+
+```sh
+bunx drizzle-kit generate --config drizzle.host.config.ts --name add-host-events
+```
+
+The generated SQL should create only `host_events`; subsequent generations use only the host
+snapshots. During a controlled release, apply the unchanged Borecount chain first, then run:
+
+```sh
+bunx drizzle-kit migrate --config drizzle.host.config.ts
+```
+
+Use the host migration login for this command and the library migration login for the Borecount
+step. The host login must not own or have DDL authority over library tables. The
+[backup/restore runbook](https://github.com/Borecount/Borecount/blob/main/docs/runbooks/portable-backup-restore.md#separate-migration-ownership-and-upgrades)
+shows both migrator calls and recovery with `--host-migrations`. The calls commit separately;
+keep application traffic stopped if either step fails. This setup starts with independent journals;
+it does not convert an existing combined history.
 
 Apply migrations before starting application code that depends on a newer adapter schema. Numbered migrations upgrade the consolidated `0000` baseline in place; reset databases created by the retired history that predates that baseline. Package downgrade does not roll back a database; follow the repository [upgrade procedure](https://github.com/Borecount/Borecount/blob/main/docs/integration/versioning.md).
 

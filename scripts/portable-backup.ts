@@ -140,18 +140,46 @@ async function fileHash(path: string) {
   return hash.digest('hex');
 }
 
+async function migrationInput<T>(path: string, read: () => Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    const reasons: Record<string, string> = {
+      ENOENT: 'file not found',
+      EACCES: 'permission denied',
+      EPERM: 'permission denied',
+      ENOTDIR: 'parent is not a directory',
+      EISDIR: 'expected a file, found a directory',
+    };
+    const code = (error as NodeJS.ErrnoException)?.code ?? '';
+    throw new Rejected(
+      `cannot read migration file ${JSON.stringify(path)}: ${reasons[code] ?? 'filesystem error'}`,
+    );
+  }
+}
+
 async function migrationHistory(
   migrations: string,
   packageJournal = false,
 ): Promise<Compatibility['history']> {
-  const {
-    dialect,
-    entries,
-  }: {
-    dialect: string;
-    entries: { idx: number; when: number; tag: string }[];
-  } = JSON.parse(await readFile(join(migrations, 'meta/_journal.json'), 'utf8'));
-  requireCheck(dialect === 'postgresql' && Array.isArray(entries), 'invalid Drizzle journal');
+  const journalPath = join(migrations, 'meta/_journal.json');
+  const contents = await migrationInput(journalPath, () => readFile(journalPath, 'utf8'));
+  let journal: unknown;
+  try {
+    journal = JSON.parse(contents);
+  } catch {
+    throw new Rejected(`invalid JSON in migration journal ${JSON.stringify(journalPath)}`);
+  }
+  requireCheck(
+    typeof journal === 'object' &&
+      journal !== null &&
+      'dialect' in journal &&
+      journal.dialect === 'postgresql' &&
+      'entries' in journal &&
+      Array.isArray(journal.entries),
+    `invalid Drizzle journal structure in ${JSON.stringify(journalPath)}`,
+  );
+  const entries = journal.entries as { idx: number; when: number; tag: string }[];
   if (packageJournal)
     requireCheck(entries[0]?.tag === baseline, 'current squashed Drizzle baseline required');
   const tags = new Set<string>();
@@ -165,17 +193,15 @@ async function migrationHistory(
         typeof entry.tag === 'string' &&
         /^[A-Za-z0-9_-]+$/.test(entry.tag) &&
         !tags.has(entry.tag),
-      'Drizzle journal requires ordered timestamps and unique safe migration tags',
+      `Drizzle journal requires ordered timestamps and unique safe migration tags: ${JSON.stringify(journalPath)}`,
     );
     tags.add(entry.tag);
   }
   return Promise.all(
-    entries.map(
-      async ({ when, tag }): Promise<[number, string]> => [
-        when,
-        await fileHash(join(migrations, `${tag}.sql`)),
-      ],
-    ),
+    entries.map(async ({ when, tag }): Promise<[number, string]> => {
+      const sqlPath = join(migrations, `${tag}.sql`);
+      return [when, await migrationInput(sqlPath, () => fileHash(sqlPath))];
+    }),
   );
 }
 
@@ -575,10 +601,8 @@ async function main() {
   });
   requireCheck(positionals.length === 1, 'supply a single bundle directory');
   const [bundle] = positionals;
-  const [local, tools] = await Promise.all([
-    compatibility(values['host-migrations']),
-    toolVersions(),
-  ]);
+  const local = await compatibility(values['host-migrations']);
+  const tools = await toolVersions();
   if (command === 'backup') {
     requireCheck(
       values.source &&
