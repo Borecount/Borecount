@@ -16,7 +16,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { Readable } from 'node:stream';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
@@ -84,6 +84,7 @@ type Versions = Record<(typeof toolNames)[number], string>;
 type Identity = { system: string; server: number; locale: string[]; database: string };
 type Compatibility = {
   history: [number, string][];
+  host_history?: [number, string][];
   packages: Record<string, string>;
   lock_sha256: string;
 };
@@ -139,28 +140,90 @@ async function fileHash(path: string) {
   return hash.digest('hex');
 }
 
-async function compatibility(): Promise<Compatibility> {
-  const migrations = join(root, 'drizzle');
-  const { entries }: { entries: { when: number; tag: string }[] } = JSON.parse(
-    await readFile(join(migrations, 'meta/_journal.json'), 'utf8'),
+async function migrationInput<T>(path: string, read: () => Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    const reasons: Record<string, string> = {
+      ENOENT: 'file not found',
+      EACCES: 'permission denied',
+      EPERM: 'permission denied',
+      ENOTDIR: 'parent is not a directory',
+      EISDIR: 'expected a file, found a directory',
+    };
+    const code = (error as NodeJS.ErrnoException)?.code ?? '';
+    throw new Rejected(
+      `cannot read migration file ${JSON.stringify(path)}: ${reasons[code] ?? 'filesystem error'}`,
+    );
+  }
+}
+
+async function migrationHistory(
+  migrations: string,
+  packageJournal = false,
+): Promise<Compatibility['history']> {
+  const journalPath = join(migrations, 'meta/_journal.json');
+  const contents = await migrationInput(journalPath, () => readFile(journalPath, 'utf8'));
+  let journal: unknown;
+  try {
+    journal = JSON.parse(contents);
+  } catch {
+    throw new Rejected(`invalid JSON in migration journal ${JSON.stringify(journalPath)}`);
+  }
+  requireCheck(
+    typeof journal === 'object' &&
+      journal !== null &&
+      'dialect' in journal &&
+      journal.dialect === 'postgresql' &&
+      'entries' in journal &&
+      Array.isArray(journal.entries),
+    `invalid Drizzle journal structure in ${JSON.stringify(journalPath)}`,
   );
-  requireCheck(entries[0]?.tag === baseline, 'current squashed Drizzle baseline required');
-  const history = await Promise.all(
-    entries.map(
-      async ({ when, tag }): Promise<[number, string]> => [
-        when,
-        await fileHash(join(migrations, `${tag}.sql`)),
-      ],
-    ),
-  );
-  const packages = await Promise.all(
-    (await readdir(join(root, 'packages'))).sort().map(async (name) => {
-      const data = JSON.parse(await readFile(join(root, 'packages', name, 'package.json'), 'utf8'));
-      return [data.name, data.version];
+  const entries = journal.entries as { idx: number; when: number; tag: string }[];
+  if (packageJournal)
+    requireCheck(entries[0]?.tag === baseline, 'current squashed Drizzle baseline required');
+  const tags = new Set<string>();
+  for (const [index, entry] of entries.entries()) {
+    requireCheck(
+      entry &&
+        entry.idx === index &&
+        Number.isSafeInteger(entry.when) &&
+        entry.when > 0 &&
+        (index === 0 || entry.when > entries[index - 1].when) &&
+        typeof entry.tag === 'string' &&
+        /^[A-Za-z0-9_-]+$/.test(entry.tag) &&
+        !tags.has(entry.tag),
+      `Drizzle journal requires ordered timestamps and unique safe migration tags: ${JSON.stringify(journalPath)}`,
+    );
+    tags.add(entry.tag);
+  }
+  return Promise.all(
+    entries.map(async ({ when, tag }): Promise<[number, string]> => {
+      const sqlPath = join(migrations, `${tag}.sql`);
+      return [when, await migrationInput(sqlPath, () => fileHash(sqlPath))];
     }),
+  );
+}
+
+async function compatibility(hostMigrations?: string): Promise<Compatibility> {
+  const history = await migrationHistory(join(root, 'drizzle'), true);
+  const hostHistory =
+    hostMigrations === undefined ? undefined : await migrationHistory(resolve(hostMigrations));
+  const packages = await Promise.all(
+    (await readdir(join(root, 'packages'), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+      .map(async (name) => {
+        const data = JSON.parse(
+          await readFile(join(root, 'packages', name, 'package.json'), 'utf8'),
+        );
+        return [data.name, data.version];
+      }),
   );
   return {
     history,
+    ...(hostHistory === undefined ? {} : { host_history: hostHistory }),
     packages: Object.fromEntries(packages),
     lock_sha256: await fileHash(join(root, 'bun.lock')),
   };
@@ -247,17 +310,29 @@ async function schemaFingerprint(env: Env, token: string) {
   return hash.digest('hex');
 }
 
-async function evidence(
-  env: Env,
-  token: string,
-  expected: Compatibility['history'],
-): Promise<Checks> {
+async function evidence(env: Env, token: string, expected: Compatibility): Promise<Checks> {
   const query = (sql: string, failure?: string) => run(psql, env, snapshotSql(token, sql), failure);
   const history = await query(HISTORY, 'Drizzle migration history is missing or unreadable');
   requireCheck(
-    JSON.stringify(JSON.parse(history)) === JSON.stringify(expected),
+    JSON.stringify(JSON.parse(history)) === JSON.stringify(expected.history),
     'database Drizzle history differs from the squashed checkout',
   );
+  const hostHistoryExists =
+    (await query("SELECT to_regclass('host_migrations.__drizzle_migrations') IS NOT NULL")) === 't';
+  requireCheck(
+    hostHistoryExists === (expected.host_history !== undefined),
+    'host migration history requires both --host-migrations and host_migrations.__drizzle_migrations',
+  );
+  if (expected.host_history !== undefined) {
+    const hostHistory = await query(
+      HISTORY.replace('drizzle.__drizzle_migrations', 'host_migrations.__drizzle_migrations'),
+      'host migration history is missing or unreadable',
+    );
+    requireCheck(
+      JSON.stringify(JSON.parse(hostHistory)) === JSON.stringify(expected.host_history),
+      'database host migration history differs from the selected host directory',
+    );
+  }
   requireCheck((await query(BALANCED)) === 't', 'unbalanced or incomplete ledger transaction');
   const totals = await query(TOTALS);
   const tables: string[] = JSON.parse(await query(TABLES));
@@ -336,7 +411,7 @@ async function backup(
     await mkdir(staging, { mode: 0o700 });
     const archive = join(staging, 'database.dump');
     const { checks, boundary } = await withSnapshot(env, async (token, boundary) => {
-      const checks = await evidence(env, token, local.history);
+      const checks = await evidence(env, token, local);
       await run(
         [
           'pg_dump',
@@ -496,7 +571,7 @@ SELECT inet_server_addr() IS NULL AND current_setting('listen_addresses') = ''
 }
 
 async function verify(env: Env, manifest: Manifest, local: Compatibility) {
-  const actual = await withSnapshot(env, (token) => evidence(env, token, local.history));
+  const actual = await withSnapshot(env, (token) => evidence(env, token, local));
   requireCheck(
     isDeepStrictEqual(actual, manifest.checks),
     'restored schema, contents or ledger totals differ from the backup snapshot',
@@ -521,14 +596,17 @@ async function main() {
       port: { type: 'string' },
       database: { type: 'string' },
       user: { type: 'string' },
+      'host-migrations': { type: 'string' },
     },
   });
   requireCheck(positionals.length === 1, 'supply a single bundle directory');
   const [bundle] = positionals;
-  const [local, tools] = await Promise.all([compatibility(), toolVersions()]);
+  const local = await compatibility(values['host-migrations']);
+  const tools = await toolVersions();
   if (command === 'backup') {
     requireCheck(
-      values.source && Object.keys(values).length === 1,
+      values.source &&
+        Object.keys(values).every((key) => key === 'source' || key === 'host-migrations'),
       'backup requires --source SERVICE',
     );
     await backup(values.source, bundle, local, tools);
