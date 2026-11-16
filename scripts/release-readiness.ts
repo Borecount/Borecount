@@ -105,7 +105,18 @@ export async function verifyReleaseReadiness(root: string): Promise<ReleaseManif
       const targetVersion = version(target.version);
       // Caret ranges stay inside one minor only for 0.<nonzero> releases.
       const bounded = range[0] === '~' || (minimum.major === 0 && minimum.minor > 0);
-      if (!bounded || line(minimum) !== compatibilityLine || compare(minimum, targetVersion) > 0) {
+      const admitsPrerelease =
+        !targetVersion.prerelease.length ||
+        (minimum.prerelease.length > 0 &&
+          minimum.major === targetVersion.major &&
+          minimum.minor === targetVersion.minor &&
+          minimum.patch === targetVersion.patch);
+      if (
+        !bounded ||
+        !admitsPrerelease ||
+        line(minimum) !== compatibilityLine ||
+        compare(minimum, targetVersion) > 0
+      ) {
         throw new Error(
           `${manifest.name} has an incompatible minimum patch range for ${dependency}: ${range}`,
         );

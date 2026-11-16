@@ -100,6 +100,16 @@ describe('release readiness', () => {
       verifyReleaseReadiness(await fixture({ version: '1.2.3', range: '^1.2.0' })),
     ).rejects.toThrow('incompatible minimum');
   });
+  it('rejects prereleases excluded by a stable dependency range', async () => {
+    await expect(
+      verifyReleaseReadiness(await fixture({ version: '0.8.1-rc.1', range: '^0.8.0' })),
+    ).rejects.toThrow('incompatible minimum');
+  });
+  it('accepts an explicitly supported prerelease patch', async () => {
+    expect(
+      await verifyReleaseReadiness(await fixture({ version: '0.8.1-rc.2', range: '~0.8.1-rc.1' })),
+    ).toHaveProperty('compatibilityLine', '0.8');
+  });
   it('rejects OpenAPI drift from HTTP', async () => {
     await expect(verifyReleaseReadiness(await fixture({ httpVersion: '0.8.1' }))).rejects.toThrow(
       'must match HTTP package version',

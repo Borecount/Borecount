@@ -57,6 +57,7 @@ jobs:
         run: |
           bun run test:unit
           bun run typecheck
+          bun run typecheck:test
           bun run lint
           bun run contract:verify
 

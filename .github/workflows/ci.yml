@@ -46,7 +46,9 @@ jobs:
         run: bun run lint
 
       - name: Run typecheck
-        run: bun run typecheck
+        run: |
+          bun run typecheck
+          bun run typecheck:test
 
       - name: Build public packages
         run: bun run build
