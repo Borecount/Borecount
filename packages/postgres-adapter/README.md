@@ -148,6 +148,37 @@ The client reads these package-owned variables when equivalent constructor optio
 
 JWT, rate-limit, bootstrap, port, and shutdown configuration belongs to the host application, not this package. Environment files must be loaded by the host/runtime before `createDbClient` is called; Node.js does not load `.env` automatically.
 
+## Packaged PostgreSQL migrations
+
+SQL migrations and their Drizzle journal ship with the adapter. Apply them directly from the
+installed package, without copying or regenerating the library schema in your host:
+
+```ts
+import { borecountMigrationsPath } from '@borecount/postgres-adapter/migrations';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import postgres from 'postgres';
+
+const connection = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
+try {
+  await migrate(drizzle(connection), {
+    migrationsFolder: borecountMigrationsPath,
+    migrationsSchema: 'drizzle',
+    migrationsTable: '__drizzle_migrations',
+  });
+} finally {
+  await connection.end({ timeout: 5 });
+}
+```
+
+Run this host-owned script once during a controlled release, before application traffic, through
+the separate library migration login. For example, a host using tsx can expose it as
+`"db:migrate": "tsx scripts/migrate.ts"` in its own package.json. Importing the path does not connect
+to PostgreSQL, apply migrations, install security roles or provision tenants. Keep backups and
+review schema compatibility before upgrades. Preserve applied SQL and journal entries unchanged;
+retain the matching package and host lockfile for recovery. The `borecountDrizzleSchemaPath` export
+continues to support schema tooling; it is not a substitute for the released migration chain.
+
 ## Independent Drizzle migrations
 
 Borecount and the host own separate tables, migration directories, snapshots and database journals.

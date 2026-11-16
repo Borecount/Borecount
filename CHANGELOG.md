@@ -6,6 +6,22 @@ are linked from each entry.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-16
+
+### Added
+
+- PostgreSQL adapter npm artifacts include the released SQL migration chain and Drizzle journal.
+- Public `@borecount/postgres-adapter/migrations` export provides `borecountMigrationsPath` for controlled host migration scripts.
+- Packed-artifact verification checks migration contents and the consumer-facing export.
+
+### Fixed
+
+- Integration fixtures respect UUID ordering for equal timestamps and preserve sub-millisecond rows in corruption checks.
+
+All five packages and the OpenAPI version advance together. No financial behavior, HTTP payload,
+database schema or migration SQL changes from 0.8.0.
+See [the 0.9.0 release notes](docs/releases/0.9.0.md).
+
 ## [0.8.0] - 2026-11-10
 
 ### Added

@@ -581,6 +581,9 @@ describe('service list where filters against PostgreSQL', () => {
         services.apiKeys.createApiKey(actor, { tenantId, name, role: 'SERVICE' }),
       ),
     );
+    // Equal timestamps sort by UUID, not creation order or display name.
+    const orderedRuleIds = rules.map((rule) => rule.id).sort();
+    const orderedKeyIds = keys.map(({ key }) => key.id).sort();
     const preciseTimestamp = sql`'2026-01-01T00:00:00.123456Z'::timestamptz`;
     await client.runTenantTx(tenantId, 'set exact pagination timestamps', async (tx) => {
       await tx.execute(
@@ -638,7 +641,7 @@ describe('service list where filters against PostgreSQL', () => {
 
     const ruleQuery = { tenantId, limit: 1, where: { name: { in: ['Rule A', 'Rule B'] } } };
     const ruleFirst = await services.reconciliation.listRules(ruleQuery);
-    expect(ruleFirst.data.map((rule) => rule.name)).toEqual(['Rule A']);
+    expect(ruleFirst.data.map((rule) => rule.id)).toEqual([orderedRuleIds[0]]);
     expect(ruleFirst.nextCursor).not.toBeNull();
     const ruleCursor = ruleFirst.nextCursor;
     if (ruleCursor === null) throw new Error('Expected a rule continuation cursor');
@@ -646,7 +649,7 @@ describe('service list where filters against PostgreSQL', () => {
       ...ruleQuery,
       cursor: ruleCursor,
     });
-    expect(ruleSecond.data.map((rule) => rule.name)).toEqual(['Rule B']);
+    expect(ruleSecond.data.map((rule) => rule.id)).toEqual([orderedRuleIds[1]]);
     await expect(
       services.reconciliation.listRules({
         ...ruleQuery,
@@ -657,7 +660,7 @@ describe('service list where filters against PostgreSQL', () => {
 
     const keyQuery = { limit: 1, where: { name: { in: ['Page A', 'Page B'] } } };
     const keyFirst = await services.apiKeys.listApiKeys(actor, keyQuery);
-    expect(keyFirst.data.map((key) => key.name)).toEqual(['Page A']);
+    expect(keyFirst.data.map((key) => key.id)).toEqual([orderedKeyIds[0]]);
     expect(keyFirst.nextCursor).not.toBeNull();
     const keyCursor = keyFirst.nextCursor;
     if (keyCursor === null) throw new Error('Expected an API key continuation cursor');
@@ -665,7 +668,7 @@ describe('service list where filters against PostgreSQL', () => {
       ...keyQuery,
       cursor: keyCursor,
     });
-    expect(keySecond.data.map((key) => key.name)).toEqual(['Page B']);
+    expect(keySecond.data.map((key) => key.id)).toEqual([orderedKeyIds[1]]);
     await expect(
       services.apiKeys.listApiKeys(actor, {
         ...keyQuery,

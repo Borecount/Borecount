@@ -5,8 +5,8 @@ coordinated semantic version. The complete version, breaking-change,
 deprecation, npm tag, provenance, and release checklist policy lives in the
 [release policy](../governance/release-policy.md).
 
-The current coordinated release is `0.8.0`; see its
-[release notes](../releases/0.8.0.md) and the repository [changelog](../../CHANGELOG.md).
+The current coordinated release is `0.9.0`; see its
+[release notes](../releases/0.9.0.md) and the repository [changelog](../../CHANGELOG.md).
 
 ## Migration policy
 
@@ -29,6 +29,11 @@ previous migrations. Recreate any development or test database initialized
 with a previous chain, then apply the current baseline to the empty database.
 Backups from a previous chain belong with the matching release and migration
 history. Historical release notes describe the migrations shipped at the time.
+
+The PostgreSQL adapter includes the released SQL files and journal. Hosts obtain their directory
+from `@borecount/postgres-adapter/migrations` (`borecountMigrationsPath`); see the
+[package migration example](https://github.com/Borecount/Borecount/blob/main/packages/postgres-adapter/README.md#packaged-postgresql-migrations).
+Apply this chain through the library journal, keeping host migrations in a separate journal.
 
 ## Upgrade verification
 
