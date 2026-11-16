@@ -6,15 +6,17 @@
  */
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import postgres from 'postgres';
+import { borecountMigrationsPath } from '@borecount/postgres-adapter/migrations';
+import { join } from 'node:path';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 
 export async function migrateSelfHosted(databaseUrl) {
   if (!databaseUrl) throw new Error('Migration connection required');
   const client = postgres(databaseUrl, { max: 1, onnotice: () => {} });
-  const folder = new URL('../deploy/upstream/drizzle/', import.meta.url);
+  const folder = borecountMigrationsPath;
   const connection = client;
   try {
     const [identity] = await connection`select current_user as role, rolsuper, rolbypassrls
@@ -23,9 +25,9 @@ export async function migrateSelfHosted(databaseUrl) {
       throw new Error('Use the separate ledger_migrator login');
     }
     await connection`select pg_advisory_lock(132080)`;
-    const journal = JSON.parse(await readFile(new URL('meta/_journal.json', folder), 'utf8'));
+    const journal = JSON.parse(await readFile(join(folder, 'meta/_journal.json'), 'utf8'));
     const expected = await Promise.all(journal.entries.map(async entry => ({
-      hash: createHash('sha256').update(await readFile(new URL(`${entry.tag}.sql`, folder))).digest('hex'),
+      hash: createHash('sha256').update(await readFile(join(folder, `${entry.tag}.sql`))).digest('hex'),
       created_at: String(entry.when),
     })));
     const [exists] = await connection`select to_regclass('drizzle.__drizzle_migrations') is not null as value`;
@@ -40,7 +42,7 @@ export async function migrateSelfHosted(databaseUrl) {
       const [tables] = await connection`select count(*)::int as count from pg_tables where schemaname = 'public'`;
       if (tables.count !== 0) throw new Error('Refusing to adopt a database without known migration history');
     }
-    await migrate(drizzle(connection), { migrationsFolder: fileURLToPath(folder) });
+    await migrate(drizzle(connection), { migrationsFolder: folder });
   } finally {
     await connection`select pg_advisory_unlock(132080)`.catch(() => {});
     await client.end({ timeout: 5 });

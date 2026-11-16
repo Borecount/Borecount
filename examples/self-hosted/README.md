@@ -1,6 +1,6 @@
-# Self-hosted library integration example 0.1.0
+# Self-hosted library integration example 0.9.0
 
-An optional, standalone HTTP example consuming published `@borecount/*` 0.8.0 packages. Borecount's
+An optional, standalone HTTP example consuming published `@borecount/*` 0.9.0 packages. Borecount's
 product remains the library; this directory supplies an integration recipe to copy and adapt.
 It requires neither the demo application nor a commercial account. It has no sandbox provisioning,
 seeded data or scheduled reset. Keep its database separate from disposable demo installations.
@@ -11,8 +11,8 @@ seeded data or scheduled reset. Keep its database separate from disposable demo 
 | --- | --- |
 | This example's installation, provisioning and release commands | This README |
 | Settings, authentication policy, limits and monitoring | [CONFIGURATION.md](CONFIGURATION.md) |
-| PostgreSQL role model, grants and RLS limitations | [Security baseline, v0.8.0](https://github.com/Borecount/Borecount/blob/v0.8.0/docs/integration/self-hosted-security.md) |
-| Backup custody, off-host storage, isolated restore and interruption recovery | [Recovery runbook, v0.8.0](https://github.com/Borecount/Borecount/blob/v0.8.0/docs/runbooks/portable-backup-restore.md) |
+| PostgreSQL role model, grants and RLS limitations | [Security baseline, v0.9.0](https://github.com/Borecount/Borecount/blob/v0.9.0/docs/integration/self-hosted-security.md) |
+| Backup custody, off-host storage, isolated restore and interruption recovery | [Recovery runbook, v0.9.0](https://github.com/Borecount/Borecount/blob/v0.9.0/docs/runbooks/portable-backup-restore.md) |
 | Observed results and their limits | [VERIFICATION.md](VERIFICATION.md) |
 
 The release links match the bundled operational assets; use them when running this pinned example.
@@ -23,12 +23,14 @@ The images pin Node.js 22.15.0 and PostgreSQL 16.16. Native operation requires N
 PostgreSQL 16. Recovery additionally requires Bun 1.3.9 and matching PostgreSQL 16 `psql`, `pg_dump`
 and `pg_restore` binaries at least as recent as the server.
 
-`deploy/upstream` contains unmodified Apache-2.0 migrations, the security overlay and recovery SQL
-from public tag v0.8.0, commit `3ec496370d9d55064a4ed3048bbd80608c232c3a`.
-Its [provenance manifest](deploy/upstream/provenance.json) records those checksums and the original
-source of the adapted [backup runner](scripts/backup.ts). The runner derives compatibility from this
-example's `package.json` and `package-lock.json`: exact Borecount versions must agree with the lock
-and bundled release, and each backup records the npm lockfile's hash. Retain the example commit,
+`@borecount/postgres-adapter/migrations` supplies `borecountMigrationsPath` for both migration and
+recovery commands. SQL and the journal come directly from the installed adapter; this example has
+no copied migration directory.
+
+`deploy/upstream` contains the unmodified Apache-2.0 security overlay and recovery SQL.
+Its [provenance manifest](deploy/upstream/provenance.json) records their source tag, immutable commit
+and checksums, plus the original source of the adapted [backup runner](scripts/backup.ts). The runner derives compatibility from this
+example's `package.json` and `package-lock.json`: exact, coordinated Borecount versions must agree with the lock, and each backup records the npm lockfile's hash. Retain the example commit,
 lockfile, image digest and private configuration with each release. The image installs only
 production dependencies, including pinned `tsx`.
 
@@ -126,6 +128,27 @@ Bundles made with another release layout or npm lockfile are rejected; retain th
 and release files for recovery. Separately
 retain this example's secret files, login/group definitions, database settings and image identity.
 Recovery covers the whole database; tenant-scoped export/import is outside this example.
+
+## Refresh operational source assets
+
+Dependency updates do not require editing `provenance.json`: npm supplies the migration files and
+its lockfile fixes the package versions. Refresh the remaining copied security/verification SQL only
+when you intentionally adopt a newer upstream implementation:
+
+```sh
+npm run update:upstream -- --ref v0.9.0
+git diff -- deploy/upstream
+npm test
+npm run test:lifecycle
+npm run test:compose
+```
+
+The command resolves the public Git tag to an immutable commit, downloads the three source assets,
+recalculates SHA-256 and replaces their snapshot together with `provenance.json`. It preserves the
+original ancestry of the adapted backup runner. Review the SQL changes before applying any to a
+live deployment; this command updates source files only and does not run migrations or alter roles.
+No GitHub login or AI tool is required. An unpublished/missing tag or failed download leaves the
+previous snapshot intact.
 
 ## Validation and operating scope
 

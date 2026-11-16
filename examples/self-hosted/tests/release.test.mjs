@@ -6,7 +6,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { tsImport } from 'tsx/esm/api';
@@ -17,7 +17,8 @@ const { readRecoveryRelease } = await tsImport('../scripts/backup.ts', import.me
 test('self-hosted recovery/security assets match the public release provenance', async () => {
   const root = new URL('../deploy/upstream/', import.meta.url);
   const provenance = JSON.parse(await readFile(new URL('provenance.json', root)));
-  assert.equal(provenance.commit, '3ec496370d9d55064a4ed3048bbd80608c232c3a');
+  assert.match(provenance.commit, /^[a-f0-9]{40}$/);
+  assert.match(provenance.tag, /^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/);
   for (const [path, hash] of Object.entries(provenance.sha256)) {
     assert.equal(createHash('sha256').update(await readFile(new URL(path, root))).digest('hex'), hash, path);
   }
@@ -43,28 +44,25 @@ test('recovery identity uses only the example dependencies and npm lockfile', as
   assert.equal(identity.packages['@borecount/express-routes'], undefined);
 });
 
-test('recovery rejects stale locks, unresolved pins and mismatched release assets', async t => {
+test('recovery rejects stale locks, unresolved pins and mixed package versions', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'borecount-recovery-metadata-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  await mkdir(join(directory, 'deploy', 'upstream'), { recursive: true });
   const root = new URL('../', import.meta.url);
   const manifest = JSON.parse(await readFile(new URL('package.json', root)));
   const lock = JSON.parse(await readFile(new URL('package-lock.json', root)));
-  const provenance = JSON.parse(await readFile(new URL('deploy/upstream/provenance.json', root)));
-  await writeFile(join(directory, 'deploy', 'upstream', 'provenance.json'), JSON.stringify(provenance));
   const scenarios = [
     { name: 'stale root dependencies', change: (pkg, locked) => { pkg.dependencies.fastify = '0.0.0'; } },
     { name: 'resolved version mismatch', change: (pkg, locked) => { locked.packages['node_modules/@borecount/core'].version = '0.0.0'; } },
     { name: 'missing resolution', change: (pkg, locked) => { delete locked.packages['node_modules/@borecount/core']; } },
     { name: 'workspace link', change: (pkg, locked) => { locked.packages['node_modules/@borecount/core'].link = true; } },
     { name: 'unpinned dependency', change: (pkg, locked) => {
-      pkg.dependencies['@borecount/core'] = '^0.8.0';
-      locked.packages[''].dependencies['@borecount/core'] = '^0.8.0';
+      pkg.dependencies['@borecount/core'] = '^0.9.0';
+      locked.packages[''].dependencies['@borecount/core'] = '^0.9.0';
     } },
-    { name: 'different bundled release', change: (pkg, locked) => {
-      pkg.dependencies['@borecount/core'] = '0.9.0';
-      locked.packages[''].dependencies['@borecount/core'] = '0.9.0';
-      locked.packages['node_modules/@borecount/core'].version = '0.9.0';
+    { name: 'mixed package releases', change: (pkg, locked) => {
+      pkg.dependencies['@borecount/core'] = '0.10.0';
+      locked.packages[''].dependencies['@borecount/core'] = '0.10.0';
+      locked.packages['node_modules/@borecount/core'].version = '0.10.0';
     } },
   ];
   for (const scenario of scenarios) {

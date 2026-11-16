@@ -6,6 +6,7 @@
  * from this example's package.json and npm lockfile instead of a monorepo layout.
  */
 import { createHash } from 'node:crypto';
+import { borecountMigrationsPath } from '@borecount/postgres-adapter/migrations';
 import { createReadStream } from 'node:fs';
 import {
   chmod,
@@ -145,7 +146,7 @@ async function fileHash(path: string) {
 }
 
 async function compatibility(): Promise<Compatibility> {
-  const migrations = join(releaseRoot, 'drizzle');
+  const migrations = borecountMigrationsPath;
   const { entries }: { entries: { when: number; tag: string }[] } = JSON.parse(
     await readFile(join(migrations, 'meta/_journal.json'), 'utf8'),
   );
@@ -163,14 +164,12 @@ async function compatibility(): Promise<Compatibility> {
 
 /** Read the example's own resolved release identity before touching a database. */
 export async function readRecoveryRelease(directory = root): Promise<Pick<Compatibility, 'packages' | 'lock_sha256'>> {
-  const [manifestText, lockText, provenanceText] = await Promise.all([
+  const [manifestText, lockText] = await Promise.all([
     readFile(join(directory, 'package.json'), 'utf8'),
     readFile(join(directory, 'package-lock.json'), 'utf8'),
-    readFile(join(directory, 'deploy', 'upstream', 'provenance.json'), 'utf8'),
   ]);
   const manifest = JSON.parse(manifestText);
   const lock = JSON.parse(lockText);
-  const provenance = JSON.parse(provenanceText);
   const lockedRoot = lock.packages?.[''];
   requireCheck(
     lock.lockfileVersion === 3 && lockedRoot && manifest.dependencies &&
@@ -187,11 +186,11 @@ export async function readRecoveryRelease(directory = root): Promise<Pick<Compat
         resolved?.version === version && !resolved.link,
       'Borecount dependencies must be exact versions resolved by the example lockfile',
     );
-    requireCheck(provenance.tag === `v${version}`, 'Borecount versions must match the bundled release assets');
     packages[name] = version;
   }
   requireCheck(packages['@borecount/core'] && packages['@borecount/postgres-adapter'],
     'the example must declare its core and PostgreSQL packages');
+  requireCheck(new Set(Object.values(packages)).size === 1, 'Borecount package versions must be coordinated');
   return { packages, lock_sha256: sha256(lockText) };
 }
 

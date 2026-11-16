@@ -13,6 +13,7 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { tsImport } from 'tsx/esm/api';
 import { generateUuidV7 } from '@borecount/core/base';
+import { borecountMigrationsPath } from '@borecount/postgres-adapter/migrations';
 import { generateApiKey } from '@borecount/core/application';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -52,7 +53,7 @@ try {
   run('psql', ['-Xq', '-v', 'ON_ERROR_STOP=1', '-f', 'deploy/roles.sql'], variables);
   // Install the released baseline first, then exercise an actual forward schema upgrade.
   const folder = join(scratch, 'prior'); mkdirSync(join(folder, 'meta'), { recursive: true });
-  const upstream = resolve('deploy/upstream/drizzle');
+  const upstream = borecountMigrationsPath;
   const journal = JSON.parse(readFileSync(join(upstream, 'meta/_journal.json')));
   writeFileSync(join(folder, 'meta/_journal.json'), JSON.stringify({ ...journal, entries: journal.entries.slice(0, 1) }));
   writeFileSync(join(folder, journal.entries[0].tag + '.sql'), readFileSync(join(upstream, journal.entries[0].tag + '.sql')));
@@ -212,7 +213,7 @@ try {
     const [code] = await exited; clearTimeout(timer); assert.equal(code, 0, output);
   } finally { if (processHost.exitCode === null) processHost.kill('SIGKILL'); }
   console.log(JSON.stringify({ result: 'passed', runtime: process.version, postgres: run('psql', ['--version']).trim(),
-    packages: '0.8.0', host: '0.1.0', upgrade: 'released baseline to full 0.8.0 migration chain',
+    packages: '0.9.0', host: '0.9.0', upgrade: 'released baseline to full 0.9.0 migration chain',
     checks: ['clean install', 'initial/subsequent provisioning and retries', 'role separation', 'posting/retries', 'tenant isolation', 'upgrade preserves history', 'isolated restore', 'restored API retries', 'revocation', 'redacted logs', 'readiness', 'graceful shutdown'],
     backupSeconds: +backupSeconds.toFixed(2), restoreSeconds: +restoreSeconds.toFixed(2), totalSeconds: +((performance.now() - started) / 1000).toFixed(2) }));
 } finally {

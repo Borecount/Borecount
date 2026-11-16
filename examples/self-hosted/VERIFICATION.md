@@ -1,7 +1,7 @@
-# Self-hosted 0.1.0 verification
+# Self-hosted 0.9.0 verification
 
-Observed 2026-11-16 with Node.js 22.15.0, Bun 1.3.9, PostgreSQL server/client 16.16, public Borecount
-packages 0.8.0 and Docker Engine 28.0.4. All installation data was synthetic, using new temporary
+Observed 2026-11-16 with Node.js 22.15.0, Bun 1.3.9, PostgreSQL server/client 16.16, candidate Borecount
+0.9.0 package tarballs and Docker Engine 28.0.4. All installation data was synthetic, using new temporary
 resources. Reproduction commands and prerequisites are in the [README](README.md#validation-and-operating-scope).
 
 ## Results
@@ -18,9 +18,9 @@ SERVICE/ADMIN and trusted-actor policy, cross-tenant denial, runtime/lookup priv
 revocation, log canaries, sanitized 500/503 responses, readiness recovery and SIGTERM exit 0.
 No sandbox, Library bridge or reset route was installed.
 
-It upgraded populated baseline data through the full 0.8.0 migration chain and reapplied it without
+It upgraded populated baseline data through the full 0.9.0 migration chain and reapplied it without
 changes. Unknown host tables and modified migration hashes were rejected. This is a forward schema
-upgrade fixture, not an earlier released host version; 0.1.0 is the first example release.
+upgrade fixture, not an earlier released host version; 0.9.0 is the first example release.
 
 Recovery used another socket-only cluster. Dependency-version and npm-lock hash mismatches were rejected before creating target tables.
 Preflight, restore and SQL checks passed; a second restore
@@ -32,14 +32,19 @@ that its ledger survived restart. Both runners removed only their own temporary 
 
 | Local synthetic measurement | Seconds |
 | --- | --- |
-| Backup | 0.23 |
-| Restore, including SQL checks | 0.23 |
-| Complete native drill | 5.21 |
+| Backup | 0.25 |
+| Restore, including SQL checks | 0.27 |
+| Complete native drill | 5.17 |
 
 The remaining dependency finding is [GHSA-g7r4-m6w7-qqqr](https://github.com/advisories/GHSA-g7r4-m6w7-qqqr),
 a low-severity Windows esbuild development-server issue. This Linux image uses esbuild through tsx
 for transformation and does not start that server; the affected trigger is absent from this profile.
 The advisory remains listed by npm audit.
+
+Before npm publication, candidate tarballs supplied the declared 0.9.0 dependencies for native
+and container checks. The container fixture changed only dependency-download URLs in a temporary
+copy; the source Dockerfile retained the ordinary npm-ci installation. `update:upstream` also passed
+annotated-tag, hash, download-failure and invalid-ref tests, and a live refresh from public v0.8.0.
 
 ## Coverage boundary
 

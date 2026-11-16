@@ -1,6 +1,6 @@
-# Version 0.1.0. Never use the public-demo profile or its cleanup against this volume.
+# Version 0.9.0. Never use the public-demo profile or its cleanup against this volume.
 x-host: &host
-  image: borecount-self-hosted:0.1.0
+  image: borecount-self-hosted:0.9.0
   build:
     context: .
     dockerfile: Dockerfile
@@ -11,7 +11,7 @@ x-host: &host
   cap_drop: [ALL]
 services:
   postgres:
-    image: borecount-self-hosted-postgres:0.1.0
+    image: borecount-self-hosted-postgres:0.9.0
     build:
       context: .
       dockerfile: Dockerfile.postgres
