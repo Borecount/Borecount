@@ -54,7 +54,7 @@ jobs:
       - name: Verify HTTP contract
         run: bun run contract:verify
 
-      - name: Verify coordinated release metadata
+      - name: Verify compatible release metadata
         run: bun run release:verify
 
       - name: Verify clean-install package consumption

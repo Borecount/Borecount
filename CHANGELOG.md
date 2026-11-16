@@ -1,12 +1,12 @@
 # Changelog
 
-Borecount uses coordinated releases: every public `@borecount/*` package and
-the OpenAPI contract share one version. Release details and migration guidance
+Public `@borecount/*` packages share a `major.minor` compatibility line with
+independent patch versions. OpenAPI follows the HTTP package version. Release details and migration guidance
 are linked from each entry.
 
 ## [Unreleased]
 
-## [0.9.0] - 2026-11-16
+## [postgres-adapter@0.8.1] - 2026-11-16
 
 ### Added
 
@@ -18,9 +18,9 @@ are linked from each entry.
 
 - Integration fixtures respect UUID ordering for equal timestamps and preserve sub-millisecond rows in corruption checks.
 
-All five packages and the OpenAPI version advance together. No financial behavior, HTTP payload,
-database schema or migration SQL changes from 0.8.0.
-See [the 0.9.0 release notes](docs/releases/0.9.0.md).
+Only `@borecount/postgres-adapter` advances; other packages and OpenAPI remain `0.8.0`.
+No financial behavior, HTTP payload, database schema or migration SQL changes from 0.8.0.
+See [the adapter 0.8.1 release notes](docs/releases/postgres-adapter-0.8.1.md).
 
 ## [0.8.0] - 2026-11-10
 

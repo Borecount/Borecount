@@ -1,15 +1,11 @@
-# Borecount 0.9.0
-
-All public packages and the OpenAPI contract ship together as 0.9.0.
+# PostgreSQL adapter 0.8.1
 
 | Component | Version |
 | --- | --- |
-| `@borecount/core` | `0.9.0` |
-| `@borecount/http` | `0.9.0` |
-| `@borecount/postgres-adapter` | `0.9.0` |
-| `@borecount/fastify-routes` | `0.9.0` |
-| `@borecount/express-routes` | `0.9.0` |
-| OpenAPI `info.version` | `0.9.0` |
+| `@borecount/postgres-adapter` | `0.8.1` |
+
+This patch makes the existing migration chain installable from npm. It does not change
+the ledger or HTTP API. Other public packages remain at `0.8.0`.
 
 ## Packaged migrations
 
@@ -25,7 +21,8 @@ assumptions without changing production pagination or statement behavior.
 
 ## Upgrade from 0.8.0
 
-Upgrade the complete package set to 0.9.0 and commit the consumer lockfile. A host can switch its
+Upgrade only `@borecount/postgres-adapter` to `0.8.1` and commit the consumer lockfile.
+The other packages and OpenAPI remain `0.8.0`. A host can switch its
 migration directory to `borecountMigrationsPath` while retaining the existing library journal
 (`drizzle.__drizzle_migrations`). Do not renumber or copy library entries into a host journal.
 See the [package migration example](../../packages/postgres-adapter/README.md#packaged-postgresql-migrations).
@@ -37,5 +34,5 @@ No migration SQL or database schema changed from published 0.8.0. The complete u
 3. `0002_2026-11-10-reconciliation-filtered-history-indexes.sql`
 
 Existing 0.8.0 installations require no new DDL. Financial invariants, idempotency semantics and HTTP
-payloads are unchanged; only OpenAPI `info.version` advances. No data conversion is introduced.
+payloads are unchanged; OpenAPI `info.version` remains `0.8.0`. No data conversion is introduced.
 Older baseline-reset limitations still apply; a package downgrade does not reverse database history.
