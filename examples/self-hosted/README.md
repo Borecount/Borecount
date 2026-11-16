@@ -23,12 +23,14 @@ The images pin Node.js 22.15.0 and PostgreSQL 16.16. Native operation requires N
 PostgreSQL 16. Recovery additionally requires Bun 1.3.9 and matching PostgreSQL 16 `psql`, `pg_dump`
 and `pg_restore` binaries at least as recent as the server.
 
-`deploy/upstream` contains unmodified Apache-2.0 migrations, the security overlay and recovery tool
+`deploy/upstream` contains unmodified Apache-2.0 migrations, the security overlay and recovery SQL
 from public tag v0.8.0, commit `3ec496370d9d55064a4ed3048bbd80608c232c3a`.
-Its [provenance manifest](deploy/upstream/provenance.json) records file checksums. The package manifests
-and lock metadata there support recovery compatibility; application dependencies come from this
-example's own npm lockfile. The image installs only production dependencies, including pinned `tsx`.
-Retain the example commit, lockfile, built image digest and private configuration with each release.
+Its [provenance manifest](deploy/upstream/provenance.json) records those checksums and the original
+source of the adapted [backup runner](scripts/backup.ts). The runner derives compatibility from this
+example's `package.json` and `package-lock.json`: exact Borecount versions must agree with the lock
+and bundled release, and each backup records the npm lockfile's hash. Retain the example commit,
+lockfile, image digest and private configuration with each release. The image installs only
+production dependencies, including pinned `tsx`.
 
 ## Install
 
@@ -118,8 +120,10 @@ rollback needs a verified schema/contract compatibility review, otherwise recove
 and database through the runbook.
 
 Follow the linked recovery runbook without duplicating its procedure here. In all its commands,
-replace `scripts/portable-backup.ts` with this example's `deploy/upstream/scripts/portable-backup.ts`.
-The pinned tool handles this package-only schema and has no `--host-migrations` option. Separately
+replace `scripts/portable-backup.ts` with this example's `scripts/backup.ts`.
+The adapted runner handles this package-only schema and has no `--host-migrations` option.
+Bundles made with another release layout or npm lockfile are rejected; retain the matching runner
+and release files for recovery. Separately
 retain this example's secret files, login/group definitions, database settings and image identity.
 Recovery covers the whole database; tenant-scoped export/import is outside this example.
 

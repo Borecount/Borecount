@@ -38,7 +38,7 @@ const { createSelfHostedServer } = await tsImport('../src/host.ts', {
   parentURL: import.meta.url, tsconfig: fileURLToPath(new URL('../tsconfig.json', import.meta.url)),
 });
 const config = host => ({ DATABASE_URL: dbUrl(host, 'ledger_app'), AUTH_DATABASE_URL: dbUrl(host, 'ledger_auth'), JWT_SIGNING_KEY: jwt, JWT_ISSUER: 'self-hosted-drill' });
-const tool = (...args) => run('bun', ['run', 'deploy/upstream/scripts/portable-backup.ts', ...args], { PGSERVICEFILE: join(scratch, 'services') });
+const tool = (...args) => run('bun', ['run', 'scripts/backup.ts', ...args], { PGSERVICEFILE: join(scratch, 'services') });
 try {
   for (const host of [source, recovery]) {
     mkdirSync(host, { mode: 0o700 });
@@ -146,12 +146,31 @@ try {
   const roleFile = join(scratch, 'roles.sql'); writeFileSync(roleFile, roles.replace(/^CREATE ROLE ledger_admin;\n/m, ''));
   run('psql', ['-Xq', '-v', 'ON_ERROR_STOP=1', '-f', roleFile], { PGHOST: recovery, PGPORT: '55442', PGUSER: 'ledger_admin', PGDATABASE: 'postgres' });
   const args = ['--socket', recovery, '--port', '55442', '--database', 'borecount_self_hosted', '--user', 'ledger_admin', bundle];
+  const metadataPath = join(bundle, 'manifest.json');
+  const metadata = JSON.parse(readFileSync(metadataPath));
+  const dependencies = JSON.parse(readFileSync('package.json')).dependencies;
+  assert.deepEqual(metadata.compatibility.packages,
+    Object.fromEntries(Object.entries(dependencies).filter(([name]) => name.startsWith('@borecount/'))));
+  assert.equal(metadata.compatibility.lock_sha256,
+    createHash('sha256').update(readFileSync('package-lock.json')).digest('hex'));
+  for (const incompatible of [
+    { ...metadata.compatibility, packages: { ...metadata.compatibility.packages, '@borecount/core': '0.0.0' } },
+    { ...metadata.compatibility, lock_sha256: '0'.repeat(64) },
+  ]) {
+    writeFileSync(metadataPath, JSON.stringify({ ...metadata, compatibility: incompatible }));
+    const rejected = spawnSync('bun', ['run', 'scripts/backup.ts', 'restore', ...args], { env, encoding: 'utf8', timeout: 60000 });
+    assert.equal(rejected.status, 1);
+    assert.match(rejected.stderr, /incompatible example dependencies, npm lockfile or Drizzle history/);
+    assert.equal(sql(recovery, "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'").trim(), '0',
+      'Incompatible recovery metadata must be rejected before restoring any tables');
+  }
+  writeFileSync(metadataPath, JSON.stringify(metadata));
   tool('preflight', ...args);
   const restoreStart = performance.now(); tool('restore', ...args);
   const restoreSeconds = (performance.now() - restoreStart) / 1000;
   tool('verify', ...args);
   // A populated target must never be adopted by a second restore attempt.
-  run('bun', ['run', 'deploy/upstream/scripts/portable-backup.ts', 'restore', ...args], {}, 1);
+  run('bun', ['run', 'scripts/backup.ts', 'restore', ...args], {}, 1);
   assert.equal(sql(recovery, 'SELECT id, balance_minor FROM accounts ORDER BY id; SELECT id, reference FROM transactions ORDER BY id; SELECT id, signed_amount_minor FROM entries ORDER BY id'), before);
   run('pg_ctl', ['-D', join(recovery, 'data'), '-m', 'fast', '-w', 'stop']);
   run('pg_ctl', ['-D', join(recovery, 'data'), '-l', join(recovery, 'server.log'), '-o', `-k ${recovery} -p 55442 -c listen_addresses='127.0.0.1'`, '-w', 'start']);

@@ -4,18 +4,19 @@
   "commit": "3ec496370d9d55064a4ed3048bbd80608c232c3a",
   "sha256": {
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
-    "bun.lock": "f5150d46f100c54fa8137ca7978e3c7c98f79d5b6a6eca73631bb4c0e3355e59",
-    "scripts/portable-backup.ts": "60da13c9bd9a521f36195556038f64f9a7d55d284e423415e4a06e95ad9e7d14",
     "scripts/portable-verify.sql": "e2f4c05b8b8cf07aeccab06af199cb257f27e612ab67e06463e39e933c10cd40",
     "examples/security/least-privilege.sql": "0a059d6ba8ea0cdf568aa2a368cbd2fda1719d556e52fd71fc30ecc5711c5950",
     "drizzle/0000_2026-11-09-baseline.sql": "dad0848416cf52560f6498b482cf65f772bb7fe67f4fc088d78bfb7b3d21fa48",
     "drizzle/0001_2026-11-10-reconciliation-run-rules-and-history-indexes.sql": "ccdceb161ba2522597638a74f7d46e432fc3f113fff448ec44482483ae3d0189",
     "drizzle/0002_2026-11-10-reconciliation-filtered-history-indexes.sql": "24bb7cc3ce9c47126bc07bd46d5ccee172bd00272a4f93019ea7f118f8d50604",
-    "drizzle/meta/_journal.json": "1ab5640d18c18f387188392d6d2c637fe49428a1649131ce3604887d071b3209",
-    "packages/core/package.json": "e0bb6244475fd353799cf443cee1885c54e17c572951ea6d3734d7f036299378",
-    "packages/http/package.json": "189607761f61ffb2f9882b057fcdb1789aeedd4b7988b54b584908c00e9fb27e",
-    "packages/postgres-adapter/package.json": "75e82ab9b2c04f32241aee85a6607015d327affad89866994435cb0e7181a672",
-    "packages/fastify-routes/package.json": "8a4144c859a9b6a2eaeadb2d54715c3658816857b1844bd80f54b52426206e52",
-    "packages/express-routes/package.json": "69a7ca9f554844162d74de5effb85106387d5fe9f03783655c4fbeaf66344d3a"
-  }
+    "drizzle/meta/_journal.json": "1ab5640d18c18f387188392d6d2c637fe49428a1649131ce3604887d071b3209"
+  },
+  "adapted": [
+    {
+      "source_path": "scripts/portable-backup.ts",
+      "source_sha256": "60da13c9bd9a521f36195556038f64f9a7d55d284e423415e4a06e95ad9e7d14",
+      "local_path": "scripts/backup.ts",
+      "changes": "Example package.json/npm-lock compatibility, local asset paths and import-safe CLI entry point."
+    }
+  ]
 }

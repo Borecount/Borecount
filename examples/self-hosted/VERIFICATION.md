@@ -8,7 +8,7 @@ resources. Reproduction commands and prerequisites are in the [README](README.md
 
 | Check | Observed result |
 | --- | --- |
-| `npm run typecheck` and `npm test` | Typecheck, release-file checksums and resolution through the example's own installed packages passed. |
+| `npm run typecheck` and `npm test` | Typecheck, release-file checksums, independent package resolution and six incompatible local-metadata cases passed. |
 | `npm run test:lifecycle` | Installation, provisioning, authentication, posting, retries, upgrade, isolated recovery and process lifecycle passed. |
 | `npm run test:compose` | Image builds, initialization, secret mounts, non-root API, provisioning, readiness and durable restart passed. |
 | `npm audit --omit=dev --audit-level=high --json` | Exit 0; zero critical/high/moderate findings, one low esbuild finding. |
@@ -22,7 +22,8 @@ It upgraded populated baseline data through the full 0.8.0 migration chain and r
 changes. Unknown host tables and modified migration hashes were rejected. This is a forward schema
 upgrade fixture, not an earlier released host version; 0.1.0 is the first example release.
 
-Recovery used another socket-only cluster. Preflight, restore and SQL checks passed; a second restore
+Recovery used another socket-only cluster. Dependency-version and npm-lock hash mismatches were rejected before creating target tables.
+Preflight, restore and SQL checks passed; a second restore
 into the populated database was refused. Schema/row fingerprints, migration history, ledger totals,
 RLS and immutability checks passed. Balances, transaction/entry identities and restored API retry
 behavior matched. After SQL verification, the target was restarted on loopback for host acceptance.
@@ -31,9 +32,9 @@ that its ledger survived restart. Both runners removed only their own temporary 
 
 | Local synthetic measurement | Seconds |
 | --- | --- |
-| Backup | 0.39 |
-| Restore, including SQL checks | 0.50 |
-| Complete native drill | 6.64 |
+| Backup | 0.23 |
+| Restore, including SQL checks | 0.23 |
+| Complete native drill | 5.21 |
 
 The remaining dependency finding is [GHSA-g7r4-m6w7-qqqr](https://github.com/advisories/GHSA-g7r4-m6w7-qqqr),
 a low-severity Windows esbuild development-server issue. This Linux image uses esbuild through tsx

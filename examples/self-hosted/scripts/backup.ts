@@ -1,3 +1,10 @@
+/**
+ * Provides whole-database backup and isolated recovery for this example.
+ * Adapted from Borecount v0.8.0 scripts/portable-backup.ts (Apache-2.0); original
+ * source provenance is recorded in deploy/upstream/provenance.json. Retains the
+ * upstream snapshot, integrity and isolation checks while deriving compatibility
+ * from this example's package.json and npm lockfile instead of a monorepo layout.
+ */
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import {
@@ -7,7 +14,6 @@ import {
   mkdir,
   mkdtemp,
   open,
-  readdir,
   readFile,
   realpath,
   rename,
@@ -17,11 +23,13 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { Readable } from 'node:stream';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
 
-const root = join(import.meta.dir, '..');
+const root = fileURLToPath(new URL('..', import.meta.url));
+const releaseRoot = join(root, 'deploy', 'upstream');
 const baseline = '0000_2026-11-09-baseline';
 const toolNames = ['psql', 'pg_dump', 'pg_restore'] as const;
 const HISTORY = `
@@ -109,9 +117,6 @@ function requireCheck(condition: unknown, message: string): asserts condition {
 
 const psql = ['psql', '-X', '-qAtw', '-v', 'ON_ERROR_STOP=1'];
 const controller = new AbortController();
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => controller.abort());
-}
 
 function spawn(command: string[], env?: Env, input?: string) {
   return Bun.spawn(command, {
@@ -140,7 +145,7 @@ async function fileHash(path: string) {
 }
 
 async function compatibility(): Promise<Compatibility> {
-  const migrations = join(root, 'drizzle');
+  const migrations = join(releaseRoot, 'drizzle');
   const { entries }: { entries: { when: number; tag: string }[] } = JSON.parse(
     await readFile(join(migrations, 'meta/_journal.json'), 'utf8'),
   );
@@ -153,17 +158,41 @@ async function compatibility(): Promise<Compatibility> {
       ],
     ),
   );
-  const packages = await Promise.all(
-    (await readdir(join(root, 'packages'))).sort().map(async (name) => {
-      const data = JSON.parse(await readFile(join(root, 'packages', name, 'package.json'), 'utf8'));
-      return [data.name, data.version];
-    }),
+  return { history, ...(await readRecoveryRelease()) };
+}
+
+/** Read the example's own resolved release identity before touching a database. */
+export async function readRecoveryRelease(directory = root): Promise<Pick<Compatibility, 'packages' | 'lock_sha256'>> {
+  const [manifestText, lockText, provenanceText] = await Promise.all([
+    readFile(join(directory, 'package.json'), 'utf8'),
+    readFile(join(directory, 'package-lock.json'), 'utf8'),
+    readFile(join(directory, 'deploy', 'upstream', 'provenance.json'), 'utf8'),
+  ]);
+  const manifest = JSON.parse(manifestText);
+  const lock = JSON.parse(lockText);
+  const provenance = JSON.parse(provenanceText);
+  const lockedRoot = lock.packages?.[''];
+  requireCheck(
+    lock.lockfileVersion === 3 && lockedRoot && manifest.dependencies &&
+      lockedRoot.name === manifest.name && lockedRoot.version === manifest.version &&
+      isDeepStrictEqual(lockedRoot.dependencies, manifest.dependencies),
+    'package.json and package-lock.json must describe the same example release',
   );
-  return {
-    history,
-    packages: Object.fromEntries(packages),
-    lock_sha256: await fileHash(join(root, 'bun.lock')),
-  };
+  const packages: Record<string, string> = {};
+  for (const name of Object.keys(manifest.dependencies).filter(name => name.startsWith('@borecount/')).sort()) {
+    const version = manifest.dependencies[name];
+    const resolved = lock.packages[`node_modules/${name}`];
+    requireCheck(
+      typeof version === 'string' && /^\d+\.\d+\.\d+$/.test(version) &&
+        resolved?.version === version && !resolved.link,
+      'Borecount dependencies must be exact versions resolved by the example lockfile',
+    );
+    requireCheck(provenance.tag === `v${version}`, 'Borecount versions must match the bundled release assets');
+    packages[name] = version;
+  }
+  requireCheck(packages['@borecount/core'] && packages['@borecount/postgres-adapter'],
+    'the example must declare its core and PostgreSQL packages');
+  return { packages, lock_sha256: sha256(lockText) };
 }
 
 async function toolVersions(): Promise<Versions> {
@@ -389,7 +418,7 @@ async function readBundle(bundle: string, local: Compatibility, tools: Versions)
   requireCheck(manifest.format === 1, 'unsupported backup format');
   requireCheck(
     isDeepStrictEqual(manifest.compatibility, local),
-    'incompatible package versions or Drizzle history',
+    'incompatible example dependencies, npm lockfile or Drizzle history',
   );
   const { source, archive: details, checks } = manifest;
   requireCheck(
@@ -504,7 +533,7 @@ async function verify(env: Env, manifest: Manifest, local: Compatibility) {
   await run(
     psql,
     env,
-    await readFile(join(import.meta.dir, 'portable-verify.sql'), 'utf8'),
+    await readFile(join(releaseRoot, 'scripts', 'portable-verify.sql'), 'utf8'),
     'tenant isolation or immutability probe failed',
   );
 }
@@ -602,13 +631,18 @@ async function main() {
   console.log(`${command} elapsed: ${((performance.now() - started) / 1000).toFixed(2)}s`);
 }
 
-process.umask(0o077);
-try {
-  await main();
-} catch (error) {
-  const message = controller.signal.aborted
-    ? 'Interrupted. Keep the target offline and check its state before retrying.'
-    : `Rejected: ${error instanceof Rejected ? error.message : 'malformed metadata, filesystem error or missing tool'}`;
-  console.error(message);
-  process.exitCode = 1;
+if (import.meta.main) {
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(signal, () => controller.abort());
+  }
+  process.umask(0o077);
+  try {
+    await main();
+  } catch (error) {
+    const message = controller.signal.aborted
+      ? 'Interrupted. Keep the target offline and check its state before retrying.'
+      : `Rejected: ${error instanceof Rejected ? error.message : 'malformed metadata, filesystem error or missing tool'}`;
+    console.error(message);
+    process.exitCode = 1;
+  }
 }
