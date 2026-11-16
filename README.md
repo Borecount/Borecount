@@ -20,6 +20,14 @@ The current schema installs from [one baseline](drizzle/0000_2026-11-09-baseline
 
 The [reference API demo](https://github.com/Borecount/Borecount-demo) is maintained separately so this repository can stay focused on reusable packages. Start with the [product overview](docs/product/overview.md), then use the [integration guide](docs/integration/README.md) before running the demo.
 
+## Optional self-hosted integration example
+
+[`examples/self-hosted`](examples/self-hosted/README.md) is a standalone, optional example consuming
+published npm packages. It includes operator provisioning, least-privilege deployment, resource
+limits and a verified install/upgrade/backup/restore workflow. Run its commands from that directory;
+it has its own npm lockfile and does not use root workspace package sources. The distributed product
+remains the library. The separate demo repository is not an installation prerequisite.
+
 ## Test strategy
 
 - `bun run test:unit` runs DB-free unit tests only.

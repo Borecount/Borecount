@@ -1,0 +1,69 @@
+# Version 0.1.0. Never use the public-demo profile or its cleanup against this volume.
+x-host: &host
+  image: borecount-self-hosted:0.1.0
+  build:
+    context: .
+    dockerfile: Dockerfile
+  user: "${SELF_HOST_UID:?Set SELF_HOST_UID to id -u}:${SELF_HOST_GID:?Set SELF_HOST_GID to id -g}"
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+services:
+  postgres:
+    image: borecount-self-hosted-postgres:0.1.0
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ledger_admin
+      POSTGRES_DB: borecount_self_hosted
+      POSTGRES_PASSWORD_FILE: /run/secrets/admin_password
+    secrets: [admin_password, migrator_password, app_password, auth_password, operator_password]
+    volumes:
+      - self_hosted_pgdata:/var/lib/postgresql/data
+      - ./deploy:/host-release:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U ledger_admin -d borecount_self_hosted"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  api:
+    <<: *host
+    restart: unless-stopped
+    environment:
+      SELF_HOST_CONFIG: /run/secrets/app_config
+    secrets: [app_config]
+    ports: ["127.0.0.1:${SELF_HOST_PORT:-8082}:3000"]
+    stop_grace_period: 15s
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  operator:
+    <<: *host
+    profiles: [tools]
+    working_dir: /app
+    environment:
+      SELF_HOST_OPERATOR_CONFIG: /run/secrets/operator_config
+      SELF_HOST_PROVISION_INPUT: /run/secrets/tenant_input
+    secrets: [operator_config, tenant_input]
+    entrypoint: [npm, run]
+    command: [migrate]
+    depends_on:
+      postgres: {condition: service_healthy}
+secrets:
+  admin_password: {file: "${SELF_HOST_SECRETS_DIR:?}/admin.password"}
+  migrator_password: {file: "${SELF_HOST_SECRETS_DIR:?}/migrator.password"}
+  app_password: {file: "${SELF_HOST_SECRETS_DIR:?}/app.password"}
+  auth_password: {file: "${SELF_HOST_SECRETS_DIR:?}/auth.password"}
+  operator_password: {file: "${SELF_HOST_SECRETS_DIR:?}/operator.password"}
+  app_config: {file: "${SELF_HOST_SECRETS_DIR:?}/app.json"}
+  operator_config: {file: "${SELF_HOST_SECRETS_DIR:?}/operator.json"}
+  tenant_input: {file: "${SELF_HOST_TENANT_INPUT:-${SELF_HOST_SECRETS_DIR:?}/tenant.json}"}
+volumes:
+  self_hosted_pgdata:
