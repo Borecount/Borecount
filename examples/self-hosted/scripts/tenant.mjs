@@ -1,3 +1,8 @@
+/**
+ * Creates a durable private command for onboarding another tenant.
+ * Generates the UUID and API key through public library helpers and writes the input
+ * once for later provisioning and exact retries. It does not connect to the database.
+ */
 import { writeFile } from 'node:fs/promises';
 import { generateUuidV7 } from '@borecount/core/base';
 import { generateApiKey } from '@borecount/core/application';

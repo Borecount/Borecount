@@ -1,3 +1,8 @@
+/**
+ * Validates integer configuration values shared by authentication and limits.
+ * Applies each caller's default and bounds consistently, failing startup with the
+ * setting-specific message when a value is invalid.
+ */
 interface ParseIntegerWithinRangeOptions {
   defaultValue: number;
   min?: number;

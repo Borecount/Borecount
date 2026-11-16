@@ -1,3 +1,8 @@
+/**
+ * Validates the explicit ingress peers allowed to supply forwarded identity.
+ * Accepts IP addresses or narrow CIDRs for Fastify's trustProxy configuration and
+ * rejects ambiguous or unrestricted trust settings before the server starts.
+ */
 import { isIP } from 'node:net';
 
 /** Explicit network allowlist only; never trust a caller-selected hop count or all peers. */

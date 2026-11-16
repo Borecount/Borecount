@@ -1,3 +1,9 @@
+/**
+ * Implements the example's HTTP server with Fastify.
+ * Registers financial API routes, request authentication, resource controls,
+ * health/readiness endpoints, metrics, and safe error/log handling. Receives services
+ * and policies from host.ts so HTTP setup does not create database connections.
+ */
 import './fastify-extensions';
 import { randomUUID } from 'node:crypto';
 import { issueAccessToken, type JwtAuthConfig, verifyAccessToken } from './auth/jwt';

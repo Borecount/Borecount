@@ -1,3 +1,9 @@
+/**
+ * Applies the host's request budgets and reporting concurrency policy.
+ * Coordinates pre-authentication IP limits, authenticated tenant read/write limits
+ * and bulk validation. Wraps awaited reporting services so permits remain held until
+ * database work completes, including error paths.
+ */
 import { RateLimitExceededError } from '@borecount/core/errors';
 import { FixedWindowLimiter } from '../rate-limit/fixed-window-limiter';
 import { parseRateLimitConfig, type RateLimitConfig, type EndpointRateLimitConfig } from '../rate-limit/policy';

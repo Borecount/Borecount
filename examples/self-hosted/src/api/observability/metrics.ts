@@ -1,3 +1,8 @@
+/**
+ * Collects process-local HTTP observations for Prometheus scraping.
+ * Formats request counts, latency histograms and authentication failures using the
+ * route/status labels supplied by the HTTP server. Metric state resets on restart.
+ */
 const REQUEST_DURATION_BUCKETS_SECONDS = [
   0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 ] as const;

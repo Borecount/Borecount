@@ -1,3 +1,8 @@
+/**
+ * Parses the example's configurable resource budgets and safe defaults.
+ * Validates rate windows/counts, limiter storage, body/bulk sizes and report
+ * concurrency, returning one consistent policy for HTTP setup and HostProtection.
+ */
 import { parseIntegerWithinRange } from '../../utils/parse-integer-with-range';
 export interface EndpointRateLimitConfig { maxRequests: number; windowSeconds: number; }
 export interface RateLimitConfig {

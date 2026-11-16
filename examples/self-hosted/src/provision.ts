@@ -1,3 +1,9 @@
+/**
+ * Provides the operator-only tenant provisioning entry point.
+ * Reads a persisted private onboarding command and invokes the public provisioning
+ * service through the separate operator connection. Prints identifiers rather than
+ * credentials so interrupted operations can be retried with the original input.
+ */
 import { readFile } from 'node:fs/promises';
 import { createDbClient, createTenantProvisioningService } from '@borecount/postgres-adapter';
 

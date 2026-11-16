@@ -1,3 +1,9 @@
+/**
+ * Provides bounded, process-local fixed-window accounting.
+ * Tracks request budgets with an injectable clock, reclaims expired identities and
+ * rejects new identities at capacity while retaining active budgets. HostProtection
+ * uses independent instances for abuse, authentication and tenant traffic.
+ */
 import type { EndpointRateLimitConfig } from './policy';
 
 interface FixedWindowBucket {

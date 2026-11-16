@@ -1,4 +1,9 @@
-// Owns a new Compose project/volume and private temporary secrets only.
+/**
+ * Verifies the independently runnable container delivery.
+ * Builds the images and owns a new Compose project, volume and private secrets for
+ * migration, provisioning, runtime isolation and durable-restart checks. Removes only
+ * those temporary resources when the test completes.
+ */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';

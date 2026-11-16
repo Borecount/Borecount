@@ -1,3 +1,8 @@
+/**
+ * Validates the host's JWT configuration before serving requests.
+ * Defines signing-key, issuer, token-lifetime and clock-skew requirements, including
+ * safe key-rotation inputs, and returns the configuration consumed by jwt.ts.
+ */
 import { parseIntegerWithinRange } from '../../utils/parse-integer-with-range';
 import type { JwtAuthConfig } from './jwt';
 

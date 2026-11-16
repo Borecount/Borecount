@@ -1,3 +1,9 @@
+/**
+ * Implements the example's short-lived HS256 bearer token format.
+ * Issues authenticated tenant/key claims and verifies signatures, issuer, role and
+ * time bounds, including previous signing keys during rotation. Database-backed
+ * credential revocation is checked by the HTTP authentication flow.
+ */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { ApiKeyRole, type AuthContext } from '@borecount/core/application';
 import { UnauthorizedError } from '@borecount/core/errors';

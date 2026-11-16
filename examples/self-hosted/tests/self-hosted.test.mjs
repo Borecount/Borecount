@@ -1,4 +1,9 @@
-// Creates and owns TWO new temporary clusters; never connects to an existing DB.
+/**
+ * Verifies the composed host against real PostgreSQL using synthetic data.
+ * Creates and owns two new temporary clusters for installation, authorization,
+ * posting/retries, upgrade and isolated recovery; then checks restored HTTP behavior,
+ * log privacy and process shutdown. Never adopts an existing database.
+ */
 import assert from 'node:assert/strict';
 import { spawnSync, spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
@@ -29,7 +34,7 @@ const source = join(scratch, 'source'); const recovery = join(scratch, 'recovery
 const clusters = []; const clients = []; let server;
 const jwt = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY';
 const logs = [];
-const { createSelfHostedServer } = await tsImport('../src/server.ts', {
+const { createSelfHostedServer } = await tsImport('../src/host.ts', {
   parentURL: import.meta.url, tsconfig: fileURLToPath(new URL('../tsconfig.json', import.meta.url)),
 });
 const config = host => ({ DATABASE_URL: dbUrl(host, 'ledger_app'), AUTH_DATABASE_URL: dbUrl(host, 'ledger_auth'), JWT_SIGNING_KEY: jwt, JWT_ISSUER: 'self-hosted-drill' });

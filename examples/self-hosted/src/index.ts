@@ -1,5 +1,10 @@
+/**
+ * Starts the example as an operating-system process.
+ * Reads private configuration, asks host.ts to assemble the application, opens the
+ * HTTP listener, and handles bounded graceful shutdown for SIGTERM and SIGINT.
+ */
 import { readFile } from 'node:fs/promises';
-import { createSelfHostedServer } from './server';
+import { createSelfHostedServer } from './host';
 
 try {
   // The request container receives only runtime/auth credentials and signing keys.

@@ -1,4 +1,9 @@
-// Generates an offline installation's credentials once; never overwrites existing files.
+/**
+ * Generates a new installation's private Compose configuration and credentials.
+ * Creates separate database passwords, runtime/operator configuration and the initial
+ * tenant command in a new protected directory. Existing files are never overwritten
+ * and credential contents are never printed.
+ */
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';

@@ -1,3 +1,9 @@
+/**
+ * Runs the example's controlled package-migration release step.
+ * Uses the separate migration login, checks applied SQL hashes/timestamps against the
+ * pinned release and serializes migration runs before applying pending migrations.
+ * Security-overlay installation remains a separate administrator operation.
+ */
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';

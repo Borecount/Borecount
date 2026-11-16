@@ -1,3 +1,9 @@
+/**
+ * Checks that the standalone example consumes the intended public release.
+ * Verifies bundled operational assets against their provenance hashes, coordinates
+ * runtime/recovery package versions and rejects dependency resolution through the
+ * parent repository's workspace packages.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';

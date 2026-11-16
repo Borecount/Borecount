@@ -1,3 +1,9 @@
+/**
+ * Composes the runnable self-hosted example from configuration and public packages.
+ * Creates separate runtime and credential-lookup database clients, verifies their
+ * security configuration, and supplies application services and authorization policy
+ * to the HTTP server. Owns database cleanup; index.ts owns listening and process signals.
+ */
 import { createApplicationServices, createDbClient } from '@borecount/postgres-adapter';
 import { ApiKeyRole } from '@borecount/core/application';
 import { ForbiddenError } from '@borecount/core/errors';
