@@ -1,7 +1,7 @@
 /**
  * Checks that the standalone example consumes the intended public release.
- * Verifies bundled operational assets against their provenance hashes, coordinates
- * runtime/recovery package versions and rejects dependency resolution through the
+ * Verifies bundled operational assets against their provenance hashes, checks
+ * compatible runtime/recovery package versions and rejects dependency resolution through the
  * parent repository's workspace packages.
  */
 import test from 'node:test';
@@ -18,7 +18,7 @@ test('self-hosted recovery/security assets match the public release provenance',
   const root = new URL('../deploy/upstream/', import.meta.url);
   const provenance = JSON.parse(await readFile(new URL('provenance.json', root)));
   assert.match(provenance.commit, /^[a-f0-9]{40}$/);
-  assert.match(provenance.tag, /^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/);
+  assert.match(provenance.tag, /^(?:(?:core|http|postgres-adapter|fastify-routes|express-routes)-)?v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/);
   for (const [path, hash] of Object.entries(provenance.sha256)) {
     assert.equal(createHash('sha256').update(await readFile(new URL(path, root))).digest('hex'), hash, path);
   }
@@ -42,9 +42,11 @@ test('recovery identity uses only the example dependencies and npm lockfile', as
   assert.equal(identity.lock_sha256,
     createHash('sha256').update(await readFile(new URL('package-lock.json', root))).digest('hex'));
   assert.equal(identity.packages['@borecount/express-routes'], undefined);
+  assert.equal(identity.packages['@borecount/core'], '0.8.0');
+  assert.equal(identity.packages['@borecount/postgres-adapter'], '0.8.1');
 });
 
-test('recovery rejects stale locks, unresolved pins and mixed package versions', async t => {
+test('recovery rejects stale locks, unresolved pins and mixed major/minor lines', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'borecount-recovery-metadata-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const root = new URL('../', import.meta.url);
@@ -56,13 +58,13 @@ test('recovery rejects stale locks, unresolved pins and mixed package versions',
     { name: 'missing resolution', change: (pkg, locked) => { delete locked.packages['node_modules/@borecount/core']; } },
     { name: 'workspace link', change: (pkg, locked) => { locked.packages['node_modules/@borecount/core'].link = true; } },
     { name: 'unpinned dependency', change: (pkg, locked) => {
-      pkg.dependencies['@borecount/core'] = '^0.9.0';
-      locked.packages[''].dependencies['@borecount/core'] = '^0.9.0';
+      pkg.dependencies['@borecount/core'] = '^0.8.0';
+      locked.packages[''].dependencies['@borecount/core'] = '^0.8.0';
     } },
-    { name: 'mixed package releases', change: (pkg, locked) => {
-      pkg.dependencies['@borecount/core'] = '0.10.0';
-      locked.packages[''].dependencies['@borecount/core'] = '0.10.0';
-      locked.packages['node_modules/@borecount/core'].version = '0.10.0';
+    { name: 'mixed compatibility lines', change: (pkg, locked) => {
+      pkg.dependencies['@borecount/core'] = '0.9.0';
+      locked.packages[''].dependencies['@borecount/core'] = '0.9.0';
+      locked.packages['node_modules/@borecount/core'].version = '0.9.0';
     } },
   ];
   for (const scenario of scenarios) {

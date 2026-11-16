@@ -15,8 +15,8 @@ const assets = ['LICENSE', 'examples/security/least-privilege.sql', 'scripts/por
 const shaPattern = /^[a-f0-9]{40}$/;
 
 export async function updateUpstream({ ref, directory = fileURLToPath(new URL('../deploy/upstream/', import.meta.url)), fetchImpl = fetch }) {
-  if (!/^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(ref ?? '')) {
-    throw new Error('Supply an explicit release tag, for example --ref v0.9.0');
+  if (!/^(?:(?:core|http|postgres-adapter|fastify-routes|express-routes)-)?v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(ref ?? '')) {
+    throw new Error('Supply an explicit release tag, for example --ref postgres-adapter-v0.8.1');
   }
   const request = async url => {
     const response = await fetchImpl(url, { headers: { accept: 'application/vnd.github+json' } });

@@ -30,8 +30,8 @@ function source(url) {
 
 test('upstream refresh pins an immutable commit and preserves adapted source identity', async t => {
   const directory = await fixture(t);
-  const result = await updateUpstream({ ref: 'v0.9.0', directory, fetchImpl: async url => source(url) });
-  assert.equal(result.commit, commit); assert.equal(result.tag, 'v0.9.0');
+  const result = await updateUpstream({ ref: 'postgres-adapter-v0.8.1', directory, fetchImpl: async url => source(url) });
+  assert.equal(result.commit, commit); assert.equal(result.tag, 'postgres-adapter-v0.8.1');
   assert.equal(Object.keys(result.sha256).length, 3);
   for (const [name, hash] of Object.entries(result.sha256)) {
     assert.equal(createHash('sha256').update(await readFile(join(directory, name))).digest('hex'), hash);
@@ -43,7 +43,7 @@ test('upstream refresh pins an immutable commit and preserves adapted source ide
 
 test('failed downloads leave the previous snapshot intact', async t => {
   const directory = await fixture(t);
-  await assert.rejects(() => updateUpstream({ ref: 'v0.9.0', directory, fetchImpl: async url =>
+  await assert.rejects(() => updateUpstream({ ref: 'postgres-adapter-v0.8.1', directory, fetchImpl: async url =>
     url.endsWith('least-privilege.sql') ? new Response('', { status: 503 }) : source(url) }), /HTTP 503/);
   assert.deepEqual(JSON.parse(await readFile(join(directory, 'provenance.json'))), old);
   assert.equal(await readFile(join(directory, 'LICENSE'), 'utf8'), 'Previous content');
@@ -52,4 +52,10 @@ test('failed downloads leave the previous snapshot intact', async t => {
 test('an unpinned branch is rejected before network access', async t => {
   const directory = await fixture(t);
   await assert.rejects(() => updateUpstream({ ref: 'main', directory, fetchImpl: () => assert.fail('Unexpected network') }), /explicit release tag/);
+});
+
+test('legacy coordinated tags remain supported', async t => {
+  const directory = await fixture(t);
+  const result = await updateUpstream({ ref: 'v0.8.0', directory, fetchImpl: async url => source(url) });
+  assert.equal(result.tag, 'v0.8.0');
 });

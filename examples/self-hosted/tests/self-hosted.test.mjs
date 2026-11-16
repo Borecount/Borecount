@@ -213,7 +213,7 @@ try {
     const [code] = await exited; clearTimeout(timer); assert.equal(code, 0, output);
   } finally { if (processHost.exitCode === null) processHost.kill('SIGKILL'); }
   console.log(JSON.stringify({ result: 'passed', runtime: process.version, postgres: run('psql', ['--version']).trim(),
-    packages: '0.9.0', host: '0.9.0', upgrade: 'released baseline to full 0.9.0 migration chain',
+    packages: { adapter: '0.8.1', other: '0.8.0' }, host: '0.8.1', upgrade: 'released baseline to unchanged full 0.8.0 migration chain',
     checks: ['clean install', 'initial/subsequent provisioning and retries', 'role separation', 'posting/retries', 'tenant isolation', 'upgrade preserves history', 'isolated restore', 'restored API retries', 'revocation', 'redacted logs', 'readiness', 'graceful shutdown'],
     backupSeconds: +backupSeconds.toFixed(2), restoreSeconds: +restoreSeconds.toFixed(2), totalSeconds: +((performance.now() - started) / 1000).toFixed(2) }));
 } finally {

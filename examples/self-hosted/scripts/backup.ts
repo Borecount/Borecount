@@ -190,7 +190,8 @@ export async function readRecoveryRelease(directory = root): Promise<Pick<Compat
   }
   requireCheck(packages['@borecount/core'] && packages['@borecount/postgres-adapter'],
     'the example must declare its core and PostgreSQL packages');
-  requireCheck(new Set(Object.values(packages)).size === 1, 'Borecount package versions must be coordinated');
+  requireCheck(new Set(Object.values(packages).map(version => version.split('.').slice(0, 2).join('.'))).size === 1,
+    'Borecount package versions must share major.minor');
   return { packages, lock_sha256: sha256(lockText) };
 }
 

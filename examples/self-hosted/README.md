@@ -1,7 +1,7 @@
-# Self-hosted library integration example 0.9.0
+# Self-hosted library integration example 0.8.1
 
-An optional, standalone HTTP example consuming published `@borecount/*` 0.9.0 packages. Borecount's
-product remains the library; this directory supplies an integration recipe to copy and adapt.
+An optional, standalone HTTP example targeting `postgres-adapter@0.8.1` and the other
+`@borecount/*` packages at `0.8.0`. Borecount's product remains the library; this directory supplies an integration recipe to copy and adapt.
 It requires neither the demo application nor a commercial account. It has no sandbox provisioning,
 seeded data or scheduled reset. Keep its database separate from disposable demo installations.
 
@@ -11,8 +11,8 @@ seeded data or scheduled reset. Keep its database separate from disposable demo 
 | --- | --- |
 | This example's installation, provisioning and release commands | This README |
 | Settings, authentication policy, limits and monitoring | [CONFIGURATION.md](CONFIGURATION.md) |
-| PostgreSQL role model, grants and RLS limitations | [Security baseline, v0.9.0](https://github.com/Borecount/Borecount/blob/v0.9.0/docs/integration/self-hosted-security.md) |
-| Backup custody, off-host storage, isolated restore and interruption recovery | [Recovery runbook, v0.9.0](https://github.com/Borecount/Borecount/blob/v0.9.0/docs/runbooks/portable-backup-restore.md) |
+| PostgreSQL role model, grants and RLS limitations | [Security baseline, v0.8.0](https://github.com/Borecount/Borecount/blob/v0.8.0/docs/integration/self-hosted-security.md) |
+| Backup custody, off-host storage, isolated restore and interruption recovery | [Recovery runbook, v0.8.0](https://github.com/Borecount/Borecount/blob/v0.8.0/docs/runbooks/portable-backup-restore.md) |
 | Observed results and their limits | [VERIFICATION.md](VERIFICATION.md) |
 
 The release links match the bundled operational assets; use them when running this pinned example.
@@ -30,7 +30,7 @@ no copied migration directory.
 `deploy/upstream` contains the unmodified Apache-2.0 security overlay and recovery SQL.
 Its [provenance manifest](deploy/upstream/provenance.json) records their source tag, immutable commit
 and checksums, plus the original source of the adapted [backup runner](scripts/backup.ts). The runner derives compatibility from this
-example's `package.json` and `package-lock.json`: exact, coordinated Borecount versions must agree with the lock, and each backup records the npm lockfile's hash. Retain the example commit,
+example's `package.json` and `package-lock.json`: exact Borecount versions must agree with the lock and share `major.minor`, and each backup records the npm lockfile's hash. Retain the example commit,
 lockfile, image digest and private configuration with each release. The image installs only
 production dependencies, including pinned `tsx`.
 
@@ -136,14 +136,15 @@ its lockfile fixes the package versions. Refresh the remaining copied security/v
 when you intentionally adopt a newer upstream implementation:
 
 ```sh
-npm run update:upstream -- --ref v0.9.0
+npm run update:upstream -- --ref postgres-adapter-v0.8.1
 git diff -- deploy/upstream
 npm test
 npm run test:lifecycle
 npm run test:compose
 ```
 
-The command resolves the public Git tag to an immutable commit, downloads the three source assets,
+After that tag is published, the command resolves it to an immutable commit, downloads the three
+source assets,
 recalculates SHA-256 and replaces their snapshot together with `provenance.json`. It preserves the
 original ancestry of the adapted backup runner. Review the SQL changes before applying any to a
 live deployment; this command updates source files only and does not run migrations or alter roles.
