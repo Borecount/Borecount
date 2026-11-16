@@ -22,11 +22,9 @@ The [reference API demo](https://github.com/Borecount/Borecount-demo) is maintai
 
 ## Optional self-hosted integration example
 
-[`examples/self-hosted`](examples/self-hosted/README.md) is a standalone, optional example consuming
-published npm packages. It includes operator provisioning, least-privilege deployment, resource
-limits and a verified install/upgrade/backup/restore workflow. Run its commands from that directory;
-it has its own npm lockfile and does not use root workspace package sources. The distributed product
-remains the library. The separate demo repository is not an installation prerequisite.
+See [`examples/self-hosted`](examples/self-hosted/README.md) for a standalone example consuming
+published packages, with installation commands, configuration and verified recovery. Run its commands
+from that directory; the separate demo repository is not required.
 
 ## Test strategy
 

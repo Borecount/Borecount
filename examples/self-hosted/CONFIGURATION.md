@@ -27,6 +27,25 @@ variables directly. Invalid settings fail startup without printing configuration
 | `REPORT_CONCURRENCY_MAX` / `REPORT_TENANT_CONCURRENCY_MAX` | 4 / 2 | Positive integers up to 1000; tenant cap cannot exceed global cap. |
 | `TRUSTED_PROXY_CIDRS` | Empty | Explicit immediate-ingress IPs/CIDRs; no wildcard, boolean, hop count or `/0`. |
 
+## Authentication and ingress
+
+Clients exchange `x-api-key` at `POST /v1/auth/token` for a bearer, then send it in the Authorization
+header. Backing-key revocation is checked on every request. ADMIN keys manage tenant keys; SERVICE
+keys cannot use `/v1/admin/*`. Adjustments require ADMIN and the authenticated key ID as `actor_id`,
+including retries. Keep credentials out of URLs and logs. See the
+[public API guide](https://github.com/Borecount/Borecount/blob/v0.8.0/docs/integration/README.md) and
+[canonical contract](https://github.com/Borecount/Borecount/blob/v0.8.0/packages/http/openapi/openapi.yaml)
+for financial commands and their idempotency rules.
+
+Runtime and authentication URLs must select the same endpoint/database. Outside `localhost`,
+`127.0.0.1` or the Compose `postgres` hostname, startup requires `sslmode=verify-full`; supply the
+operator's trust roots. Set `TRUSTED_PROXY_CIDRS` only to the actual immediate ingress peers after
+verifying forwarding behavior. Never trust a caller-selected chain. Rotate database login secrets
+through your secret store; JWT key overlap uses `JWT_PREVIOUS_SIGNING_KEYS`, removed after old tokens
+expire plus clock skew.
+
+## Resource controls
+
 Rate counts accept integers 1–1000000; windows accept integer seconds 1–86400. Authenticated tenant
 budgets follow credential verification. Client tenant headers and resource IDs cannot choose a
 bucket. Token attempts and the general pre-auth budget use source IP independently; by default
@@ -58,6 +77,8 @@ All quotas and metrics are process-local and ephemeral. Restarting resets counte
 allowances. Limits reduce shared-resource pressure but do not guarantee fairness or availability.
 Distributed enforcement, ingress connection limits, dashboards and alerts are operator-owned.
 
+## Monitoring and shutdown
+
 `/health` is liveness; `/ready` verifies DB role/schema composition and credential lookup. `/metrics`
 exports bounded route/status request counts, latency and authentication failures. Restrict these at
 ingress. Logs contain request ID, route template, tenant/key IDs when authenticated, status and
@@ -65,7 +86,7 @@ duration; no bodies, query strings, headers, SQL, driver diagnostics or cause ch
 limited to 1–64 ASCII letters/digits/underscore/hyphen; invalid IDs are replaced. All 5xx are sanitized
 and logged with correlated safe context. Review platform/database logs separately.
 
-See [README](README.md) for TLS/secret inputs, role ownership, upgrades and recovery. Run
-`npm run test:lifecycle` for real DB posting, retries, isolation, redaction, readiness and shutdown;
-`npm run test:compose` verifies the actual images, secret mounts and durable restart. These use only
-new temporary synthetic installations. The example's bounds are a starting profile, not a load test.
+SIGTERM/SIGINT drains in-flight HTTP work, then closes both database pools. Allow a termination
+grace period longer than `SHUTDOWN_TIMEOUT_MS` (Compose supplies 15 seconds for the default 10-second
+deadline) and remove traffic before termination. See the [README](README.md) for release and
+operator procedures, and [VERIFICATION.md](VERIFICATION.md) for observed checks.
