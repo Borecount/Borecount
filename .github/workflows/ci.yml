@@ -64,7 +64,8 @@ jobs:
 
   integration:
     name: Integration (PostgreSQL)
-    runs-on: ubuntu-latest
+    # Keep the installed restore clients on the PostgreSQL 16 compatibility line.
+    runs-on: ubuntu-24.04
     env:
       DATABASE_URL: postgresql://luxledger:luxledger@127.0.0.1:5432/luxledger_test
       DATABASE_URL_TEST: postgresql://luxledger:luxledger@127.0.0.1:5432/luxledger_test
@@ -97,10 +98,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install PostgreSQL 16 client tools
+      - name: Select PostgreSQL 16 client tools
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client-16
+          for tool in pg_dump pg_restore psql; do
+            test -x "/usr/lib/postgresql/16/bin/$tool"
+            "/usr/lib/postgresql/16/bin/$tool" --version
+          done
           echo '/usr/lib/postgresql/16/bin' >> "$GITHUB_PATH"
 
       - name: Check PostgreSQL connectivity
