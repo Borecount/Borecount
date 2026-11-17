@@ -27,6 +27,24 @@ variables directly. Invalid settings fail startup without printing configuration
 | `REPORT_CONCURRENCY_MAX` / `REPORT_TENANT_CONCURRENCY_MAX` | 4 / 2 | Positive integers up to 1000; tenant cap cannot exceed global cap. |
 | `TRUSTED_PROXY_CIDRS` | Empty | Explicit immediate-ingress IPs/CIDRs; no wildcard, boolean, hop count or `/0`. |
 
+## Installation defaults
+
+The npm management commands share these defaults. They do not require shell exports for the
+single-installation case; override a value consistently when managing a different installation.
+
+| Setting | Default |
+| --- | --- |
+| `SELF_HOST_PROJECT` | `borecount-selfhost-01` |
+| `SELF_HOST_SECRETS_DIR` | `~/.local/share/<SELF_HOST_PROJECT>` |
+| `SELF_HOST_PORT` | `8082`, published on loopback only |
+| `SELF_HOST_UID` / `SELF_HOST_GID` | Current user's UID/GID |
+
+Raw Compose commands remain available through `npm run compose -- <arguments>`, using the same
+project, Compose file, secret directory and UID/GID. Secret paths and existing ancestors are
+resolved through symlinks before validation; symlink aliases into the build context and dangling
+symlinks are rejected. The application-level `start`, `migrate` and
+`provision` scripts remain the native entry points used inside the containers.
+
 ## Authentication and ingress
 
 Clients exchange `x-api-key` at `POST /v1/auth/token` for a bearer, then send it in the Authorization
@@ -37,9 +55,18 @@ including retries. Keep credentials out of URLs and logs. See the
 [canonical contract](https://github.com/Borecount/Borecount/blob/v0.8.0/packages/http/openapi/openapi.yaml)
 for financial commands and their idempotency rules.
 
-Runtime and authentication URLs must select the same endpoint/database. Outside `localhost`,
-`127.0.0.1` or the Compose `postgres` hostname, startup requires `sslmode=verify-full`; supply the
-operator's trust roots. Set `TRUSTED_PROXY_CIDRS` only to the actual immediate ingress peers after
+All runtime, authentication, migration and provisioning URLs use one validation policy. Repeated
+query parameters are rejected; only `sslmode` and `application_name` query keys are supported.
+Endpoints and nonempty usernames/passwords must be explicit in every URL. A missing port is
+normalized to `5432` before the driver sees the URL, so `PGPORT`, `PGUSER` and `PGPASSWORD` cannot
+redirect these connections. Runtime and authentication must select the same endpoint/database.
+Only `localhost` and `127.0.0.1` are local exceptions in native mode. The `postgres` hostname is
+exempt only inside Docker with the internal `SELF_HOST_NETWORK=compose` marker supplied by
+`compose.yml`; private JSON configuration cannot enable it. Other targets require
+`sslmode=verify-full` and the operator's trust roots. IPv6 URLs are rejected because the pinned
+postgres 3.4.8 driver does not reliably parse them.
+
+Set `TRUSTED_PROXY_CIDRS` only to the actual immediate ingress peers after
 verifying forwarding behavior. Never trust a caller-selected chain. Rotate database login secrets
 through your secret store; JWT key overlap uses `JWT_PREVIOUS_SIGNING_KEYS`, removed after old tokens
 expire plus clock skew.
@@ -79,7 +106,12 @@ Distributed enforcement, ingress connection limits, dashboards and alerts are op
 
 ## Monitoring and shutdown
 
-`/health` is liveness; `/ready` verifies DB role/schema composition and credential lookup. `/metrics`
+`/health` is liveness; `/ready` verifies DB role/schema composition, credential lookup, and the
+complete installed migration journal (timestamps and SQL hashes). Table/column names and required
+index presence must match the installed migration chain; the API refuses pending migrations.
+The runtime login receives read-only access to the library journal, not migration privileges.
+These catalog checks cover the pinned release DDL, not arbitrary host schema or every possible
+constraint/function alteration; recovery retains its separate SQL/invariant checks. `/metrics`
 exports bounded route/status request counts, latency and authentication failures. Restrict these at
 ingress. Logs contain request ID, route template, tenant/key IDs when authenticated, status and
 duration; no bodies, query strings, headers, SQL, driver diagnostics or cause chains. Request IDs are

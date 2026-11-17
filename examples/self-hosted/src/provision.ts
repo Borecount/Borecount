@@ -4,6 +4,7 @@
  * service through the separate operator connection. Prints identifiers rather than
  * credentials so interrupted operations can be retried with the original input.
  */
+import { parseDatabaseUrl } from './database-policy.mjs';
 import { readFile } from 'node:fs/promises';
 import { createDbClient, createTenantProvisioningService } from '@borecount/postgres-adapter';
 
@@ -12,8 +13,8 @@ import { createDbClient, createTenantProvisioningService } from '@borecount/post
 try {
   const config = JSON.parse(await readFile(process.env.SELF_HOST_OPERATOR_CONFIG!, 'utf8'));
   const command = JSON.parse(await readFile(process.env.SELF_HOST_PROVISION_INPUT!, 'utf8'));
-  if (!config.OPERATOR_DATABASE_URL) throw new Error('Operator connection required');
-  const client = createDbClient({ databaseUrl: config.OPERATOR_DATABASE_URL });
+  const target = parseDatabaseUrl(config.OPERATOR_DATABASE_URL);
+  const client = createDbClient({ databaseUrl: target.href });
   try {
     const [identity] = await client.sql`select pg_has_role(current_user, 'borecount_operator', 'MEMBER') as allowed`;
     if (!identity.allowed) throw new Error('Operator role required');

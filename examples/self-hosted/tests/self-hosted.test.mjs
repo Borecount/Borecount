@@ -30,7 +30,7 @@ const run = (cmd, args, extra = {}, expected = 0) => {
   return result.stdout;
 };
 const sql = (host, text, database = 'borecount_self_hosted') => run('psql', ['-XqAtw', '-v', 'ON_ERROR_STOP=1', '-c', text], { PGHOST: host, PGPORT: host === source ? '55443' : '55442', PGUSER: 'ledger_admin', PGDATABASE: database });
-const dbUrl = (host, role) => `postgresql://${role}@127.0.0.1:${host === source ? '55443' : '55442'}/borecount_self_hosted`;
+const dbUrl = (host, role) => `postgresql://${role}:synthetic-${role.slice(7)}@127.0.0.1:${host === source ? '55443' : '55442'}/borecount_self_hosted`;
 const source = join(scratch, 'source'); const recovery = join(scratch, 'recovery');
 const clusters = []; const clients = []; let server;
 const jwt = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY';
@@ -69,11 +69,20 @@ try {
     const provisionEnv = { SELF_HOST_OPERATOR_CONFIG: operatorConfig, SELF_HOST_PROVISION_INPUT: input };
     const args = ['--import', 'tsx', 'src/provision.ts'];
     const execute = () => spawnSync(process.execPath, args, { cwd: resolve('.'), env: { ...env, ...provisionEnv }, encoding: 'utf8' });
+    const badConfig = join(scratch, 'bad-operator.json');
+    writeFileSync(badConfig, JSON.stringify({ OPERATOR_DATABASE_URL: dbUrl(source, 'ledger_operator') + '?sslmode=verify-full&sslmode=disable' }));
+    const rejected = spawnSync(process.execPath, args, { cwd: resolve('.'), env: { ...env, ...provisionEnv, SELF_HOST_OPERATOR_CONFIG: badConfig }, encoding: 'utf8' });
+    assert.equal(rejected.status, 1, 'Provisioning must reject duplicate TLS options');
     const initial = execute(); assert.equal(initial.status, 0, initial.stderr); assert.equal(JSON.parse(initial.stdout).created, true); keyIds.push(JSON.parse(initial.stdout).apiKeyId);
     const repeat = execute(); assert.equal(repeat.status, 0, repeat.stderr); assert.equal(JSON.parse(repeat.stdout).created, false);
     writeFileSync(input, JSON.stringify({ ...command, tenantName: 'Conflicting command' }));
     assert.equal(execute().status, 1);
   }
+  // A baseline-only database must never be accepted by the HTTP host.
+  await assert.rejects(() => createSelfHostedServer(config(source), false), /Pending package migrations/);
+  await migrateSelfHosted(dbUrl(source, 'ledger_migrator'));
+  run('psql', ['-Xq', '-v', 'ON_ERROR_STOP=1', '-f', 'deploy/permissions.sql'], variables);
+  assert.equal(sql(source, 'SELECT count(*) FROM tenants').trim(), '2');
   const stream = { write: line => { logs.push(line); return true; } };
   // Capture the composed host's real structured logs, including readiness errors.
   server = await createSelfHostedServer(config(source), { stream });
@@ -83,6 +92,14 @@ try {
     return response.body ? response.json() : null;
   };
   const token = async key => (await request('POST', '/v1/auth/token', null, null, 200, { 'x-api-key': key })).access_token;
+  const latestMigration = JSON.parse(sql(source, `DELETE FROM drizzle.__drizzle_migrations
+    WHERE id = (SELECT max(id) FROM drizzle.__drizzle_migrations)
+    RETURNING json_build_object('id',id,'hash',hash,'created_at',created_at::text)`));
+  await request('GET', '/ready', null, null, 503);
+  await assert.rejects(() => createSelfHostedServer(config(source), false), /Pending package migrations/);
+  sql(source, `INSERT INTO drizzle.__drizzle_migrations(id,hash,created_at) VALUES
+    (${latestMigration.id},'${latestMigration.hash}',${latestMigration.created_at})`);
+  await request('GET', '/ready', null);
   let firstToken = await token(tenants[0].rawApiKey); const secondToken = await token(tenants[1].rawApiKey);
   await request('POST', '/v1/assets', firstToken, { code: 'USD', scale: 2 }, 201);
   const ledger = await request('POST', '/v1/ledgers', firstToken, { name: 'Durable ledger' }, 201);
@@ -131,8 +148,21 @@ try {
   await assert.rejects(() => migrateSelfHosted(dbUrl(source, 'ledger_migrator')));
   await assert.rejects(() => createSelfHostedServer(config(source), false));
   sql(source, 'DROP TABLE public.unreviewed_host_data');
+  // Preserve the count while replacing an expected table: names must still fail closed.
+  sql(source, 'ALTER TABLE public.recon_results RENAME TO unreviewed_host_data');
+  await assert.rejects(() => migrateSelfHosted(dbUrl(source, 'ledger_migrator')), /table inventory/);
+  await assert.rejects(() => createSelfHostedServer(config(source), false), /table inventory/);
+  sql(source, 'ALTER TABLE public.unreviewed_host_data RENAME TO recon_results');
+  sql(source, 'ALTER TABLE public.recon_runs DROP COLUMN matching_rule_ids');
+  await assert.rejects(() => migrateSelfHosted(dbUrl(source, 'ledger_migrator')), /column inventory/);
+  sql(source, 'ALTER TABLE public.recon_runs ADD COLUMN matching_rule_ids uuid[] NOT NULL');
+  sql(source, 'DROP INDEX public.recon_runs_ledger_history_idx');
+  await assert.rejects(() => migrateSelfHosted(dbUrl(source, 'ledger_migrator')), /Missing package index/);
+  sql(source, 'CREATE INDEX recon_runs_ledger_history_idx ON public.recon_runs(tenant_id,ledger_id,started_at,id)');
+
   sql(source, "UPDATE drizzle.__drizzle_migrations SET hash = 'bad' WHERE id = (SELECT max(id) FROM drizzle.__drizzle_migrations)");
   await assert.rejects(() => migrateSelfHosted(dbUrl(source, 'ledger_migrator')));
+  await assert.rejects(() => createSelfHostedServer(config(source), false), /Incompatible migration history/);
   const { createHash } = await import('node:crypto');
   const hash = createHash('sha256').update(readFileSync(join(upstream, journal.entries.at(-1).tag + '.sql'))).digest('hex');
   sql(source, `UPDATE drizzle.__drizzle_migrations SET hash = '${hash}' WHERE id = (SELECT max(id) FROM drizzle.__drizzle_migrations)`);
@@ -200,6 +230,16 @@ try {
   const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
   const port = probe.address().port; await new Promise(r => probe.close(r));
   const appConfig = join(scratch, 'app.json'); writeFileSync(appConfig, JSON.stringify({ ...config(recovery), HOST: '127.0.0.1', PORT: String(port) }), { mode: 0o600 });
+  // A failed listen must close the host pools rather than waiting for their idle timeout.
+  const occupied = createServer(); occupied.listen(port, '127.0.0.1'); await once(occupied, 'listening');
+  const failedHost = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], { cwd: resolve('.'), env: { ...env, SELF_HOST_CONFIG: appConfig }, stdio: 'pipe' });
+  const failedExit = once(failedHost, 'close');
+  const failedTimer = setTimeout(() => failedHost.kill('SIGKILL'), 8000);
+  try {
+    const [code] = await failedExit;
+    assert.equal(code, 1, 'Failed listen must exit normally after releasing resources');
+    assert.equal(sql(recovery, "SELECT count(*) FROM pg_stat_activity WHERE usename IN ('ledger_app','ledger_auth')").trim(), '0');
+  } finally { clearTimeout(failedTimer); await new Promise(resolve => occupied.close(resolve)); }
   const processHost = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], { cwd: resolve('.'), env: { ...env, SELF_HOST_CONFIG: appConfig }, stdio: ['ignore', 'pipe', 'pipe'] });
   const exited = once(processHost, 'close'); let output = ''; processHost.stdout.on('data', d => { output += d; }); processHost.stderr.on('data', d => { output += d; });
   try {
@@ -214,7 +254,7 @@ try {
   } finally { if (processHost.exitCode === null) processHost.kill('SIGKILL'); }
   console.log(JSON.stringify({ result: 'passed', runtime: process.version, postgres: run('psql', ['--version']).trim(),
     packages: { adapter: '0.8.1', other: '0.8.0' }, host: '0.8.1', upgrade: 'released baseline to unchanged full 0.8.0 migration chain',
-    checks: ['clean install', 'initial/subsequent provisioning and retries', 'role separation', 'posting/retries', 'tenant isolation', 'upgrade preserves history', 'isolated restore', 'restored API retries', 'revocation', 'redacted logs', 'readiness', 'graceful shutdown'],
+    checks: ['clean install', 'initial/subsequent provisioning and retries', 'role separation', 'posting/retries', 'tenant isolation', 'upgrade preserves history', 'isolated restore', 'restored API retries', 'revocation', 'redacted logs', 'TLS URL policy', 'migration readiness/catalog', 'listen failure cleanup', 'readiness', 'graceful shutdown'],
     backupSeconds: +backupSeconds.toFixed(2), restoreSeconds: +restoreSeconds.toFixed(2), totalSeconds: +((performance.now() - started) / 1000).toFixed(2) }));
 } finally {
   await server?.close();

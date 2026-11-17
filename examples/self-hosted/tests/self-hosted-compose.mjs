@@ -12,7 +12,7 @@ import { once } from 'node:events';
 const scratch = mkdtempSync('/tmp/bc-compose-');
 const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
 const port = probe.address().port; await new Promise(r => probe.close(r));
-const env = { ...process.env, SELF_HOST_SECRETS_DIR: `${scratch}/secrets`, SELF_HOST_UID: String(process.getuid()), SELF_HOST_GID: String(process.getgid()), SELF_HOST_PORT: String(port) };
+const env = { ...process.env, SELF_HOST_SECRETS_DIR: `${scratch}/secrets`, SELF_HOST_UID: String(process.getuid()), SELF_HOST_GID: String(process.getgid()), SELF_HOST_PORT: String(port), SELF_HOST_TENANT_INPUT: `${scratch}/ambient-tenant.json`, SELF_HOST_PROJECT: `bc-selfhost-drill-${process.pid}` };
 const project = `bc-selfhost-drill-${process.pid}`;
 const run = (command, args) => {
   const result = spawnSync(command, args, { env, encoding: 'utf8', timeout: 240000 });
@@ -21,21 +21,28 @@ const run = (command, args) => {
 };
 const compose = (...args) => run('docker', ['compose', '-p', project, '-f', 'compose.yml', ...args]);
 try {
-  run(process.execPath, ['scripts/config.mjs']);
-  compose('build');
-  compose('up', '-d', '--wait', 'postgres');
-  compose('run', '--rm', 'operator', 'migrate');
-  compose('exec', '-T', 'postgres', 'psql', '-Xq', '-U', 'ledger_admin', '-d', 'borecount_self_hosted', '-v', 'ON_ERROR_STOP=1', '-f', '/host-release/permissions.sql');
-  compose('run', '--rm', 'operator', 'provision');
-  compose('run', '--rm', 'operator', 'provision');
-  compose('up', '-d', '--wait', 'api');
+  // Exercise the exact short installation commands documented for users.
+  run('npm', ['run', 'setup']);
+  const initialTenant = JSON.parse(readFileSync(`${env.SELF_HOST_SECRETS_DIR}/tenant.json`, 'utf8'));
+  env.SELF_HOST_TENANT_NAME = 'Ambient tenant must not be provisioned';
+  run(process.execPath, ['scripts/tenant.mjs']);
+  delete env.SELF_HOST_TENANT_NAME;
+  const ambientTenant = JSON.parse(readFileSync(env.SELF_HOST_TENANT_INPUT, 'utf8'));
+  const credentials = readFileSync(`${env.SELF_HOST_SECRETS_DIR}/app.json`, 'utf8');
+  const setupRetry = run('npm', ['run', 'setup']);
+  assert.ok(setupRetry.includes(initialTenant.tenantId));
+  assert.ok(!setupRetry.includes(ambientTenant.tenantId));
+  const provisionRetry = run('npm', ['run', 'tenant:provision']);
+  assert.ok(provisionRetry.includes(initialTenant.tenantId));
+  assert.ok(!provisionRetry.includes(ambientTenant.tenantId));
+  assert.equal(readFileSync(`${env.SELF_HOST_SECRETS_DIR}/app.json`, 'utf8'), credentials, 'Setup retry must preserve existing secrets');
+  run('npm', ['run', 'up']);
+  run('npm', ['run', 'check']);
   const state = JSON.parse(compose('exec', '-T', 'api', 'node', '-e', "console.log(JSON.stringify({uid:process.getuid(),secrets:require('fs').readdirSync('/run/secrets')}))"));
   assert.notEqual(state.uid, 0); assert.deepEqual(state.secrets, ['app_config']);
-  env.SELF_HOST_TENANT_INPUT = `${env.SELF_HOST_SECRETS_DIR}/tenant-02.json`;
-  env.SELF_HOST_TENANT_NAME = 'Second Compose tenant';
-  run(process.execPath, ['scripts/tenant.mjs']);
-  compose('run', '--rm', 'operator', 'provision');
-  compose('run', '--rm', 'operator', 'provision');
+  const secondInput = `${env.SELF_HOST_SECRETS_DIR}/tenant-02.json`;
+  run('npm', ['run', 'tenant:add', '--', '--name', 'Second Compose tenant', '--file', secondInput]);
+  run('npm', ['run', 'tenant:provision', '--', '--file', secondInput]);
   const tenant = JSON.parse(readFileSync(`${env.SELF_HOST_SECRETS_DIR}/tenant.json`));
   const url = `http://127.0.0.1:${port}`;
   const getToken = async () => {
@@ -46,7 +53,8 @@ try {
   const created = await fetch(`${url}/v1/ledgers`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Durable Compose ledger' }) });
   assert.equal(created.status, 201); const ledger = await created.json();
   assert.equal((await fetch(`${url}/demo/session`, { method: 'POST' })).status, 404);
-  compose('restart', 'api');
+  run('npm', ['run', 'down']);
+  run('npm', ['run', 'up']);
   let healthy = false;
   for (let i = 0; i < 100; i++) {
     try { if ((await fetch(`${url}/ready`)).ok) { healthy = true; break; } } catch {}

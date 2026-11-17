@@ -10,15 +10,26 @@ resources. Reproduction commands are in the [README](README.md#validation-and-op
 
 | Check | Observed result |
 | --- | --- |
-| `npm run typecheck` and `npm test` | Typecheck and 15 tests passed, covering checksums, standalone resolution, recovery metadata, source refresh and invalid migration URLs. |
+| `npm run typecheck` and `npm test` | Typecheck and 30 tests passed, covering metadata, source refresh, shared TLS URL policy and installation defaults and symlinked paths. |
 | `npm run test:lifecycle` | Installation, provisioning, authentication, posting, retries, upgrade, isolated recovery and process lifecycle passed. |
-| `npm run test:compose` | Image builds, initialization, secret mounts, non-root API, provisioning, readiness and durable restart passed. |
+| `npm run test:compose` | Documented npm setup/up/check commands, setup retries preserving secrets, tenant commands, non-root API and down/up preserving ledger data passed. |
 | `npm audit --omit=dev --audit-level=high --json` | Exit 0; zero critical/high/moderate findings, one low esbuild finding. |
 
 The lifecycle drill checked first/subsequent tenant provisioning and exact/conflicting retries,
 SERVICE/ADMIN and trusted-actor policy, cross-tenant denial, runtime/lookup privilege separation,
 revocation, log canaries, sanitized 500/503 responses, readiness recovery and SIGTERM exit 0.
 No sandbox, Library bridge or reset route was installed.
+
+Security regressions reject repeated/overriding URL options, missing credentials and IPv6 URLs.
+Native `postgres` hostnames require verified TLS; the Compose-only exception requires both the
+manifest marker and Docker execution. A nondefault `PGPORT` cannot change the normalized driver
+port. Symlinked secret paths are checked through existing ancestors. Compose setup and default
+provisioning ignore an inherited alternate tenant input. Additional regressions reject
+baseline-only or altered migration journals, equal-count table replacements, missing columns and
+missing required indexes. Readiness returns 503 for a removed journal entry and recovers after
+restoration. An occupied HTTP port causes exit 1 with both application pools closed, checked in
+PostgreSQL's activity catalog. Expected catalog names are derived from the pinned installed SQL;
+these checks do not audit arbitrary DDL or every constraint/function definition.
 
 It upgraded populated baseline data through the full unchanged 0.8.0 migration chain packaged in adapter 0.8.1 and reapplied it without
 changes. Unknown host tables and modified migration hashes were rejected. This is a forward schema
@@ -34,9 +45,9 @@ that its ledger survived restart. Both runners removed only their own temporary 
 
 | Local synthetic measurement | Seconds |
 | --- | --- |
-| Backup | 0.24 |
+| Backup | 0.23 |
 | Restore, including SQL checks | 0.24 |
-| Complete native drill | 5.17 |
+| Complete native drill | 6.49 |
 
 The remaining dependency finding is [GHSA-g7r4-m6w7-qqqr](https://github.com/advisories/GHSA-g7r4-m6w7-qqqr),
 a low-severity Windows esbuild development-server issue. This Linux image uses esbuild through tsx
