@@ -10,7 +10,7 @@ resources. Reproduction commands are in the [README](README.md#validation-and-op
 
 | Check | Observed result |
 | --- | --- |
-| `npm run typecheck` and `npm test` | Typecheck and 25 tests passed, covering metadata, source refresh, shared TLS URL policy and installation defaults. |
+| `npm run typecheck` and `npm test` | Typecheck and 30 tests passed, covering metadata, source refresh, shared TLS URL policy and installation defaults and symlinked paths. |
 | `npm run test:lifecycle` | Installation, provisioning, authentication, posting, retries, upgrade, isolated recovery and process lifecycle passed. |
 | `npm run test:compose` | Documented npm setup/up/check commands, setup retries preserving secrets, tenant commands, non-root API and down/up preserving ledger data passed. |
 | `npm audit --omit=dev --audit-level=high --json` | Exit 0; zero critical/high/moderate findings, one low esbuild finding. |
@@ -20,7 +20,11 @@ SERVICE/ADMIN and trusted-actor policy, cross-tenant denial, runtime/lookup priv
 revocation, log canaries, sanitized 500/503 responses, readiness recovery and SIGTERM exit 0.
 No sandbox, Library bridge or reset route was installed.
 
-Security regressions reject repeated/overriding URL options in all connection entry points,
+Security regressions reject repeated/overriding URL options, missing credentials and IPv6 URLs.
+Native `postgres` hostnames require verified TLS; the Compose-only exception requires both the
+manifest marker and Docker execution. A nondefault `PGPORT` cannot change the normalized driver
+port. Symlinked secret paths are checked through existing ancestors. Compose setup and default
+provisioning ignore an inherited alternate tenant input. Additional regressions reject
 baseline-only or altered migration journals, equal-count table replacements, missing columns and
 missing required indexes. Readiness returns 503 for a removed journal entry and recovers after
 restoration. An occupied HTTP port causes exit 1 with both application pools closed, checked in

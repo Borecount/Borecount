@@ -94,7 +94,8 @@ overwritten. After interruption, retry the saved input rather than generating a 
 npm run tenant:provision -- --file /private/tenant-02.json
 ```
 
-Without `--file`, `tenant:provision` retries the initial `tenant.json`. An exact retry reuses its
+Both `setup` and `tenant:provision` without `--file` explicitly select the initial `tenant.json`,
+ignoring an inherited `SELF_HOST_TENANT_INPUT`. An exact retry reuses its
 tenant/key; conflicting fields or a revoked credential fail. CLI output contains IDs and creation
 status, never raw keys. Provisioning is an operator capability, with no public onboarding route.
 

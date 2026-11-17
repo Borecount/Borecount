@@ -21,7 +21,7 @@ export async function createSelfHostedServer(env: NodeJS.ProcessEnv, logger: Par
   }
   const target = parseDatabaseUrl(env.DATABASE_URL);
   const authTarget = parseDatabaseUrl(env.AUTH_DATABASE_URL);
-  if (target.hostname !== authTarget.hostname || (target.port || '5432') !== (authTarget.port || '5432') || target.pathname !== authTarget.pathname) {
+  if (target.hostname !== authTarget.hostname || target.port !== authTarget.port || target.pathname !== authTarget.pathname) {
     throw new Error('Runtime and authentication must use the same database endpoint');
   }
   const limits = parseRateLimitConfig(env);

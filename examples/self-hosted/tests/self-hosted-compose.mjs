@@ -12,7 +12,7 @@ import { once } from 'node:events';
 const scratch = mkdtempSync('/tmp/bc-compose-');
 const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
 const port = probe.address().port; await new Promise(r => probe.close(r));
-const env = { ...process.env, SELF_HOST_SECRETS_DIR: `${scratch}/secrets`, SELF_HOST_UID: String(process.getuid()), SELF_HOST_GID: String(process.getgid()), SELF_HOST_PORT: String(port), SELF_HOST_PROJECT: `bc-selfhost-drill-${process.pid}` };
+const env = { ...process.env, SELF_HOST_SECRETS_DIR: `${scratch}/secrets`, SELF_HOST_UID: String(process.getuid()), SELF_HOST_GID: String(process.getgid()), SELF_HOST_PORT: String(port), SELF_HOST_TENANT_INPUT: `${scratch}/ambient-tenant.json`, SELF_HOST_PROJECT: `bc-selfhost-drill-${process.pid}` };
 const project = `bc-selfhost-drill-${process.pid}`;
 const run = (command, args) => {
   const result = spawnSync(command, args, { env, encoding: 'utf8', timeout: 240000 });
@@ -23,8 +23,18 @@ const compose = (...args) => run('docker', ['compose', '-p', project, '-f', 'com
 try {
   // Exercise the exact short installation commands documented for users.
   run('npm', ['run', 'setup']);
+  const initialTenant = JSON.parse(readFileSync(`${env.SELF_HOST_SECRETS_DIR}/tenant.json`, 'utf8'));
+  env.SELF_HOST_TENANT_NAME = 'Ambient tenant must not be provisioned';
+  run(process.execPath, ['scripts/tenant.mjs']);
+  delete env.SELF_HOST_TENANT_NAME;
+  const ambientTenant = JSON.parse(readFileSync(env.SELF_HOST_TENANT_INPUT, 'utf8'));
   const credentials = readFileSync(`${env.SELF_HOST_SECRETS_DIR}/app.json`, 'utf8');
-  run('npm', ['run', 'setup']);
+  const setupRetry = run('npm', ['run', 'setup']);
+  assert.ok(setupRetry.includes(initialTenant.tenantId));
+  assert.ok(!setupRetry.includes(ambientTenant.tenantId));
+  const provisionRetry = run('npm', ['run', 'tenant:provision']);
+  assert.ok(provisionRetry.includes(initialTenant.tenantId));
+  assert.ok(!provisionRetry.includes(ambientTenant.tenantId));
   assert.equal(readFileSync(`${env.SELF_HOST_SECRETS_DIR}/app.json`, 'utf8'), credentials, 'Setup retry must preserve existing secrets');
   run('npm', ['run', 'up']);
   run('npm', ['run', 'check']);

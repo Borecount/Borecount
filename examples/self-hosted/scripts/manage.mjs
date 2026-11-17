@@ -36,6 +36,7 @@ try {
     try { await access(env.SELF_HOST_SECRETS_DIR); }
     catch { run(process.execPath, ['scripts/config.mjs']); }
     await configured();
+    env.SELF_HOST_TENANT_INPUT = join(env.SELF_HOST_SECRETS_DIR, 'tenant.json');
     compose('build'); migrate(); compose('run', '--rm', 'operator', 'provision');
     console.log(`Setup complete. Private configuration: ${env.SELF_HOST_SECRETS_DIR}. Run npm run up.`);
   } else if (command === 'tenant:add' || command === 'tenant:provision') {
@@ -46,7 +47,7 @@ try {
       env.SELF_HOST_TENANT_INPUT = values.file ?? join(env.SELF_HOST_SECRETS_DIR, `tenant-${randomUUID()}.json`);
       run(process.execPath, ['scripts/tenant.mjs'], { ...env, SELF_HOST_TENANT_NAME: values.name, SELF_HOST_TENANT_ROLE: values.role ?? 'ADMIN' });
       console.log(`Retain this input for retries: ${env.SELF_HOST_TENANT_INPUT}`);
-    } else if (values.file) env.SELF_HOST_TENANT_INPUT = values.file;
+    } else env.SELF_HOST_TENANT_INPUT = values.file ?? join(env.SELF_HOST_SECRETS_DIR, 'tenant.json');
     compose('run', '--rm', 'operator', 'provision');
   } else {
     if (args.length) throw new Error('Use npm run compose -- <arguments> for advanced Compose commands');

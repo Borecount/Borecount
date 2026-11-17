@@ -40,7 +40,9 @@ single-installation case; override a value consistently when managing a differen
 | `SELF_HOST_UID` / `SELF_HOST_GID` | Current user's UID/GID |
 
 Raw Compose commands remain available through `npm run compose -- <arguments>`, using the same
-project, Compose file, secret directory and UID/GID. The application-level `start`, `migrate` and
+project, Compose file, secret directory and UID/GID. Secret paths and existing ancestors are
+resolved through symlinks before validation; symlink aliases into the build context and dangling
+symlinks are rejected. The application-level `start`, `migrate` and
 `provision` scripts remain the native entry points used inside the containers.
 
 ## Authentication and ingress
@@ -55,10 +57,16 @@ for financial commands and their idempotency rules.
 
 All runtime, authentication, migration and provisioning URLs use one validation policy. Repeated
 query parameters are rejected; only `sslmode` and `application_name` query keys are supported.
-Endpoints and credentials belong in the URL authority/path. Runtime and authentication URLs must
-select the same endpoint/database. Outside `localhost`,
-`127.0.0.1` or the Compose `postgres` hostname, startup requires `sslmode=verify-full`; supply the
-operator's trust roots. Set `TRUSTED_PROXY_CIDRS` only to the actual immediate ingress peers after
+Endpoints and nonempty usernames/passwords must be explicit in every URL. A missing port is
+normalized to `5432` before the driver sees the URL, so `PGPORT`, `PGUSER` and `PGPASSWORD` cannot
+redirect these connections. Runtime and authentication must select the same endpoint/database.
+Only `localhost` and `127.0.0.1` are local exceptions in native mode. The `postgres` hostname is
+exempt only inside Docker with the internal `SELF_HOST_NETWORK=compose` marker supplied by
+`compose.yml`; private JSON configuration cannot enable it. Other targets require
+`sslmode=verify-full` and the operator's trust roots. IPv6 URLs are rejected because the pinned
+postgres 3.4.8 driver does not reliably parse them.
+
+Set `TRUSTED_PROXY_CIDRS` only to the actual immediate ingress peers after
 verifying forwarding behavior. Never trust a caller-selected chain. Rotate database login secrets
 through your secret store; JWT key overlap uses `JWT_PREVIOUS_SIGNING_KEYS`, removed after old tokens
 expire plus clock skew.

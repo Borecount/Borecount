@@ -30,7 +30,7 @@ const run = (cmd, args, extra = {}, expected = 0) => {
   return result.stdout;
 };
 const sql = (host, text, database = 'borecount_self_hosted') => run('psql', ['-XqAtw', '-v', 'ON_ERROR_STOP=1', '-c', text], { PGHOST: host, PGPORT: host === source ? '55443' : '55442', PGUSER: 'ledger_admin', PGDATABASE: database });
-const dbUrl = (host, role) => `postgresql://${role}@127.0.0.1:${host === source ? '55443' : '55442'}/borecount_self_hosted`;
+const dbUrl = (host, role) => `postgresql://${role}:synthetic-${role.slice(7)}@127.0.0.1:${host === source ? '55443' : '55442'}/borecount_self_hosted`;
 const source = join(scratch, 'source'); const recovery = join(scratch, 'recovery');
 const clusters = []; const clients = []; let server;
 const jwt = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY';
