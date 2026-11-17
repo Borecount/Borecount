@@ -11,6 +11,11 @@ for command in pg_dump pg_restore psql; do
     echo "Missing required PostgreSQL client command: $command" >&2
     exit 1
   }
+  client_version="$("$command" --version)"
+  if [[ ! "$client_version" =~ \(PostgreSQL\)[[:space:]]16\. ]]; then
+    echo "PostgreSQL 16 client tools are required: $client_version" >&2
+    exit 1
+  fi
 done
 
 mkdir -p "$dump_directory"

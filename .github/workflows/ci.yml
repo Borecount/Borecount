@@ -97,6 +97,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install PostgreSQL 16 client tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-16
+          echo '/usr/lib/postgresql/16/bin' >> "$GITHUB_PATH"
+
       - name: Check PostgreSQL connectivity
         run: bun run db:check:test
 
