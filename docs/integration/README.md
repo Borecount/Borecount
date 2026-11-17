@@ -30,8 +30,9 @@ own manifest and lockfile; use the matching package contracts when adapting it.
 
 Run the following block in your terminal after setup, with Node.js 22 available. It uses Node's
 built-in HTTP client and reads the generated initial ADMIN credential locally without printing it.
-Keep the same `SELF_HOST_PROJECT`, `SELF_HOST_SECRETS_DIR` and `SELF_HOST_PORT` overrides if you used
-custom installation settings.
+Use the same `SELF_HOST_PROJECT`, `SELF_HOST_SECRETS_DIR` and `SELF_HOST_PORT` values you used during
+setup. Export them in this shell before running the block, or prefix the `node` command with the
+assignments; values set only on an earlier `npm run setup` command do not carry over.
 
 The scenario records a $10 wallet funding event: debit a clearing account and credit a wallet
 liability account by 1,000 USD minor units. This records the event; it does not initiate a payment.
