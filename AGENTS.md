@@ -29,7 +29,7 @@ The reference API demo host lives in a separate repository.
 - Import workspace packages only through declared `@borecount/*` exports. Cross-package source
   imports are allowed only in tests explicitly enforcing repository boundaries.
 - Treat exports, entry-point barrels, declaration build inputs, and README usage as one public API.
-  Keep coordinated versions/dependency ranges aligned; never export internals merely for tests.
+  Keep public major.minor versions aligned and dependency ranges compatible; never export internals merely for tests.
 
 ## Correctness
 

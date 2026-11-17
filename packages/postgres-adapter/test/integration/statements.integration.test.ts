@@ -67,6 +67,18 @@ const databaseTime = async (): Promise<Date> => {
   return new Date(row.now);
 };
 
+const capacityHistoryEnd = async (tenantId: string, grantId: string): Promise<Date> => {
+  // Date truncates PostgreSQL microseconds. Use an exact millisecond after every
+  // fixture row so the invalid row cannot accidentally fall outside the query.
+  const [row] = await db.execute<{ end: Date | null }>(sql`
+    select date_trunc('milliseconds', max(created_at)) + interval '1 millisecond' as "end"
+    from credit_grant_capacity_versions
+    where tenant_id = ${tenantId} and grant_id = ${grantId}
+  `);
+  if (!row?.end) throw new Error('Missing capacity history fixture');
+  return new Date(row.end);
+};
+
 const setup = async (tenantId: string) => {
   const ledgerId = await createLedger(db, tenantId, 'Statement ledger');
   const asset = (await services.assets.list({ tenantId, limit: 50 })).data.find(
@@ -374,11 +386,12 @@ describe('bounded statements', () => {
       insert into credit_grant_capacity_versions (
         tenant_id, ledger_id, account_id, grant_id, version,
         granted_minor, reversed_minor, consumed_minor, compensated_minor,
-        expired_minor, remaining_minor, reserved_minor
+        expired_minor, remaining_minor, reserved_minor, created_at
       )
       select tenant_id, ledger_id, account_id, grant_id, version + 1,
         granted_minor, reversed_minor, consumed_minor, compensated_minor,
-        expired_minor, remaining_minor, reserved_minor
+        expired_minor, remaining_minor, reserved_minor,
+        date_trunc('milliseconds', created_at) + interval '1.999 milliseconds'
       from credit_grant_capacity_versions
       where tenant_id = ${tenantId} and grant_id = ${grant.grant.id}
       order by version desc
@@ -391,7 +404,7 @@ describe('bounded statements', () => {
         accountId: accounts.walletId,
         grantId: grant.grant.id,
         from: new Date('2020-01-01T00:00:00.000Z'),
-        asOf: await databaseTime(),
+        asOf: await capacityHistoryEnd(tenantId, grant.grant.id),
         limit: 20,
       }),
       'Credit lot movement has invalid provenance',
@@ -440,7 +453,7 @@ describe('bounded statements', () => {
         accountId: accounts.walletId,
         grantId: grant.grant.id,
         from: new Date('2020-01-01T00:00:00.000Z'),
-        asOf: await databaseTime(),
+        asOf: await capacityHistoryEnd(tenantId, grant.grant.id),
         limit: 20,
       }),
       'Credit lot movement has invalid hold release provenance',
@@ -489,7 +502,7 @@ describe('bounded statements', () => {
         accountId: accounts.walletId,
         grantId: grant.grant.id,
         from: new Date('2020-01-01T00:00:00.000Z'),
-        asOf: await databaseTime(),
+        asOf: await capacityHistoryEnd(tenantId, grant.grant.id),
         limit: 20,
       }),
       'Credit lot movement is missing its previous capacity version',

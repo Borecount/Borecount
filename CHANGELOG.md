@@ -1,10 +1,26 @@
 # Changelog
 
-Borecount uses coordinated releases: every public `@borecount/*` package and
-the OpenAPI contract share one version. Release details and migration guidance
+Public `@borecount/*` packages share a `major.minor` compatibility line with
+independent patch versions. OpenAPI follows the HTTP package version. Release details and migration guidance
 are linked from each entry.
 
 ## [Unreleased]
+
+## [postgres-adapter@0.8.1] - 2026-11-16
+
+### Added
+
+- PostgreSQL adapter npm artifacts include the released SQL migration chain and Drizzle journal.
+- Public `@borecount/postgres-adapter/migrations` export provides `borecountMigrationsPath` for controlled host migration scripts.
+- Packed-artifact verification checks migration contents and the consumer-facing export.
+
+### Fixed
+
+- Integration fixtures respect UUID ordering for equal timestamps and preserve sub-millisecond rows in corruption checks.
+
+Only `@borecount/postgres-adapter` advances; other packages and OpenAPI remain `0.8.0`.
+No financial behavior, HTTP payload, database schema or migration SQL changes from 0.8.0.
+See [the adapter 0.8.1 release notes](docs/releases/postgres-adapter-0.8.1.md).
 
 ## [0.8.0] - 2026-11-10
 

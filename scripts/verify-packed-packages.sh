@@ -22,12 +22,14 @@ pack_workspace "@borecount/express-routes"
 
 cd "$SMOKE_DIR"
 npm init --yes >/dev/null
-npm install --ignore-scripts --no-package-lock "$TARBALL_DIR"/*.tgz
+npm install --ignore-scripts --no-audit --no-package-lock "$TARBALL_DIR"/*.tgz
 
 node --input-type=module <<'NODE'
-import { access, readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import { strictEqual } from 'node:assert';
+import { access, readFile, readdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { borecountMigrationsPath } from '@borecount/postgres-adapter/migrations';
+import { dirname, resolve, join } from 'node:path';
+import { strictEqual, deepStrictEqual } from 'node:assert';
 
 const packageRoot = resolve('node_modules/@borecount/postgres-adapter');
 const readmePath = resolve(packageRoot, 'README.md');
@@ -55,6 +57,21 @@ strictEqual(overlay.includes('CREATE ROLE %I NOLOGIN'), true, 'Packed security S
 strictEqual(overlay.includes('borecount_runtime'), true, 'Packed security SQL is missing the runtime role');
 strictEqual(overlay.includes('find_active_api_key'), true, 'Packed security SQL is missing credential lookup functions');
 strictEqual(runbook.includes('--file dist/security/least-privilege.sql'), true, 'Packed runbook does not point to the packaged overlay');
+
+// Verify the exported path against the actual installed tarball, not source aliases.
+const sourceMigrations = resolve('../..', 'drizzle');
+const journal = await readFile(join(borecountMigrationsPath, 'meta/_journal.json'));
+strictEqual(journal.equals(await readFile(join(sourceMigrations, 'meta/_journal.json'))), true);
+const entries = JSON.parse(journal).entries;
+deepStrictEqual((await readdir(borecountMigrationsPath)).filter(name => name.endsWith('.sql')).sort(),
+  entries.map(({ tag }) => `${tag}.sql`).sort());
+for (const { tag } of entries) {
+  const packaged = await readFile(join(borecountMigrationsPath, `${tag}.sql`));
+  const source = await readFile(join(sourceMigrations, `${tag}.sql`));
+  strictEqual(createHash('sha256').update(packaged).digest('hex'),
+    createHash('sha256').update(source).digest('hex'), `Changed packed migration: ${tag}`);
+}
+
 NODE
 
 node --input-type=module <<'NODE'
@@ -116,6 +133,7 @@ NODE
 node --input-type=commonjs <<'NODE'
 require('@borecount/core');
 require('@borecount/postgres-adapter/schema');
+require('@borecount/postgres-adapter/migrations');
 NODE
 
 echo "Packed package smoke test passed."

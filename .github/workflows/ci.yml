@@ -46,7 +46,9 @@ jobs:
         run: bun run lint
 
       - name: Run typecheck
-        run: bun run typecheck
+        run: |
+          bun run typecheck
+          bun run typecheck:test
 
       - name: Build public packages
         run: bun run build
@@ -54,7 +56,7 @@ jobs:
       - name: Verify HTTP contract
         run: bun run contract:verify
 
-      - name: Verify coordinated release metadata
+      - name: Verify compatible release metadata
         run: bun run release:verify
 
       - name: Verify clean-install package consumption
@@ -62,7 +64,8 @@ jobs:
 
   integration:
     name: Integration (PostgreSQL)
-    runs-on: ubuntu-latest
+    # Keep the installed restore clients on the PostgreSQL 16 compatibility line.
+    runs-on: ubuntu-24.04
     env:
       DATABASE_URL: postgresql://luxledger:luxledger@127.0.0.1:5432/luxledger_test
       DATABASE_URL_TEST: postgresql://luxledger:luxledger@127.0.0.1:5432/luxledger_test
@@ -94,6 +97,14 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Select PostgreSQL 16 client tools
+        run: |
+          for tool in pg_dump pg_restore psql; do
+            test -x "/usr/lib/postgresql/16/bin/$tool"
+            "/usr/lib/postgresql/16/bin/$tool" --version
+          done
+          echo '/usr/lib/postgresql/16/bin' >> "$GITHUB_PATH"
 
       - name: Check PostgreSQL connectivity
         run: bun run db:check:test

@@ -1,12 +1,13 @@
 # Versioning, Migrations, and Publication
 
-Borecount publishes every public package and the OpenAPI contract as one
-coordinated semantic version. The complete version, breaking-change,
+Borecount public packages share a `major.minor` compatibility line and have
+independent patch versions. OpenAPI follows the HTTP package version. The complete version, breaking-change,
 deprecation, npm tag, provenance, and release checklist policy lives in the
 [release policy](../governance/release-policy.md).
 
-The current coordinated release is `0.8.0`; see its
-[release notes](../releases/0.8.0.md) and the repository [changelog](../../CHANGELOG.md).
+The current compatibility line is `0.8.x`; the PostgreSQL adapter is `0.8.1`
+and the other packages remain `0.8.0`. See the
+[adapter release notes](../releases/postgres-adapter-0.8.1.md) and the repository [changelog](../../CHANGELOG.md).
 
 ## Migration policy
 
@@ -30,6 +31,11 @@ with a previous chain, then apply the current baseline to the empty database.
 Backups from a previous chain belong with the matching release and migration
 history. Historical release notes describe the migrations shipped at the time.
 
+The PostgreSQL adapter includes the released SQL files and journal. Hosts obtain their directory
+from `@borecount/postgres-adapter/migrations` (`borecountMigrationsPath`); see the
+[package migration example](https://github.com/Borecount/Borecount/blob/main/packages/postgres-adapter/README.md#packaged-postgresql-migrations).
+Apply this chain through the library journal, keeping host migrations in a separate journal.
+
 ## Upgrade verification
 
 For releases following this baseline reset, every schema-changing release must
@@ -48,7 +54,8 @@ sufficient.
 
 1. Read every intervening release note and the changelog.
 2. Back up PostgreSQL and verify the backup can be restored.
-3. Upgrade the complete `@borecount/*` set and commit the lockfile.
+3. Upgrade changed packages within the same `major.minor` line and commit the lockfile.
+   Upgrade the complete set when changing the compatibility line.
 4. Recreate dev/test databases when adopting the new pre-production baseline.
    For subsequent upgrades, apply new migrations in numeric order.
 5. Run application smoke tests and ledger reconciliation before resuming writes.
