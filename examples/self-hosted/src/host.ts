@@ -7,6 +7,8 @@
 import { createApplicationServices, createDbClient } from '@borecount/postgres-adapter';
 import { ApiKeyRole } from '@borecount/core/application';
 import { ForbiddenError } from '@borecount/core/errors';
+import { parseDatabaseUrl } from './database-policy.mjs';
+import { verifyReleaseState } from './release-state.mjs';
 import { createServerCore, registerApplication } from './api/server';
 import { parseJwtAuthConfig } from './api/auth/policy';
 import { parseRateLimitConfig } from './api/rate-limit/policy';
@@ -17,15 +19,10 @@ export async function createSelfHostedServer(env: NodeJS.ProcessEnv, logger: Par
   if (!env.DATABASE_URL || !env.AUTH_DATABASE_URL || env.DATABASE_URL === env.AUTH_DATABASE_URL) {
     throw new Error('Separate runtime and authentication connections are required');
   }
-  const target = new URL(env.DATABASE_URL);
-  const authTarget = new URL(env.AUTH_DATABASE_URL);
-  if (target.hostname !== authTarget.hostname || target.port !== authTarget.port || target.pathname !== authTarget.pathname) {
+  const target = parseDatabaseUrl(env.DATABASE_URL);
+  const authTarget = parseDatabaseUrl(env.AUTH_DATABASE_URL);
+  if (target.hostname !== authTarget.hostname || (target.port || '5432') !== (authTarget.port || '5432') || target.pathname !== authTarget.pathname) {
     throw new Error('Runtime and authentication must use the same database endpoint');
-  }
-  for (const url of [target, authTarget]) {
-    if (!['127.0.0.1', 'localhost', 'postgres'].includes(url.hostname) && url.searchParams.get('sslmode') !== 'verify-full') {
-      throw new Error('Remote PostgreSQL requires verified TLS');
-    }
   }
   const limits = parseRateLimitConfig(env);
   const jwtAuth = parseJwtAuthConfig(env);
@@ -36,8 +33,8 @@ export async function createSelfHostedServer(env: NodeJS.ProcessEnv, logger: Par
   };
   const pool = { idleTimeoutSeconds: positive(env.DB_IDLE_TIMEOUT, 20),
     connectTimeoutSeconds: positive(env.DB_CONNECT_TIMEOUT, 10) };
-  const runtime = createDbClient({ databaseUrl: env.DATABASE_URL, ...pool, max: positive(env.DB_POOL_MAX, 10) });
-  const lookup = createDbClient({ databaseUrl: env.AUTH_DATABASE_URL, ...pool, max: positive(env.AUTH_DB_POOL_MAX, 2) });
+  const runtime = createDbClient({ databaseUrl: target.href, ...pool, max: positive(env.DB_POOL_MAX, 10) });
+  const lookup = createDbClient({ databaseUrl: authTarget.href, ...pool, max: positive(env.AUTH_DB_POOL_MAX, 2) });
   const close = async () => {
     await Promise.all([runtime.sql.end({ timeout: 5 }), lookup.sql.end({ timeout: 5 })]);
   };
@@ -68,16 +65,15 @@ export async function createSelfHostedServer(env: NodeJS.ProcessEnv, logger: Par
           auth.rolcreatedb || auth.rolcreaterole || auth.database !== identity.database || auth.role === identity.role) {
         throw new Error('Unsafe self-hosted database role composition');
       }
-      const [schema] = await runtime.sql`select count(*)::int as count from pg_class c
+      const tables = await verifyReleaseState(runtime.sql);
+      const scoped = await runtime.sql`select c.relname as name from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
         join pg_policy p on p.polrelid = c.oid and p.polname = 'borecount_runtime_scope'
         where n.nspname = 'public' and c.relrowsecurity
         and not pg_has_role(current_user, c.relowner, 'MEMBER')`;
-      if (schema.count !== 19) throw new Error('Security overlay is missing or incompatible');
-      const [inventory] = await runtime.sql`select count(*)::int as count from pg_class c
-        join pg_namespace n on n.oid = c.relnamespace
-        where n.nspname = 'public' and c.relkind in ('r', 'p')`;
-      if (inventory.count !== 19) throw new Error('This profile requires the package-only schema');
+      if (scoped.length !== tables.length || tables.some((name: string) => !scoped.some(row => row.name === name))) {
+        throw new Error('Security overlay is missing or incompatible');
+      }
       await lookup.sql`select * from borecount_security.find_active_api_key('readiness-no-key')`;
     };
     await check();

@@ -5,14 +5,15 @@
  * and credential contents are never printed.
  */
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { installationEnv } from './installation.mjs';
+import { dirname, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { generateUuidV7 } from '@borecount/core/base';
 import { generateApiKey } from '@borecount/core/application';
 
 process.umask(0o077);
-const directory = process.env.SELF_HOST_SECRETS_DIR;
-if (!directory) throw new Error('SELF_HOST_SECRETS_DIR is required');
+const directory = installationEnv().SELF_HOST_SECRETS_DIR;
+await mkdir(dirname(resolve(directory)), { recursive: true, mode: 0o700 });
 await mkdir(resolve(directory), { mode: 0o700 }); // An existing directory is deliberately rejected.
 const passwords = Object.fromEntries(['admin', 'migrator', 'app', 'auth', 'operator'].map(name => [name, randomBytes(32).toString('hex')]));
 const url = role => `postgresql://ledger_${role}:${passwords[role]}@postgres:5432/borecount_self_hosted`;
