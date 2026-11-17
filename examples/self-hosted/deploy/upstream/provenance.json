@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/Borecount/Borecount",
+  "tag": "v0.8.0",
+  "commit": "3ec496370d9d55064a4ed3048bbd80608c232c3a",
+  "sha256": {
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "examples/security/least-privilege.sql": "0a059d6ba8ea0cdf568aa2a368cbd2fda1719d556e52fd71fc30ecc5711c5950",
+    "scripts/portable-verify.sql": "e2f4c05b8b8cf07aeccab06af199cb257f27e612ab67e06463e39e933c10cd40"
+  },
+  "adapted": [
+    {
+      "source_path": "scripts/portable-backup.ts",
+      "source_sha256": "60da13c9bd9a521f36195556038f64f9a7d55d284e423415e4a06e95ad9e7d14",
+      "local_path": "scripts/backup.ts",
+      "changes": "Example package.json/npm-lock compatibility, local asset paths and import-safe CLI entry point.",
+      "source_tag": "v0.8.0",
+      "source_commit": "3ec496370d9d55064a4ed3048bbd80608c232c3a"
+    }
+  ]
+}

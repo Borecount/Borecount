@@ -1,0 +1,38 @@
+name: Self-hosted library example
+on:
+  pull_request:
+    paths:
+      - examples/self-hosted/**
+      - .github/workflows/self-hosted-example.yml
+  push:
+    branches: [main]
+    paths:
+      - examples/self-hosted/**
+      - .github/workflows/self-hosted-example.yml
+permissions:
+  contents: read
+jobs:
+  standalone-example:
+    # PostgreSQL 16 server/client tools are supplied by this runner image.
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: examples/self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.15.0
+          cache: npm
+          cache-dependency-path: examples/self-hosted/package-lock.json
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-16 postgresql-client-16
+      - run: npm ci --ignore-scripts --no-audit
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:lifecycle
+        env:
+          PG_BIN: /usr/lib/postgresql/16/bin
+      - run: npm run test:compose
