@@ -1,14 +1,16 @@
 # Self-hosted 0.8.1 verification
 
-Observed 2026-11-16 with Node.js 22.15.0, Bun 1.3.9, PostgreSQL server/client 16.16, a candidate
-`postgres-adapter@0.8.1` tarball with the other Borecount packages from npm at `0.8.0` and Docker Engine 28.0.4. All installation data was synthetic, using new temporary
-resources. Reproduction commands and prerequisites are in the [README](README.md#validation-and-operating-scope).
+Observed 2026-11-17 with Node.js 22.15.0, Bun 1.3.9, PostgreSQL server/client 16.16
+and Docker Engine 28.0.4. All dependencies were installed from npm using a new empty cache:
+`postgres-adapter@0.8.1` and the other Borecount packages at `0.8.0`. The lockfile records
+the published adapter's integrity. All installation data was synthetic, using new temporary
+resources. Reproduction commands are in the [README](README.md#validation-and-operating-scope).
 
 ## Results
 
 | Check | Observed result |
 | --- | --- |
-| `npm run typecheck` and `npm test` | Typecheck, release-file checksums, independent package resolution and six incompatible local-metadata cases passed. |
+| `npm run typecheck` and `npm test` | Typecheck and 15 tests passed, covering checksums, standalone resolution, recovery metadata, source refresh and invalid migration URLs. |
 | `npm run test:lifecycle` | Installation, provisioning, authentication, posting, retries, upgrade, isolated recovery and process lifecycle passed. |
 | `npm run test:compose` | Image builds, initialization, secret mounts, non-root API, provisioning, readiness and durable restart passed. |
 | `npm audit --omit=dev --audit-level=high --json` | Exit 0; zero critical/high/moderate findings, one low esbuild finding. |
@@ -33,18 +35,19 @@ that its ledger survived restart. Both runners removed only their own temporary 
 | Local synthetic measurement | Seconds |
 | --- | --- |
 | Backup | 0.24 |
-| Restore, including SQL checks | 0.23 |
-| Complete native drill | 4.79 |
+| Restore, including SQL checks | 0.24 |
+| Complete native drill | 5.17 |
 
 The remaining dependency finding is [GHSA-g7r4-m6w7-qqqr](https://github.com/advisories/GHSA-g7r4-m6w7-qqqr),
 a low-severity Windows esbuild development-server issue. This Linux image uses esbuild through tsx
 for transformation and does not start that server; the affected trigger is absent from this profile.
 The advisory remains listed by npm audit.
 
-Before npm publication, a candidate tarball supplied adapter 0.8.1 and npm supplied the other 0.8.0 packages for native
-and container checks. The container fixture changed only dependency-download URLs in a temporary
-copy; the source Dockerfile retained the ordinary npm-ci installation. `update:upstream` also passed
-package-specific/legacy annotated-tag, hash, download-failure and invalid-ref tests, and a live refresh from public v0.8.0.
+The final native and container checks used the ordinary registry installation and unchanged
+Dockerfile, with no candidate tarball overrides or file dependencies. The source-refresh command
+also passed package-specific/legacy annotated-tag, hash, download-failure and invalid-ref tests.
+Operational SQL remains pinned to its original public v0.8.0 provenance because those files did
+not change; updating npm dependencies does not require rewriting their provenance.
 
 ## Coverage boundary
 

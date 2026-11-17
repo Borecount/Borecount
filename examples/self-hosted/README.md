@@ -143,8 +143,8 @@ npm run test:lifecycle
 npm run test:compose
 ```
 
-After that tag is published, the command resolves it to an immutable commit, downloads the three
-source assets,
+The command resolves the public release tag to an immutable commit, downloads the three source
+assets,
 recalculates SHA-256 and replaces their snapshot together with `provenance.json`. It preserves the
 original ancestry of the adapted backup runner. Review the SQL changes before applying any to a
 live deployment; this command updates source files only and does not run migrations or alter roles.

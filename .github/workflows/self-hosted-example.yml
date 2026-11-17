@@ -13,7 +13,8 @@ permissions:
   contents: read
 jobs:
   standalone-example:
-    runs-on: ubuntu-latest
+    # PostgreSQL 16 server/client tools are supplied by this runner image.
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: examples/self-hosted

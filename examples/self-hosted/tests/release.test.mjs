@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { tsImport } from 'tsx/esm/api';
 import { createHash } from 'node:crypto';
+import { migrateSelfHosted } from '../scripts/migrate.mjs';
 
 const { readRecoveryRelease } = await tsImport('../scripts/backup.ts', import.meta.url);
 
@@ -75,5 +76,11 @@ test('recovery rejects stale locks, unresolved pins and mixed major/minor lines'
       await writeFile(join(directory, 'package-lock.json'), JSON.stringify(locked));
       await assert.rejects(() => readRecoveryRelease(directory));
     });
+  }
+});
+
+test('migration rejects missing or incomplete URLs before connecting', async () => {
+  for (const value of [undefined, null, '', '  ', 'https://localhost/database', 'postgresql:///database', 'postgresql://localhost']) {
+    await assert.rejects(() => migrateSelfHosted(value), /explicit PostgreSQL host and database/);
   }
 });

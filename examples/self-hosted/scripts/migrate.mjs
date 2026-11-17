@@ -14,8 +14,14 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 
 export async function migrateSelfHosted(databaseUrl) {
-  if (!databaseUrl) throw new Error('Migration connection required');
-  const client = postgres(databaseUrl, { max: 1, onnotice: () => {} });
+  const url = typeof databaseUrl === 'string' ? databaseUrl.trim() : '';
+  let target;
+  try { target = new URL(url); } catch {}
+  if (!target || !['postgres:', 'postgresql:'].includes(target.protocol) ||
+      !target.hostname || !target.pathname || target.pathname === '/') {
+    throw new Error('Migration URL must specify an explicit PostgreSQL host and database');
+  }
+  const client = postgres(url, { max: 1, onnotice: () => {} });
   const folder = borecountMigrationsPath;
   const connection = client;
   try {
