@@ -41,7 +41,8 @@ exception does not authorize deleting old published artifacts.
 
 ## Tags and publication
 
-- Stable versions publish under npm `latest`; prereleases use `next`.
+- Each package independently selects its npm tag: stable versions use `latest`;
+  prereleases use `next`. One run may publish both kinds.
 - Independent package releases use Git tags `<package-directory>-v<version>` and
   notes `docs/releases/<package-directory>-<version>.md`, for example
   `postgres-adapter-v0.8.1`. This avoids collisions when another package later
@@ -53,9 +54,12 @@ exception does not authorize deleting old published artifacts.
 Release verification generates a manifest containing each package's own version,
 tarball, release notes and tag. The workflow carries that manifest alongside the
 verified tarballs, checks npm for each exact version, and publishes only missing
-versions in dependency order. Already published packages and their dist-tags stay
-unchanged. Registry/authentication errors fail the release rather than counting
-as a missing version. The final smoke test installs the exact mixed-patch set.
+versions in dependency order. Before skipping an existing version, it downloads the
+published tarball and compares its filenames and file bytes with the candidate, ignoring
+archive timestamps, compression and entry order. A difference fails the entire preflight
+and requires a version bump; no package is published before every check passes.
+Already published packages and their dist-tags stay unchanged. Registry/authentication
+errors fail the release rather than counting as a missing version. The final smoke test installs the exact mixed-patch set.
 
 ## Release checklist
 
@@ -67,8 +71,9 @@ as a missing version. The final smoke test installs the exact mixed-patch set.
    policy](../integration/versioning.md#upgrade-verification).
 3. Pass unit and PostgreSQL integration tests, lint, typecheck, build,
    `contract:verify`, `release:verify`, `migration:verify`, and `pack:verify`.
-4. Run `Release` with publication disabled. Inspect its manifest and tarballs.
-5. Run the workflow with publication enabled and the appropriate npm tag.
+4. Run `Release` with publication disabled. Inspect its manifest, tarballs and
+   verified npm publication plan.
+5. Run the workflow with publication enabled; tags are selected per package.
 6. Confirm changed versions and provenance in npm; create their package tags and
    GitHub releases from their versioned notes.
 7. Upgrade consumers, regenerate their lockfiles, and verify their integrations.

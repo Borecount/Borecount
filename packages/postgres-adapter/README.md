@@ -159,7 +159,14 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 
-const connection = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
+const migrationDatabaseUrl = process.env.MIGRATION_DATABASE_URL?.trim();
+if (!migrationDatabaseUrl) throw new Error('MIGRATION_DATABASE_URL is required');
+const target = new URL(migrationDatabaseUrl);
+if (!['postgres:', 'postgresql:'].includes(target.protocol) || !target.hostname ||
+    !target.pathname || target.pathname === '/') {
+  throw new Error('MIGRATION_DATABASE_URL must specify a PostgreSQL host and database');
+}
+const connection = postgres(migrationDatabaseUrl, { max: 1 });
 try {
   await migrate(drizzle(connection), {
     migrationsFolder: borecountMigrationsPath,
@@ -182,8 +189,9 @@ continues to support schema tooling; it is not a substitute for the released mig
 ## Independent Drizzle migrations
 
 Borecount and the host own separate tables, migration directories, snapshots and database journals.
-Keep the released Borecount SQL and journal from the matching checkout unchanged in
-`./migrations/borecount`, using `drizzle.__drizzle_migrations`. Generate host migrations only from
+Use `borecountMigrationsPath` from the installed adapter for the library chain and
+`drizzle.__drizzle_migrations` for its journal, as shown above. Do not copy library migrations
+into the host checkout. Generate host migrations only from
 host-owned tables, using `host_migrations.__drizzle_migrations`; do not include
 `borecountDrizzleSchemaPath` or re-export library tables in the host generation schema.
 The exported schema path remains available for schema inspection, not combined migration generation.
