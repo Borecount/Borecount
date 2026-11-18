@@ -1,5 +1,5 @@
+import { InvalidAccountSideError, InvalidOverdraftPolicyError } from '../errors';
 import { AccountSide, OverdraftPolicy } from './entity';
-import { InvalidAccountSideError, InvalidOverdraftPolicyError } from './errors';
 
 export function validateAccountSide(side: string): void {
   if (!(Object.values(AccountSide) as string[]).includes(side)) {

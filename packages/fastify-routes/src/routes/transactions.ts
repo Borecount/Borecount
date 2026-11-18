@@ -1,5 +1,15 @@
-import type { TransactionEntity } from '@luxledger/core';
-import type { TransactionService } from '@luxledger/core/application';
+import type { TransactionEntity } from '@borecount/core';
+import type {
+  TransactionService,
+  transactionListFilter,
+  WhereFor,
+} from '@borecount/core/application';
+import {
+  invalidWhereError,
+  readWhereParameter,
+  transactionFilterFields,
+  whereQueryProperty,
+} from '@borecount/http';
 import {
   type CorrectTransactionRequest,
   correctTransactionRequestSchema,
@@ -14,9 +24,11 @@ import {
   transactionByIdParamsSchema,
   transactionResponseSchema,
   transactionsPageResponseSchema,
-} from '@luxledger/http/contracts';
-import { toTransactionResponse } from '@luxledger/http/mappers';
+} from '@borecount/http/contracts';
+import { toTransactionResponse } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
+import { handleValidationError } from '../errors/validation-error-handler';
 import { BasePaginatedRoute, type PaginatedRequest } from '../routing/paginated-route';
 
 export class TransactionsRoutes extends BasePaginatedRoute<
@@ -38,15 +50,27 @@ export class TransactionsRoutes extends BasePaginatedRoute<
   }
 
   protected querystringSchema() {
-    return super.querystringSchema(listTransactionsQuerySchemaExtra);
+    return super.querystringSchema({
+      ...listTransactionsQuerySchemaExtra,
+      properties: {
+        ...listTransactionsQuerySchemaExtra.properties,
+        where: whereQueryProperty(transactionFilterFields),
+      },
+    });
   }
 
   protected list(request: PaginatedRequest<ListTransactionsQuery>) {
+    const where = readWhereParameter<WhereFor<typeof transactionListFilter>>(
+      request.raw.url ?? '',
+      transactionFilterFields,
+    );
+    if (where === null) throw invalidWhereError();
     return this.transactions.list({
       tenantId: request.tenantId as string,
-      limit: this.resolveLimit(request.query.limit),
+      limit: resolveLimit(request.query.limit),
       cursor: request.query.cursor,
       ledgerId: request.query.ledger_id,
+      where,
     });
   }
 
@@ -62,6 +86,7 @@ export class TransactionsRoutes extends BasePaginatedRoute<
     server.get<{ Params: TransactionByIdParams }>(
       '/v1/transactions/:id',
       {
+        errorHandler: handleValidationError,
         schema: {
           params: transactionByIdParamsSchema,
           response: { 200: transactionResponseSchema },
@@ -82,6 +107,7 @@ export class TransactionsRoutes extends BasePaginatedRoute<
     server.post<{ Params: TransactionByIdParams; Body: ReverseTransactionRequest }>(
       '/v1/transactions/:id/reverse',
       {
+        errorHandler: handleValidationError,
         schema: {
           params: transactionByIdParamsSchema,
           body: reverseTransactionRequestSchema,
@@ -110,6 +136,7 @@ export class TransactionsRoutes extends BasePaginatedRoute<
     server.post<{ Params: TransactionByIdParams; Body: CorrectTransactionRequest }>(
       '/v1/transactions/:id/correct',
       {
+        errorHandler: handleValidationError,
         schema: {
           params: transactionByIdParamsSchema,
           body: correctTransactionRequestSchema,

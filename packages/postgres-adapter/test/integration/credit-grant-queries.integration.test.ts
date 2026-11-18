@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { AccountSide } from '@luxledger/core';
-import { AccountNotFoundError, InvariantViolationError } from '@luxledger/core/application';
+import { AccountSide } from '@borecount/core';
+import { AccountNotFoundError, InvariantViolationError } from '@borecount/core/errors';
 import { eq, sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import { creditGrants } from '../../src/schema';
@@ -19,7 +19,9 @@ const services = createApplicationServices(client);
 
 const setup = async (tenantId: string) => {
   const ledgerId = await createLedger(db, tenantId, 'Credits');
-  const asset = (await services.assets.list(tenantId)).find((item) => item.code === 'USD');
+  const asset = (await services.assets.list({ tenantId, limit: 50 })).data.find(
+    (item) => item.code === 'USD',
+  );
   if (!asset) throw new Error('Missing test asset');
   const wallet = await services.accounts.create({
     tenantId,

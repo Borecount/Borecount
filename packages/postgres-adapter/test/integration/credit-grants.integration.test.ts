@@ -1,6 +1,10 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { AccountSide, InvalidCreditGrantError } from '@luxledger/core';
-import { CreditGrantConflictError, CreditGrantNotFoundError } from '@luxledger/core/application';
+import { AccountSide } from '@borecount/core';
+import {
+  CreditGrantConflictError,
+  CreditGrantNotFoundError,
+  InvalidCreditGrantError,
+} from '@borecount/core/errors';
 import { eq, sql } from 'drizzle-orm';
 import { createApplicationServices } from '../../src/application-services';
 import { createDbClient, type DbClient, type DrizzleDatabase } from '../../src/client';
@@ -30,6 +34,14 @@ const db = createRepositoryTestDatabase(client);
 const services = createApplicationServices(client);
 
 const PAGE_LIMIT = 200;
+
+const readDatabaseNow = async (): Promise<Date> => {
+  const [clock] = await db.execute<{ databaseNow: Date }>(
+    sql`select clock_timestamp() as "databaseNow"`,
+  );
+  if (!clock) throw new Error('Unable to read database time');
+  return new Date(clock.databaseNow);
+};
 
 const collectPages = async <T>(
   fetchPage: (cursor: string | undefined) => Promise<{ data: T[]; nextCursor: string | null }>,
@@ -84,9 +96,35 @@ const getActiveGrantReservations = async (
   return new Map(rows.map((row) => [row.grantId, BigInt(row.reserved)]));
 };
 
+const withDatabaseClock = (
+  baseClient: DbClient,
+  operation: string,
+  databaseNow: () => Date,
+): DbClient => ({
+  ...baseClient,
+  runTenantTx: async <T>(
+    tenantId: string,
+    currentOperation: string,
+    action: (tx: DrizzleDatabase) => Promise<T>,
+  ): Promise<T> =>
+    baseClient.runTenantTx(tenantId, currentOperation, async (tx) => {
+      if (currentOperation !== operation) return action(tx);
+      const clockedTx = new Proxy(tx, {
+        get(target, property) {
+          if (property === 'execute') return async () => [{ databaseNow: databaseNow() }];
+          const value = Reflect.get(target, property, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }) as DrizzleDatabase;
+      return action(clockedTx);
+    }),
+});
+
 const setup = async (tenantId: string) => {
   const ledgerId = await createLedger(db, tenantId, 'Credits');
-  const asset = (await services.assets.list(tenantId)).find((item) => item.code === 'USD');
+  const asset = (await services.assets.list({ tenantId, limit: 50 })).data.find(
+    (item) => item.code === 'USD',
+  );
   if (!asset) throw new Error('Missing test asset');
   const wallet = await services.accounts.create({
     tenantId,
@@ -1607,7 +1645,9 @@ describe('credit grants', () => {
           .set({ grantEnabled: true })
           .where(eq(accountRows.id, ordinaryAccount.id));
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: 'account grant capability is immutable' }),
+    });
     await expect(
       db.transaction(async (tx) => {
         await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
@@ -1616,7 +1656,9 @@ describe('credit grants', () => {
           .set({ grantEnabled: false })
           .where(eq(accountRows.id, grantAccounts.accountId));
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: 'account grant capability is immutable' }),
+    });
   });
 
   it('rejects an untracked ledger posting and preserves the reconciled balance', async () => {
@@ -1700,6 +1742,384 @@ describe('credit grants', () => {
     expect(
       (await services.creditGrants.getBalance(tenantId, accounts.accountId)).remainingMinor,
     ).toBe(100n);
+  });
+
+  it('refunds partial and full unspent capacity idempotently with immutable lineage', async () => {
+    const tenantId = await createTenant(db, 'refund-idempotency');
+    const accounts = await setup(tenantId);
+    const grant = await services.creditGrants.create(grantInput(tenantId, accounts, 'grant'));
+
+    const partial = await services.creditGrants.refund({
+      tenantId,
+      grantId: grant.grant.id,
+      reference: 'partial',
+      amountMinor: 30n,
+    });
+    expect(partial.created).toBeTrue();
+    expect(
+      await services.creditGrants.refund({
+        tenantId,
+        grantId: grant.grant.id,
+        reference: 'partial',
+        amountMinor: 30n,
+      }),
+    ).toEqual({ ...partial, created: false });
+    await expect(
+      services.creditGrants.refund({
+        tenantId,
+        grantId: grant.grant.id,
+        reference: 'partial',
+        amountMinor: 31n,
+      }),
+    ).rejects.toThrow('refund reference payload mismatch');
+
+    const remainder = await services.creditGrants.refund({
+      tenantId,
+      grantId: grant.grant.id,
+      reference: 'remainder',
+      amountMinor: 70n,
+    });
+    expect(remainder.created).toBeTrue();
+    expect((await lotsOf(tenantId, accounts.accountId))[0]).toMatchObject({
+      reversedMinor: 100n,
+      consumedMinor: 0n,
+      remainingMinor: 0n,
+    });
+    expect(
+      (await lineageByGrant(tenantId, grant.grant.id)).map(({ kind, amountMinor }) => ({
+        kind,
+        amountMinor,
+      })),
+    ).toEqual([
+      { kind: 'REFUND', amountMinor: 30n },
+      { kind: 'REFUND', amountMinor: 70n },
+    ]);
+    await expect(
+      services.creditGrants.reverse({
+        tenantId,
+        grantId: grant.grant.id,
+        reference: 'full-reversal-after-refund',
+      }),
+    ).rejects.toThrow('Consumed, refunded, or expired grant cannot be fully reversed');
+  });
+
+  it('refunds only unspent and unreserved capacity and releases capacity after hold void', async () => {
+    const tenantId = await createTenant(db, 'refund-capacity');
+    const accounts = await setup(tenantId);
+    const grant = await services.creditGrants.create(grantInput(tenantId, accounts, 'grant'));
+    await consume(tenantId, accounts, 'spend', 40n);
+    const hold = await reserve(tenantId, accounts, 'reserve', 30n);
+
+    await expect(
+      services.creditGrants.refund({
+        tenantId,
+        grantId: grant.grant.id,
+        reference: 'reserved-over-refund',
+        amountMinor: 31n,
+      }),
+    ).rejects.toThrow('exceeds current unspent grant capacity');
+    await services.creditGrants.refund({
+      tenantId,
+      grantId: grant.grant.id,
+      reference: 'available-before-void',
+      amountMinor: 30n,
+    });
+    await services.holds.void({ tenantId, holdId: hold.holdId });
+    await services.creditGrants.refund({
+      tenantId,
+      grantId: grant.grant.id,
+      reference: 'released-after-void',
+      amountMinor: 30n,
+    });
+
+    expect((await lotsOf(tenantId, accounts.accountId))[0]).toMatchObject({
+      reversedMinor: 60n,
+      consumedMinor: 40n,
+      remainingMinor: 0n,
+    });
+    await expect(
+      services.creditGrants.refund({
+        tenantId,
+        grantId: grant.grant.id,
+        reference: 'already-spent',
+        amountMinor: 1n,
+      }),
+    ).rejects.toThrow('exceeds current unspent grant capacity');
+  });
+
+  it('rejects an over-refund at the PostgreSQL boundary and rolls back its posting', async () => {
+    const tenantId = await createTenant(db, 'refund-database-boundary');
+    const accounts = await setup(tenantId);
+    const grant = await services.creditGrants.create(grantInput(tenantId, accounts, 'grant'));
+    await consume(tenantId, accounts, 'spend', 40n);
+    await reserve(tenantId, accounts, 'reserve', 30n);
+    await expect(
+      client.runTenantTx(tenantId, 'invalid direct refund', async (tx) => {
+        const [transaction] = await tx
+          .insert(transactions)
+          .values({
+            tenantId,
+            ledgerId: accounts.ledgerId,
+            reference: 'direct-over-refund',
+            currency: 'USD',
+            assetId: accounts.assetId,
+          })
+          .returning({ id: transactions.id });
+        if (!transaction) throw new Error('Missing direct refund transaction');
+        const [walletEntry] = await tx
+          .insert(entries)
+          .values({
+            tenantId,
+            transactionId: transaction.id,
+            accountId: accounts.accountId,
+            signedAmountMinor: 31n,
+            currency: 'USD',
+            assetId: accounts.assetId,
+          })
+          .returning({ id: entries.id });
+        await tx.insert(entries).values({
+          tenantId,
+          transactionId: transaction.id,
+          accountId: accounts.fundingAccountId,
+          signedAmountMinor: -31n,
+          currency: 'USD',
+          assetId: accounts.assetId,
+        });
+        if (!walletEntry) throw new Error('Missing direct refund wallet entry');
+        await tx.insert(creditGrantEntries).values({
+          tenantId,
+          ledgerId: accounts.ledgerId,
+          accountId: accounts.accountId,
+          grantId: grant.grant.id,
+          entryId: walletEntry.id,
+          kind: 'REFUND',
+          amountMinor: 31n,
+        });
+      }),
+    ).rejects.toThrow();
+
+    expect(
+      await db
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(eq(transactions.reference, 'direct-over-refund')),
+    ).toHaveLength(0);
+    expect((await lotsOf(tenantId, accounts.accountId))[0]).toMatchObject({
+      reversedMinor: 0n,
+      remainingMinor: 60n,
+    });
+  });
+
+  it('rejects refund lineage with a hold, relation, or mismatched funding account', async () => {
+    const tenantId = await createTenant(db, 'refund-lineage-boundary');
+    const accounts = await setup(tenantId);
+    const grant = await services.creditGrants.create(grantInput(tenantId, accounts, 'grant'));
+    const hold = await reserve(tenantId, accounts, 'refund-lineage-hold', 1n);
+    const alternateFunding = await services.accounts.create({
+      tenantId,
+      ledgerId: accounts.ledgerId,
+      name: 'Alternate funding',
+      side: AccountSide.DEBIT,
+      currency: 'USD',
+      assetId: accounts.assetId,
+    });
+    const cases = [
+      {
+        name: 'hold',
+        transaction: { holdId: hold.holdId },
+        fundingAccountId: accounts.fundingAccountId,
+      },
+      {
+        name: 'relation',
+        transaction: {
+          relationType: 'REVERSAL' as const,
+          relatedTransactionId: grant.grant.transactionId,
+        },
+        fundingAccountId: accounts.fundingAccountId,
+      },
+      {
+        name: 'funding-account',
+        transaction: {},
+        fundingAccountId: alternateFunding.id,
+      },
+    ];
+
+    for (const invalid of cases) {
+      const reference = `direct-refund-${invalid.name}`;
+      await expect(
+        client.runTenantTx(tenantId, `invalid ${invalid.name} refund`, async (tx) => {
+          const [transaction] = await tx
+            .insert(transactions)
+            .values({
+              tenantId,
+              ledgerId: accounts.ledgerId,
+              reference,
+              currency: 'USD',
+              assetId: accounts.assetId,
+              ...invalid.transaction,
+            })
+            .returning({ id: transactions.id });
+          if (!transaction) throw new Error('Missing direct refund transaction');
+          const [walletEntry] = await tx
+            .insert(entries)
+            .values({
+              tenantId,
+              transactionId: transaction.id,
+              accountId: accounts.accountId,
+              signedAmountMinor: 10n,
+              currency: 'USD',
+              assetId: accounts.assetId,
+            })
+            .returning({ id: entries.id });
+          await tx.insert(entries).values({
+            tenantId,
+            transactionId: transaction.id,
+            accountId: invalid.fundingAccountId,
+            signedAmountMinor: -10n,
+            currency: 'USD',
+            assetId: accounts.assetId,
+          });
+          if (!walletEntry) throw new Error('Missing direct refund wallet entry');
+          await tx.insert(creditGrantEntries).values({
+            tenantId,
+            ledgerId: accounts.ledgerId,
+            accountId: accounts.accountId,
+            grantId: grant.grant.id,
+            entryId: walletEntry.id,
+            kind: 'REFUND',
+            amountMinor: 10n,
+          });
+        }),
+      ).rejects.toThrow();
+      expect(
+        await db
+          .select({ id: transactions.id })
+          .from(transactions)
+          .where(eq(transactions.reference, reference)),
+      ).toHaveLength(0);
+    }
+
+    expect((await lotsOf(tenantId, accounts.accountId))[0]).toMatchObject({
+      reversedMinor: 0n,
+      remainingMinor: 100n,
+    });
+  });
+
+  it('makes late compensated capacity refundable while expired capacity stays expiration-owned', async () => {
+    const tenantId = await createTenant(db, 'refund-late-compensation');
+    const accounts = await setup(tenantId);
+    const grant = await services.creditGrants.create(grantInput(tenantId, accounts, 'grant'));
+    const spent = await consume(tenantId, accounts, 'spend', 80n);
+    await services.creditGrants.refund({
+      tenantId,
+      grantId: grant.grant.id,
+      reference: 'initial-unspent',
+      amountMinor: 20n,
+    });
+    await services.transactions.reverse({
+      tenantId,
+      transactionId: spent.transactionId,
+      reference: 'restore-spend',
+    });
+    await services.creditGrants.refund({
+      tenantId,
+      grantId: grant.grant.id,
+      reference: 'restored-capacity',
+      amountMinor: 80n,
+    });
+    expect((await lotsOf(tenantId, accounts.accountId))[0]).toMatchObject({
+      reversedMinor: 100n,
+      consumedMinor: 80n,
+      compensatedMinor: 80n,
+      remainingMinor: 0n,
+    });
+
+    const expiresAt = new Date(Date.now() + 60_000);
+    const expiring = await services.creditGrants.create({
+      ...grantInput(tenantId, accounts, 'expiring'),
+      expiresAt,
+    });
+    let databaseNow = new Date(expiresAt.getTime() - 1_000);
+    const clockedServices = createApplicationServices(
+      withDatabaseClock(client, 'refund credit grant', () => databaseNow),
+    );
+    const beforeExpiration = await clockedServices.creditGrants.refund({
+      tenantId,
+      grantId: expiring.grant.id,
+      reference: 'before-expiration',
+      amountMinor: 1n,
+    });
+    const [storedRefund] = await db
+      .select({ effectiveAt: transactions.effectiveAt })
+      .from(transactions)
+      .where(eq(transactions.id, beforeExpiration.transactionId))
+      .limit(1);
+    expect(storedRefund?.effectiveAt).toEqual(databaseNow);
+
+    databaseNow = new Date(expiresAt.getTime() + 1);
+    await expect(
+      clockedServices.creditGrants.refund({
+        tenantId,
+        grantId: expiring.grant.id,
+        reference: 'expired',
+        amountMinor: 1n,
+      }),
+    ).rejects.toThrow('Expired grant capacity cannot be refunded');
+  });
+
+  it('serializes concurrent refunds and keeps tenant-scoped references independent', async () => {
+    const tenantId = await createTenant(db, 'refund-concurrency');
+    const accounts = await setup(tenantId);
+    const grant = await services.creditGrants.create(grantInput(tenantId, accounts, 'grant'));
+    const secondClient = createDbClient({ databaseUrl, max: 2 });
+    try {
+      const other = createApplicationServices(secondClient);
+      const results = await Promise.allSettled([
+        services.creditGrants.refund({
+          tenantId,
+          grantId: grant.grant.id,
+          reference: 'first',
+          amountMinor: 70n,
+        }),
+        other.creditGrants.refund({
+          tenantId,
+          grantId: grant.grant.id,
+          reference: 'second',
+          amountMinor: 70n,
+        }),
+      ]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.find((result) => result.status === 'rejected')?.reason).toBeInstanceOf(
+        CreditGrantConflictError,
+      );
+      expect((await lotsOf(tenantId, accounts.accountId))[0]?.remainingMinor).toBe(30n);
+    } finally {
+      await secondClient.sql.end({ timeout: 5 });
+    }
+
+    const otherTenantId = await createTenant(db, 'refund-other-tenant');
+    const otherAccounts = await setup(otherTenantId);
+    const otherGrant = await services.creditGrants.create(
+      grantInput(otherTenantId, otherAccounts, 'grant'),
+    );
+    await expect(
+      services.creditGrants.refund({
+        tenantId: otherTenantId,
+        grantId: grant.grant.id,
+        reference: 'tenant-reference',
+        amountMinor: 1n,
+      }),
+    ).rejects.toBeInstanceOf(CreditGrantNotFoundError);
+    expect(
+      (
+        await services.creditGrants.refund({
+          tenantId: otherTenantId,
+          grantId: otherGrant.grant.id,
+          reference: 'first',
+          amountMinor: 1n,
+        })
+      ).created,
+    ).toBeTrue();
   });
 
   it('allows only one of two concurrent reversal references', async () => {
@@ -2244,7 +2664,7 @@ describe('credit grants', () => {
     await expect(
       services.creditGrants.create({
         ...grantInput(tenantId, accounts, 'already-expired'),
-        expiresAt: new Date(Date.now() - 1),
+        expiresAt: new Date((await readDatabaseNow()).getTime() - 1),
       }),
     ).rejects.toBeInstanceOf(CreditGrantConflictError);
     const perpetual = await services.creditGrants.create(
@@ -2283,7 +2703,7 @@ describe('credit grants', () => {
   it('enforces effective-at and database-time eligibility including backdated submissions', async () => {
     const tenantId = await createTenant(db, 'eligibility');
     const accounts = await setup(tenantId);
-    const expiresAt = new Date(Date.now() + 120);
+    const expiresAt = new Date((await readDatabaseNow()).getTime() + 120);
     await services.creditGrants.create({
       ...grantInput(tenantId, accounts, 'effective-window'),
       expiresAt,
@@ -2336,7 +2756,7 @@ describe('credit grants', () => {
   it('previews and runs bounded expirations deterministically and idempotently', async () => {
     const tenantId = await createTenant(db, 'expiration-run');
     const accounts = await setup(tenantId);
-    const expiresAt = new Date(Date.now() + 120);
+    const expiresAt = new Date((await readDatabaseNow()).getTime() + 120);
     const first = await services.creditGrants.create({
       ...grantInput(tenantId, accounts, 'due-first'),
       expiresAt,
@@ -2361,27 +2781,27 @@ describe('credit grants', () => {
     ]);
     expect(futurePreview.items.every((item) => item.transactionId === null)).toBeTrue();
     await new Promise((resolve) => setTimeout(resolve, 170));
-    const asOf = new Date();
+    const asOf = await readDatabaseNow();
     const preview = await services.creditGrants.previewExpirations({ tenantId, asOf, limit: 2 });
     expect(preview.items.map((item) => item.grantId)).toEqual([first.grant.id, second.grant.id]);
     expect(preview.items.map((item) => item.amountMinor)).toEqual([60n, 100n]);
     expect(preview.items.every((item) => item.transactionId === null)).toBeTrue();
     const pageOne = await services.creditGrants.runExpirations({
       tenantId,
-      asOf: new Date(Date.now() - 1),
+      asOf: await readDatabaseNow(),
       limit: 2,
     });
     expect(pageOne.items).toHaveLength(2);
     const pageTwo = await services.creditGrants.runExpirations({
       tenantId,
-      asOf: new Date(Date.now() - 1),
+      asOf: await readDatabaseNow(),
       limit: 2,
     });
     expect(pageTwo.items.map((item) => item.grantId)).toEqual([third.grant.id]);
     expect(
       await services.creditGrants.runExpirations({
         tenantId,
-        asOf: new Date(Date.now() - 1),
+        asOf: await readDatabaseNow(),
         limit: 2,
       }),
     ).toMatchObject({ items: [] });
@@ -2411,14 +2831,7 @@ describe('credit grants', () => {
   it('returns a short FEFO-sorted page when the earliest bounded grant is locked', async () => {
     const tenantId = await createTenant(db, 'expiration-skip-locked-order');
     const accounts = await setup(tenantId);
-    const readDatabaseTime = async () => {
-      const [clock] = await db.execute<{ databaseNow: Date }>(
-        sql`select transaction_timestamp() as "databaseNow"`,
-      );
-      if (!clock) throw new Error('Unable to read database time');
-      return new Date(clock.databaseNow);
-    };
-    const firstExpiry = new Date(Date.now() + 120);
+    const firstExpiry = new Date((await readDatabaseNow()).getTime() + 120);
     const first = await services.creditGrants.create({
       ...grantInput(tenantId, accounts, 'skip-locked-first'),
       expiresAt: firstExpiry,
@@ -2461,7 +2874,7 @@ describe('credit grants', () => {
       await locked;
       const shortPage = await services.creditGrants.runExpirations({
         tenantId,
-        asOf: await readDatabaseTime(),
+        asOf: await readDatabaseNow(),
         limit: 3,
       });
       expect(shortPage.items.map((item) => item.grantId)).toEqual([
@@ -2476,7 +2889,7 @@ describe('credit grants', () => {
 
     const nextPage = await services.creditGrants.runExpirations({
       tenantId,
-      asOf: await readDatabaseTime(),
+      asOf: await readDatabaseNow(),
       limit: 3,
     });
     expect(nextPage.items.map((item) => item.grantId)).toEqual([first.grant.id]);
@@ -2485,7 +2898,7 @@ describe('credit grants', () => {
   it('does not post zero-capacity grants and prevents full reversal after use or expiration', async () => {
     const tenantId = await createTenant(db, 'zero-capacity');
     const accounts = await setup(tenantId);
-    const expiresAt = new Date(Date.now() + 100);
+    const expiresAt = new Date((await readDatabaseNow()).getTime() + 100);
     const consumed = await services.creditGrants.create({
       ...grantInput(tenantId, accounts, 'fully-consumed'),
       expiresAt,
@@ -2493,8 +2906,13 @@ describe('credit grants', () => {
     await consume(tenantId, accounts, 'consume-all', 100n);
     await new Promise((resolve) => setTimeout(resolve, 140));
     expect(
-      (await services.creditGrants.previewExpirations({ tenantId, asOf: new Date(), limit: 10 }))
-        .items,
+      (
+        await services.creditGrants.previewExpirations({
+          tenantId,
+          asOf: await readDatabaseNow(),
+          limit: 10,
+        })
+      ).items,
     ).toEqual([]);
     await expect(
       services.creditGrants.reverse({
@@ -2508,7 +2926,7 @@ describe('credit grants', () => {
   it('rolls back an expiration whose deterministic reference has a changed payload', async () => {
     const tenantId = await createTenant(db, 'expiration-conflict');
     const accounts = await setup(tenantId);
-    const expiresAt = new Date(Date.now() + 120);
+    const expiresAt = new Date((await readDatabaseNow()).getTime() + 120);
     const grant = await services.creditGrants.create({
       ...grantInput(tenantId, accounts, 'conflicting-expiration'),
       expiresAt,
@@ -2543,7 +2961,7 @@ describe('credit grants', () => {
     await expect(
       services.creditGrants.runExpirations({
         tenantId,
-        asOf: new Date(Date.now() - 1),
+        asOf: await readDatabaseNow(),
         limit: 10,
       }),
     ).rejects.toThrow('reference payload mismatch');
@@ -2556,7 +2974,7 @@ describe('credit grants', () => {
   it('re-expires late reversal and correction capacity atomically', async () => {
     const tenantId = await createTenant(db, 'late-compensation');
     const accounts = await setup(tenantId);
-    const expiresAt = new Date(Date.now() + 120);
+    const expiresAt = new Date((await readDatabaseNow()).getTime() + 120);
     const grant = await services.creditGrants.create({
       ...grantInput(tenantId, accounts, 'late-grant'),
       expiresAt,
@@ -2580,7 +2998,7 @@ describe('credit grants', () => {
 
     const correctionTenantId = await createTenant(db, 'late-correction');
     const correctionAccounts = await setup(correctionTenantId);
-    const correctionExpiry = new Date(Date.now() + 120);
+    const correctionExpiry = new Date((await readDatabaseNow()).getTime() + 120);
     const expiring = await services.creditGrants.create({
       ...grantInput(correctionTenantId, correctionAccounts, 'correction-expiring'),
       expiresAt: correctionExpiry,
@@ -2628,7 +3046,7 @@ describe('credit grants', () => {
   it('serializes concurrent expiration workers and spending without duplicate expiration', async () => {
     const tenantId = await createTenant(db, 'expiration-concurrency');
     const accounts = await setup(tenantId);
-    const expiresAt = new Date(Date.now() + 100);
+    const expiresAt = new Date((await readDatabaseNow()).getTime() + 100);
     const grant = await services.creditGrants.create({
       ...grantInput(tenantId, accounts, 'concurrent-expiry'),
       expiresAt,
@@ -2637,7 +3055,7 @@ describe('credit grants', () => {
     const secondClient = createDbClient({ databaseUrl, max: 2 });
     try {
       const other = createApplicationServices(secondClient);
-      const asOf = new Date(Date.now() - 1);
+      const asOf = await readDatabaseNow();
       const [first, second, spend] = await Promise.allSettled([
         services.creditGrants.runExpirations({ tenantId, asOf, limit: 10 }),
         other.creditGrants.runExpirations({ tenantId, asOf, limit: 10 }),
@@ -2658,7 +3076,7 @@ describe('credit grants', () => {
   it('serializes a late reversal against an expiration worker without capacity drift', async () => {
     const tenantId = await createTenant(db, 'late-reversal-concurrency');
     const accounts = await setup(tenantId);
-    const expiresAt = new Date(Date.now() + 100);
+    const expiresAt = new Date((await readDatabaseNow()).getTime() + 100);
     const grant = await services.creditGrants.create({
       ...grantInput(tenantId, accounts, 'late-reversal-concurrent-grant'),
       expiresAt,
@@ -2672,7 +3090,7 @@ describe('credit grants', () => {
       const [run, reversal] = await Promise.all([
         services.creditGrants.runExpirations({
           tenantId,
-          asOf: new Date(Date.now() - 1),
+          asOf: await readDatabaseNow(),
           limit: 10,
         }),
         other.transactions.reverse({
@@ -2704,7 +3122,7 @@ describe('credit grants', () => {
   it('re-derives expiration capacity after claiming the grant lock', async () => {
     const tenantId = await createTenant(db, 'expiration-locked-capacity');
     const accounts = await setup(tenantId);
-    const expiresAt = new Date(Date.now() + 100);
+    const expiresAt = new Date((await readDatabaseNow()).getTime() + 100);
     const grant = await services.creditGrants.create({
       ...grantInput(tenantId, accounts, 'locked-capacity'),
       expiresAt,
@@ -2785,7 +3203,7 @@ describe('credit grants', () => {
       const hookedServices = createApplicationServices(hookedClient);
       const result = await hookedServices.creditGrants.runExpirations({
         tenantId,
-        asOf: new Date(Date.now() - 1),
+        asOf: await readDatabaseNow(),
         limit: 10,
       });
       expect(injectedExpiration).toBeTrue();

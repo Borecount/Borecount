@@ -1,4 +1,6 @@
 export * from './accounts';
+export * from './adjustments';
+export * from './assets';
 export * from './auth-admin';
 export * from './common';
 export * from './credit-grants';
@@ -7,4 +9,5 @@ export * from './holds';
 export * from './ledgers';
 export * from './pagination';
 export * from './reconciliation';
+export * from './statements';
 export * from './transactions';

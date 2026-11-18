@@ -1,4 +1,4 @@
-import type { EntryEntity } from '@luxledger/core';
+import type { EntryEntity } from '@borecount/core';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { toEntryEntity } from '../mappers/entry-mapper';

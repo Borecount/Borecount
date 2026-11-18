@@ -1,7 +1,52 @@
-# LuxLedger
-Financial core infrastructure: double-entry ledger domain packages, transport contracts, and persistence adapters.
+# Borecount
 
-## Local setup
+An embeddable double-entry ledger for JavaScript and TypeScript applications on PostgreSQL.
+
+Borecount is for backend developers and CTOs building products with internal balances.
+Use the `@borecount/*` packages to record balanced postings, retry requests without double-posting,
+and preserve transaction history through reversals and corrections.
+
+The packages run inside your application. Your team owns deployment, authentication and operations.
+Borecount does not move money through banks or payment networks; it records your application's
+ledger events. See the [product overview](docs/product/overview.md) and
+[known limitations](docs/product/limitations.md).
+
+Explore the [live demo](https://borecount.dev), or run the self-hosted example below.
+
+## Try Borecount: self-hosted
+
+Start with the standalone [self-hosted example](examples/self-hosted/README.md), which consumes
+published packages. You need Git, Node.js 22, Docker with Compose v2, and a running Docker engine.
+PostgreSQL 16 runs in a container; no separate database installation or commercial account is needed.
+
+```sh
+git clone https://github.com/Borecount/Borecount.git
+cd Borecount/examples/self-hosted
+npm ci
+npm run setup
+npm run up
+npm run check
+```
+
+`setup` generates private credentials, builds the images, applies migrations and provisions an
+initial tenant. `up` starts the API at `http://127.0.0.1:8082`; `check` should print `health: OK`
+and `ready: OK`. The first build needs network access to npm and container registries.
+
+**Next: [make your first posting](docs/integration/README.md#make-your-first-posting).**
+The copy-and-run example creates two USD accounts, records a $10 wallet funding event,
+retries the identical request and verifies that only two entries exist and the trial balance agrees.
+
+The example keeps its database and generated credentials between restarts. Use `npm run down`
+from the same directory to stop it while retaining data. Configuration, additional tenants and
+operating procedures are documented in the [example README](examples/self-hosted/README.md).
+
+To embed the packages in your own application after trying them, follow the
+[integration guide](docs/integration/README.md#embed-borecount-in-your-application).
+
+## Develop this repository
+
+These commands prepare the package-development database; use the self-hosted route above to try
+the product and make a first posting. Repository development requires Bun 1.x and Docker.
 
 1. Start PostgreSQL:
    `docker compose up -d`
@@ -12,9 +57,7 @@ Financial core infrastructure: double-entry ledger domain packages, transport co
 4. Migrate the local database:
    `bun run db:migrate`
 
-The current migration chain starts with the consolidated pre-production baseline in `drizzle/0000_initial-schema.sql`. Later numbered migrations upgrade that baseline in place; databases created from the retired history that predates `0000` must still be reset.
-
-The [reference API demo](https://github.com/Crusader4Christ/LuxLedger-demo) is maintained separately so this repository can stay focused on reusable packages. Start with the [product overview](docs/product/overview.md), then use the [integration guide](docs/integration/README.md) before running the demo.
+The current schema installs from [one baseline](drizzle/0000_2026-11-09-baseline.sql). Recreate existing development and test databases initialized from any earlier migration chain before running the current migration command. See the [migration policy](docs/integration/versioning.md).
 
 ## Test strategy
 
@@ -27,6 +70,7 @@ The [reference API demo](https://github.com/Crusader4Christ/LuxLedger-demo) is m
 
 - Local application DB: `DATABASE_URL=postgresql://luxledger:luxledger@127.0.0.1:5432/luxledger`
 - Local test DB: `DATABASE_URL_TEST=postgresql://luxledger:luxledger@127.0.0.1:5433/luxledger_test`
+
 - To prepare only the test database schema locally:
   `bun run db:migrate:test`
 - To reset the test database before rerunning integration tests:

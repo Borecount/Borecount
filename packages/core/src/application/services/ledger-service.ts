@@ -1,7 +1,10 @@
+import { LedgerNotFoundError } from '../../errors';
+import { ledgerListFilter } from '../../ledger/list-filter';
 import { assertNonEmpty } from '../../utils';
-import { LedgerNotFoundError } from '../errors';
+import { validateListWhere } from '../list-filters';
+import { validatePaginationQuery } from '../pagination-query';
 import type { LedgerRepository } from '../repositories.interface';
-import type { CreateLedgerInput, Ledger } from '../types';
+import type { CreateLedgerInput, Ledger, PaginatedResult, PaginationQuery } from '../types';
 
 export class LedgerService {
   public constructor(private readonly repository: LedgerRepository) {}
@@ -22,8 +25,11 @@ export class LedgerService {
     return ledger;
   }
 
-  public async list(tenantId: string): Promise<Ledger[]> {
-    assertNonEmpty(tenantId, 'tenantId is required');
-    return this.repository.list(tenantId);
+  public async list(
+    query: PaginationQuery<typeof ledgerListFilter>,
+  ): Promise<PaginatedResult<Ledger>> {
+    validatePaginationQuery(query);
+    validateListWhere(ledgerListFilter, query.where);
+    return this.repository.list(query);
   }
 }

@@ -1,4 +1,4 @@
-import type { AccountEntity } from '@luxledger/core';
+import type { AccountEntity } from '@borecount/core';
 import type { AccountResponse } from '../contracts/accounts';
 
 export const toAccountResponse = (account: AccountEntity): AccountResponse => ({

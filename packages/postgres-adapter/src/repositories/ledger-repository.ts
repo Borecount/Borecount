@@ -1,8 +1,17 @@
-import type { LedgerEntity } from '@luxledger/core';
-import type { CreateLedgerInput, LedgerRepository } from '@luxledger/core/application';
-import { and, asc, eq } from 'drizzle-orm';
+import type { LedgerEntity } from '@borecount/core';
+import type {
+  CreateLedgerInput,
+  LedgerRepository,
+  PaginatedResult,
+  PaginationQuery,
+} from '@borecount/core/application';
+import { ledgerListFilter } from '@borecount/core/application';
+import { and, eq, getTableColumns } from 'drizzle-orm';
 import type { DbClient } from '../client';
+import { exactTimestamp } from '../exact-timestamp';
+import { listWhereScope, listWhereSql } from '../list-where';
 import { toLedgerEntity } from '../mappers/ledger-mapper';
+import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
 
 export class DrizzleLedgerRepository implements LedgerRepository {
@@ -29,14 +38,40 @@ export class DrizzleLedgerRepository implements LedgerRepository {
     });
   }
 
-  public async list(tenantId: string): Promise<LedgerEntity[]> {
-    return this.client.runTenantTx(tenantId, 'find ledgers by tenant', async (tx) => {
-      const rows = await tx
-        .select()
-        .from(schema.ledgers)
-        .where(eq(schema.ledgers.tenantId, tenantId))
-        .orderBy(asc(schema.ledgers.createdAt), asc(schema.ledgers.id));
-      return rows.map(toLedgerEntity);
+  public async list(
+    query: PaginationQuery<typeof ledgerListFilter>,
+  ): Promise<PaginatedResult<LedgerEntity>> {
+    return this.client.runTenantTx(query.tenantId, 'find ledgers by tenant', async (tx) => {
+      const predicates = [
+        eq(schema.ledgers.tenantId, query.tenantId),
+        listWhereSql(getTableColumns(schema.ledgers), ledgerListFilter, query.where),
+      ];
+      const page = await paginateByCursor<
+        typeof schema.ledgers.$inferSelect & { cursorCreatedAt: string }
+      >({
+        query,
+        scope: { resource: 'ledgers', tenantId: query.tenantId, ...listWhereScope(query.where) },
+        order: [
+          {
+            column: schema.ledgers.createdAt,
+            key: 'created_at',
+            type: 'timestamp',
+            getValue: (row) => row.cursorCreatedAt,
+          },
+          { column: schema.ledgers.id, key: 'id', type: 'uuid', getValue: (row) => row.id },
+        ],
+        selectRows: async ({ cursorPredicate, limit, orderBy }) =>
+          tx
+            .select({
+              ...getTableColumns(schema.ledgers),
+              cursorCreatedAt: exactTimestamp(schema.ledgers.createdAt),
+            })
+            .from(schema.ledgers)
+            .where(and(...predicates, cursorPredicate))
+            .orderBy(...orderBy)
+            .limit(limit),
+      });
+      return { data: page.rows.map(toLedgerEntity), nextCursor: page.nextCursor };
     });
   }
 }

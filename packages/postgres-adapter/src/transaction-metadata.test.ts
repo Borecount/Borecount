@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { InvariantViolationError } from '@luxledger/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import {
   MAX_TRANSACTION_METADATA_BYTES,
   toStoredTransactionMetadata,

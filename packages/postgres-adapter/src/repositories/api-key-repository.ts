@@ -1,55 +1,57 @@
-import { type ApiKeyEntity, ApiKeyRole } from '@luxledger/core';
+import type { ApiKeyEntity, ApiKeyRole } from '@borecount/core';
 import type {
   ApiKeyRepository,
-  BootstrapAdminRepositoryInput,
-  BootstrapAdminResult,
-} from '@luxledger/core/application';
-import { and, asc, eq, sql } from 'drizzle-orm';
+  PaginatedResult,
+  PaginationQuery,
+} from '@borecount/core/application';
+import { apiKeyListFilter } from '@borecount/core/application';
+import { and, eq, getTableColumns, sql } from 'drizzle-orm';
 import type { DbClient } from '../client';
+import { exactTimestamp } from '../exact-timestamp';
+import { listWhereScope, listWhereSql } from '../list-where';
 import { toApiKeyEntity } from '../mappers/api-key-mapper';
+import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
 
 export class DrizzleApiKeyRepository implements ApiKeyRepository {
-  public constructor(private readonly client: DbClient) {}
+  public constructor(
+    private readonly client: DbClient,
+    private readonly credentialLookupClient?: DbClient,
+  ) {}
 
-  public async bootstrapInitialAdmin(
-    input: BootstrapAdminRepositoryInput,
-  ): Promise<BootstrapAdminResult> {
-    return this.client.runTx('bootstrap initial admin', async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('luxledger.bootstrap_admin'))`);
-
-      const [row] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.apiKeys)
-        .limit(1);
-      if ((row?.count ?? 0) > 0) {
-        return { created: false };
-      }
-
-      const [tenant] = await tx
-        .insert(schema.tenants)
-        .values({ name: input.tenantName })
-        .returning();
-
-      const [apiKey] = await tx
-        .insert(schema.apiKeys)
-        .values({
-          tenantId: tenant.id,
-          name: input.keyName,
-          role: ApiKeyRole.ADMIN,
-          keyHash: input.keyHash,
-        })
-        .returning({ id: schema.apiKeys.id });
-
-      return {
-        created: true,
-        tenantId: tenant.id,
-        apiKeyId: apiKey.id,
-      };
+  private async lookupCredential(query: ReturnType<typeof sql>): Promise<ApiKeyEntity | null> {
+    const client = this.credentialLookupClient;
+    if (!client) throw new Error('Credential lookup client is required');
+    return client.execute('lookup api key', async (db) => {
+      const [row] = await db.execute<{
+        id: string;
+        tenant_id: string;
+        name: string;
+        role: string;
+        key_hash: string;
+        created_at: string | Date;
+        revoked_at: string | Date | null;
+      }>(query);
+      return row
+        ? toApiKeyEntity({
+            id: row.id,
+            tenantId: row.tenant_id,
+            name: row.name,
+            role: row.role,
+            keyHash: row.key_hash,
+            createdAt: new Date(row.created_at),
+            revokedAt: row.revoked_at === null ? null : new Date(row.revoked_at),
+          })
+        : null;
     });
   }
 
   public async findActiveByHash(keyHash: string): Promise<ApiKeyEntity | null> {
+    if (this.credentialLookupClient) {
+      return this.lookupCredential(
+        sql`select * from borecount_security.find_active_api_key(${keyHash})`,
+      );
+    }
     return this.client.execute('find api key by hash', async (db) => {
       const [row] = await db
         .select()
@@ -61,6 +63,11 @@ export class DrizzleApiKeyRepository implements ApiKeyRepository {
   }
 
   public async findById(apiKeyId: string): Promise<ApiKeyEntity | null> {
+    if (this.credentialLookupClient) {
+      return this.lookupCredential(
+        sql`select * from borecount_security.find_api_key(${apiKeyId}::uuid)`,
+      );
+    }
     return this.client.execute('find api key by id', async (db) => {
       const [row] = await db
         .select()
@@ -83,14 +90,40 @@ export class DrizzleApiKeyRepository implements ApiKeyRepository {
     });
   }
 
-  public async list(tenantId: string): Promise<ApiKeyEntity[]> {
-    return this.client.runTenantTx(tenantId, 'list api keys', async (tx) => {
-      const rows = await tx
-        .select()
-        .from(schema.apiKeys)
-        .where(eq(schema.apiKeys.tenantId, tenantId))
-        .orderBy(asc(schema.apiKeys.createdAt), asc(schema.apiKeys.id));
-      return rows.map(toApiKeyEntity);
+  public async list(
+    query: PaginationQuery<typeof apiKeyListFilter>,
+  ): Promise<PaginatedResult<ApiKeyEntity>> {
+    return this.client.runTenantTx(query.tenantId, 'list api keys', async (tx) => {
+      const predicates = [
+        eq(schema.apiKeys.tenantId, query.tenantId),
+        listWhereSql(getTableColumns(schema.apiKeys), apiKeyListFilter, query.where),
+      ];
+      const page = await paginateByCursor<
+        typeof schema.apiKeys.$inferSelect & { cursorCreatedAt: string }
+      >({
+        query,
+        scope: { resource: 'api-keys', tenantId: query.tenantId, ...listWhereScope(query.where) },
+        order: [
+          {
+            column: schema.apiKeys.createdAt,
+            key: 'created_at',
+            type: 'timestamp',
+            getValue: (row) => row.cursorCreatedAt,
+          },
+          { column: schema.apiKeys.id, key: 'id', type: 'uuid', getValue: (row) => row.id },
+        ],
+        selectRows: async ({ cursorPredicate, limit, orderBy }) =>
+          tx
+            .select({
+              ...getTableColumns(schema.apiKeys),
+              cursorCreatedAt: exactTimestamp(schema.apiKeys.createdAt),
+            })
+            .from(schema.apiKeys)
+            .where(and(...predicates, cursorPredicate))
+            .orderBy(...orderBy)
+            .limit(limit),
+      });
+      return { data: page.rows.map(toApiKeyEntity), nextCursor: page.nextCursor };
     });
   }
 

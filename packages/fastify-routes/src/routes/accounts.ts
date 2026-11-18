@@ -1,10 +1,25 @@
-import type { AccountEntity, AccountSide } from '@luxledger/core';
-import type { AccountService, BalanceService } from '@luxledger/core/application';
+import type { AccountEntity, AccountSide } from '@borecount/core';
+import type {
+  AccountService,
+  accountListFilter,
+  BalanceService,
+  balanceHistoryListFilter,
+  StatementService,
+  WhereFor,
+} from '@borecount/core/application';
+import {
+  accountFilterFields,
+  balanceHistoryFilterFields,
+  invalidWhereError,
+  readWhereParameter,
+  whereQueryProperty,
+} from '@borecount/http';
 import {
   type AccountByIdParams,
   type AccountResponse,
   accountByIdParamsSchema,
   accountResponseSchema,
+  accountStatementResponseSchema,
   accountsPageResponseSchema,
   type BalanceAsOfQuery,
   type BalanceHistoryQuery,
@@ -13,19 +28,32 @@ import {
   balanceHistoryQuerySchema,
   balanceHistoryResponseSchema,
   type CreateAccountRequest,
+  type CreditLotStatementQuery,
   createAccountBodySchema,
+  creditLotStatementQuerySchema,
+  creditLotStatementResponseSchema,
   type ListAccountsQuery,
   listAccountsQuerySchemaExtra,
-} from '@luxledger/http/contracts';
-import { toAccountResponse } from '@luxledger/http/mappers';
+  mergePaginationQuerySchema,
+  type StatementQuery,
+  statementQuerySchema,
+} from '@borecount/http/contracts';
+import {
+  toAccountResponse,
+  toAccountStatementResponse,
+  toCreditLotStatementResponse,
+} from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
-import { createPaginationQuerySchema, resolvePaginationLimit } from '../query/pagination';
+import { sendInvalidInput } from '../errors/send-invalid-input';
+import { handleValidationError } from '../errors/validation-error-handler';
 import { BaseEntityRoute } from '../routing/base-route';
 
 export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountResponse> {
   public constructor(
     private readonly accounts: AccountService,
     private readonly balances: BalanceService,
+    private readonly statements: StatementService,
   ) {
     super();
   }
@@ -40,12 +68,14 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
     this.registerListAccounts(server);
     this.registerGetBalanceAsOf(server);
     this.registerGetBalanceHistory(server);
+    this.registerStatements(server);
   }
 
   private registerCreateAccount(server: FastifyInstance): void {
     server.post<{ Body: CreateAccountRequest }>(
       '/v1/accounts',
       {
+        errorHandler: handleValidationError,
         schema: {
           body: createAccountBodySchema,
           response: {
@@ -76,6 +106,7 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
     server.get<{ Params: AccountByIdParams }>(
       '/v1/accounts/:id',
       {
+        errorHandler: handleValidationError,
         schema: {
           params: accountByIdParamsSchema,
           response: {
@@ -99,8 +130,15 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
     server.get<{ Querystring: ListAccountsQuery }>(
       '/v1/accounts',
       {
+        errorHandler: handleValidationError,
         schema: {
-          querystring: createPaginationQuerySchema(listAccountsQuerySchemaExtra),
+          querystring: mergePaginationQuerySchema({
+            ...listAccountsQuerySchemaExtra,
+            properties: {
+              ...listAccountsQuerySchemaExtra.properties,
+              where: whereQueryProperty(accountFilterFields),
+            },
+          }),
           response: {
             200: accountsPageResponseSchema,
           },
@@ -108,11 +146,17 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
       },
       async (request, reply) => {
         return this.handle(reply, async () => {
+          const where = readWhereParameter<WhereFor<typeof accountListFilter>>(
+            request.raw.url ?? '',
+            accountFilterFields,
+          );
+          if (where === null) return sendInvalidInput(reply, 'Invalid querystring');
           const page = await this.accounts.list({
             tenantId: request.tenantId as string,
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
             ledgerId: request.query.ledger_id,
+            where,
           });
 
           return reply.status(200).send({
@@ -128,6 +172,7 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
     server.get<{ Params: AccountByIdParams; Querystring: BalanceAsOfQuery }>(
       '/v1/accounts/:id/balance-as-of',
       {
+        errorHandler: handleValidationError,
         schema: {
           params: accountByIdParamsSchema,
           querystring: balanceAsOfQuerySchema,
@@ -153,24 +198,40 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
   }
 
   private registerGetBalanceHistory(server: FastifyInstance): void {
-    server.get<{ Params: AccountByIdParams; Querystring: BalanceHistoryQuery }>(
+    server.get<{
+      Params: AccountByIdParams;
+      Querystring: BalanceHistoryQuery & { where?: string };
+    }>(
       '/v1/accounts/:id/balance-history',
       {
+        errorHandler: handleValidationError,
         schema: {
           params: accountByIdParamsSchema,
-          querystring: balanceHistoryQuerySchema,
+          querystring: {
+            ...balanceHistoryQuerySchema,
+            properties: {
+              ...balanceHistoryQuerySchema.properties,
+              where: whereQueryProperty(balanceHistoryFilterFields),
+            },
+          },
           response: { 200: balanceHistoryResponseSchema },
         },
       },
       async (request, reply) =>
         this.handle(reply, async () => {
+          const where = readWhereParameter<WhereFor<typeof balanceHistoryListFilter>>(
+            request.raw.url ?? '',
+            balanceHistoryFilterFields,
+          );
+          if (where === null) throw invalidWhereError();
           const page = await this.balances.listHistory({
             tenantId: request.tenantId as string,
             accountId: request.params.id,
             from: new Date(request.query.from),
             to: new Date(request.query.to),
-            limit: resolvePaginationLimit(request.query.limit),
+            limit: resolveLimit(request.query.limit),
             cursor: request.query.cursor,
+            where,
           });
           return reply.status(200).send({
             data: page.data.map((item) => ({
@@ -188,6 +249,63 @@ export class AccountsRoutes extends BaseEntityRoute<AccountEntity, AccountRespon
             next_cursor: page.nextCursor,
           });
         }),
+    );
+  }
+
+  private registerStatements(server: FastifyInstance): void {
+    server.get<{ Params: AccountByIdParams; Querystring: StatementQuery }>(
+      '/v1/accounts/:id/statement',
+      {
+        errorHandler: handleValidationError,
+        schema: {
+          params: accountByIdParamsSchema,
+          querystring: statementQuerySchema,
+          response: { 200: accountStatementResponseSchema },
+        },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () =>
+          reply.status(200).send(
+            toAccountStatementResponse(
+              await this.statements.getAccountStatement({
+                tenantId: request.tenantId as string,
+                accountId: request.params.id,
+                from: new Date(request.query.from),
+                asOf: new Date(request.query.as_of),
+                limit: resolveLimit(request.query.limit),
+                cursor: request.query.cursor,
+              }),
+            ),
+          ),
+        ),
+    );
+
+    server.get<{ Params: AccountByIdParams; Querystring: CreditLotStatementQuery }>(
+      '/v1/accounts/:id/credit-statement',
+      {
+        errorHandler: handleValidationError,
+        schema: {
+          params: accountByIdParamsSchema,
+          querystring: creditLotStatementQuerySchema,
+          response: { 200: creditLotStatementResponseSchema },
+        },
+      },
+      async (request, reply) =>
+        this.handle(reply, async () =>
+          reply.status(200).send(
+            toCreditLotStatementResponse(
+              await this.statements.getCreditLotStatement({
+                tenantId: request.tenantId as string,
+                accountId: request.params.id,
+                grantId: request.query.grant_id,
+                from: new Date(request.query.from),
+                asOf: new Date(request.query.as_of),
+                limit: resolveLimit(request.query.limit),
+                cursor: request.query.cursor,
+              }),
+            ),
+          ),
+        ),
     );
   }
 }

@@ -1,4 +1,9 @@
-import type { ApplicationServices } from '@luxledger/core/application';
+import type {
+  ApplicationServices,
+  transactionListFilter,
+  WhereFor,
+} from '@borecount/core/application';
+import { readWhereParameter, transactionFilterFields } from '@borecount/http';
 import {
   type BulkCreateTransactionRequest,
   type BulkCreateTransactionResponse,
@@ -15,10 +20,10 @@ import {
   reverseTransactionRequestSchema,
   type TransactionByIdParams,
   type TransactionsPage,
-} from '@luxledger/http/contracts';
-import { toTransactionResponse } from '@luxledger/http/mappers';
-import { parseUuidQuery } from '@luxledger/http/query/pagination';
-import { parseUuidParam } from '@luxledger/http/validation-utils';
+} from '@borecount/http/contracts';
+import { toTransactionResponse } from '@borecount/http/mappers';
+import { parseUuidQuery } from '@borecount/http/query/pagination';
+import { parseUuidParam } from '@borecount/http/validation-utils';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
 import { parsePaginationQuery } from '../query/pagination';
@@ -120,8 +125,12 @@ export const registerTransactionRoutes = (
   app.get('/v1/transactions', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
       const pagination = parsePaginationQuery(req.query);
+      const where = readWhereParameter<WhereFor<typeof transactionListFilter>>(
+        req.originalUrl,
+        transactionFilterFields,
+      );
       const ledgerId = parseUuidQuery(req.query.ledger_id);
-      if (pagination === null) {
+      if (pagination === null || where === null) {
         sendInvalidInput(res, 'Invalid querystring');
         return;
       }
@@ -140,6 +149,7 @@ export const registerTransactionRoutes = (
         limit: pagination.limit,
         cursor: query.cursor,
         ledgerId: query.ledger_id,
+        where,
       });
       const response: TransactionsPage = {
         data: page.data.map(toTransactionResponse),

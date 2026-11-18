@@ -1,12 +1,25 @@
-import type { ApplicationServices } from '@luxledger/core/application';
+import type {
+  ApplicationServices,
+  creditGrantListFilter,
+  creditLineageListFilter,
+  WhereFor,
+} from '@borecount/core/application';
+import { isNonEmptyString } from '@borecount/core/base';
+import {
+  creditGrantFilterFields,
+  creditLineageFilterFields,
+  readWhereParameter,
+} from '@borecount/http';
 import {
   type CreateCreditGrantRequest,
   createCreditGrantBodySchema,
   type ProcessCreditGrantExpirationsRequest,
   processCreditGrantExpirationsBodySchema,
+  type RefundCreditGrantRequest,
   type ReverseCreditGrantRequest,
+  refundCreditGrantBodySchema,
   reverseCreditGrantBodySchema,
-} from '@luxledger/http/contracts';
+} from '@borecount/http/contracts';
 import {
   toCreditBalanceResponse,
   toCreditGrantExpirationResponse,
@@ -14,9 +27,10 @@ import {
   toCreditGrantLotResponse,
   toCreditGrantResponse,
   toPaginatedResponse,
-} from '@luxledger/http/mappers';
-import { parseUuidQuery } from '@luxledger/http/query/pagination';
-import { parseUuidParam } from '@luxledger/http/validation-utils';
+  toRefundCreditGrantResponse,
+} from '@borecount/http/mappers';
+import { parseUuidQuery } from '@borecount/http/query/pagination';
+import { parseUuidParam } from '@borecount/http/validation-utils';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
 import { parsePaginationQuery } from '../query/pagination';
@@ -26,7 +40,7 @@ import type { RequestWithContext } from '../types';
 
 const parseNonEmptyQuery = (value: unknown): string | null | undefined => {
   if (value === undefined) return undefined;
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+  return isNonEmptyString(value) ? value : null;
 };
 
 export const registerCreditGrantRoutes = (
@@ -82,11 +96,16 @@ export const registerCreditGrantRoutes = (
   app.get('/v1/credit-grants', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
       const pagination = parsePaginationQuery(req.query);
+      const where = readWhereParameter<WhereFor<typeof creditGrantListFilter>>(
+        req.originalUrl,
+        creditGrantFilterFields,
+      );
       const accountId = parseUuidQuery(req.query.account_id);
       const reference = parseNonEmptyQuery(req.query.reference);
       const externalReference = parseNonEmptyQuery(req.query.external_reference);
       if (
         pagination === null ||
+        where === null ||
         (req.query.account_id !== undefined && accountId === null) ||
         reference === null ||
         externalReference === null
@@ -102,6 +121,7 @@ export const registerCreditGrantRoutes = (
         accountId: accountId ?? undefined,
         reference,
         externalReference,
+        where,
       });
       res.status(200).json(toPaginatedResponse(page, toCreditGrantResponse));
     }),
@@ -139,12 +159,32 @@ export const registerCreditGrantRoutes = (
     }),
   );
 
-  const registerPagedGet = <Item, Dto>(
+  app.post('/v1/credit-grants/:id/refund', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const params = parseUuidParam(req.params.id, 'id');
+      const body = validate<RefundCreditGrantRequest>(refundCreditGrantBodySchema, req.body);
+      if (!params || !body) {
+        sendInvalidInput(res, params ? 'Invalid request body' : 'Invalid path parameter');
+        return;
+      }
+      const { tenantId } = requireContext(req);
+      const result = await services.creditGrants.refund({
+        tenantId,
+        grantId: params.id,
+        reference: body.reference,
+        amountMinor: BigInt(body.amount_minor),
+      });
+      res.status(result.created ? 201 : 200).json(toRefundCreditGrantResponse(result));
+    }),
+  );
+
+  const registerPagedGet = <Item, Dto, Where>(
     path: string,
+    parseWhere: (url: string) => Where | undefined | null,
     load: (
       tenantId: string,
       id: string,
-      page: { limit: number; cursor?: string },
+      page: { limit: number; cursor?: string; where?: Where },
     ) => Promise<{ data: Item[]; nextCursor: string | null }>,
     toDto: (item: Item) => Dto,
   ): void => {
@@ -156,32 +196,41 @@ export const registerCreditGrantRoutes = (
           return;
         }
         const pagination = parsePaginationQuery(req.query);
-        if (pagination === null) {
+        const where = parseWhere(req.originalUrl);
+        if (pagination === null || where === null) {
           sendInvalidInput(res, 'Invalid querystring');
           return;
         }
         const { tenantId } = requireContext(req);
         res
           .status(200)
-          .json(toPaginatedResponse(await load(tenantId, params.id, pagination), toDto));
+          .json(
+            toPaginatedResponse(await load(tenantId, params.id, { ...pagination, where }), toDto),
+          );
       }),
     );
   };
 
   registerPagedGet(
     '/v1/credit-grants/:id/allocations',
+    (url) =>
+      readWhereParameter<WhereFor<typeof creditLineageListFilter>>(url, creditLineageFilterFields),
     (tenantId, grantId, page) =>
       services.creditGrants.listLineageByGrant({ tenantId, grantId, ...page }),
     toCreditGrantLineageItemResponse,
   );
   registerPagedGet(
     '/v1/transactions/:id/credit-allocations',
+    (url) =>
+      readWhereParameter<WhereFor<typeof creditLineageListFilter>>(url, creditLineageFilterFields),
     (tenantId, transactionId, page) =>
       services.creditGrants.listLineageByTransaction({ tenantId, transactionId, ...page }),
     toCreditGrantLineageItemResponse,
   );
   registerPagedGet(
     '/v1/accounts/:id/credit-lots',
+    (url) =>
+      readWhereParameter<WhereFor<typeof creditGrantListFilter>>(url, creditGrantFilterFields),
     (tenantId, accountId, page) => services.creditGrants.listLots({ tenantId, accountId, ...page }),
     toCreditGrantLotResponse,
   );

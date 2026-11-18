@@ -1,4 +1,4 @@
-import type { AccountSide, TransactionMetadata } from '@luxledger/core';
+import type { AccountSide, TransactionMetadata } from '@borecount/core';
 import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -120,6 +120,7 @@ export const createAccount = async (
     name: string;
     side?: AccountSide;
     overdraftPolicy?: 'ALLOW' | 'DISALLOW';
+    grantEnabled?: boolean;
     currency: string;
     balanceMinor?: bigint;
     createdAt?: Date;
@@ -135,6 +136,7 @@ export const createAccount = async (
       name: input.name,
       side: input.side ?? 'DEBIT',
       overdraftPolicy: input.overdraftPolicy ?? 'ALLOW',
+      grantEnabled: input.grantEnabled ?? false,
       currency: input.currency,
       assetId,
       balanceMinor: input.balanceMinor ?? 0n,

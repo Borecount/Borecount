@@ -1,25 +1,175 @@
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { CREDIT_LOT_MOVEMENT_KINDS, MAX_PAGE_LIMIT } from '@borecount/core/application';
+import Ajv from 'ajv';
+import {
+  listReconRunsQuerySchema,
+  listReconUploadsQuerySchema,
+  reconRecordResponseSchema,
+  reconRecordsListQuerySchema,
+  reconRecordsListResponseSchema,
+  reconResultResponseSchema,
+  reconResultsListQuerySchema,
+  reconResultsListResponseSchema,
+  reconRunResponseSchema,
+  reconRunSummaryResponseSchema,
+  reconRunsListResponseSchema,
+  reconUploadResponseSchema,
+  reconUploadsListResponseSchema,
+} from '../contracts/reconciliation';
+import { errorResponseSchema, rateLimitExceededResponseSchema } from '../errors';
 import {
   accountResponseSchema,
+  accountStatementResponseSchema,
+  adjustmentResponseSchema,
+  assetByIdParamsSchema,
+  assetResponseSchema,
+  assetsListResponseSchema,
   createAccountBodySchema,
+  createAdjustmentBodySchema,
   createApiKeyBodySchema,
+  createAssetBodySchema,
   createCreditGrantBodySchema,
   createLedgerBodySchema,
   createTransactionRequestSchema,
   creditBalanceResponseSchema,
   creditGrantLotResponseSchema,
   creditGrantResponseSchema,
+  creditLotStatementResponseSchema,
   entriesPageResponseSchema,
+  holdCaptureResponseSchema,
+  holdCapturesPageResponseSchema,
+  holdCreditAllocationResponseSchema,
+  holdCreditAllocationsPageResponseSchema,
+  holdEntriesPageResponseSchema,
+  holdEntryResponseSchema,
+  holdSummaryResponseSchema,
+  holdsPageResponseSchema,
+  listAssetsQuerySchema,
+  listHoldCapturesQuerySchema,
+  listHoldCreditAllocationsQuerySchema,
+  listHoldEntriesQuerySchema,
+  listHoldsQuerySchema,
+  refundCreditGrantBodySchema,
+  refundCreditGrantResponseSchema,
   transactionEntryRequestSchema,
   transactionResponseSchema,
 } from '../index';
+import type { FilterFields } from '../query/list-filter';
+import { parseWhere, whereFieldsToJsonSchema, whereQueryProperty } from '../query/list-filter';
+import {
+  accountFilterFields,
+  apiKeyFilterFields,
+  assetFilterFields,
+  balanceHistoryFilterFields,
+  creditGrantFilterFields,
+  creditLineageFilterFields,
+  entryFilterFields,
+  holdCaptureFilterFields,
+  holdCreditAllocationFilterFields,
+  holdEntryFilterFields,
+  holdSummaryFilterFields,
+  ledgerFilterFields,
+  reconResultListFilterFields,
+  reconRuleFilterFields,
+  reconRunListFilterFields,
+  reconUploadListFilterFields,
+  transactionFilterFields,
+} from '../query/list-filter-fields';
+import { defaultErrorResponses } from '../route-specs';
 import { createContractHarness } from './harness';
 
 const openapiPath = resolve(import.meta.dir, '../../openapi/openapi.yaml');
 
+type OpenApiSchema = {
+  additionalProperties?: boolean;
+  required?: readonly string[];
+  properties?: Record<string, Record<string, unknown>>;
+  [key: string]: unknown;
+};
+
+type OpenApiContent = {
+  content?: {
+    'application/json'?: {
+      schema?: { $ref?: string };
+      example?: unknown;
+    };
+  };
+};
+
+type OpenApiOperation = {
+  requestBody?: OpenApiContent & { required?: boolean };
+  responses?: Record<string, OpenApiContent & { $ref?: string; description?: string }>;
+};
+
+type OpenApiDocument = {
+  components?: { schemas?: Record<string, OpenApiSchema> };
+  paths?: Record<
+    string,
+    {
+      post?: OpenApiOperation;
+      get?: OpenApiOperation & { parameters?: Array<Record<string, unknown>> };
+    }
+  >;
+};
+
 describe('framework-agnostic contract suite', () => {
+  it('governs host resource errors without requiring package-owned enforcement', () => {
+    const document = Bun.YAML.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocument & {
+      components: { responses: Record<string, unknown> };
+    };
+    expect(document.components.schemas?.RateLimitExceededResponse).toEqual(
+      rateLimitExceededResponseSchema,
+    );
+    expect(document.components.schemas?.ErrorResponse).toEqual(errorResponseSchema);
+    expect(defaultErrorResponses[429]).toEqual(rateLimitExceededResponseSchema);
+    expect(defaultErrorResponses[413]).toEqual(errorResponseSchema);
+    for (const path of [
+      '/v1/transactions',
+      '/v1/transactions/bulk',
+      '/v1/transactions/{id}/correct',
+    ]) {
+      expect(document.paths?.[path]?.post?.responses?.['404']).toEqual({
+        $ref: '#/components/responses/NotFoundError',
+      });
+    }
+    expect(document.components.responses.RateLimitExceededError).toEqual({
+      description: expect.any(String),
+      headers: {
+        'Retry-After': {
+          required: true,
+          description: expect.any(String),
+          schema: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+        },
+      },
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/RateLimitExceededResponse' } },
+      },
+    });
+    expect(document.components.responses.RequestTooLargeError).toEqual({
+      description: expect.any(String),
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } },
+      },
+    });
+    for (const [path, item] of Object.entries(document.paths ?? {})) {
+      if (!path.startsWith('/v1/')) continue;
+      for (const method of ['get', 'post'] as const) {
+        const operation = item[method];
+        if (!operation) continue;
+        expect(operation.responses?.['429']).toEqual({
+          $ref: '#/components/responses/RateLimitExceededError',
+        });
+        if (method === 'post') {
+          expect(operation.responses?.['413']).toEqual({
+            $ref: '#/components/responses/RequestTooLargeError',
+          });
+        }
+      }
+    }
+  });
+
   it('keeps core request/response schemas deterministic', () => {
     const harness = createContractHarness();
     const adapters = [{ name: 'fastify' }, { name: 'express' }] as const;
@@ -59,6 +209,24 @@ describe('framework-agnostic contract suite', () => {
             }),
         },
         {
+          name: 'hold read schemas expose the shared paginated summaries and child records',
+          assert: () => {
+            expect(holdsPageResponseSchema.properties.data.items).toEqual(
+              holdSummaryResponseSchema,
+            );
+            expect(holdEntriesPageResponseSchema.properties.data.items).toEqual(
+              holdEntryResponseSchema,
+            );
+            expect(holdCapturesPageResponseSchema.properties.data.items).toEqual(
+              holdCaptureResponseSchema,
+            );
+            expect(holdCreditAllocationsPageResponseSchema.properties.data.items).toEqual(
+              holdCreditAllocationResponseSchema,
+            );
+            expect(holdSummaryResponseSchema.properties).not.toHaveProperty('entries');
+          },
+        },
+        {
           name: 'api key payload requires name and role',
           assert: () => expect(createApiKeyBodySchema.required).toEqual(['name', 'role']),
         },
@@ -95,6 +263,18 @@ describe('framework-agnostic contract suite', () => {
           assert: () => expect(createAccountBodySchema.additionalProperties).toBeFalse(),
         },
         {
+          name: 'account grant capability is optional on creation and required on reads',
+          assert: () => {
+            expect(createAccountBodySchema.required).not.toContain('grant_enabled');
+            expect(createAccountBodySchema.properties.grant_enabled).toEqual({
+              type: 'boolean',
+              default: false,
+            });
+            expect(accountResponseSchema.required).toContain('grant_enabled');
+            expect(accountResponseSchema.properties.grant_enabled).toEqual({ type: 'boolean' });
+          },
+        },
+        {
           name: 'grant derives its asset from the account and uses integer minor units',
           assert: () => {
             expect(createCreditGrantBodySchema.required).not.toContain('asset_id');
@@ -121,6 +301,41 @@ describe('framework-agnostic contract suite', () => {
             );
             expect(creditBalanceResponseSchema.properties.remaining_minor).toEqual(responseAmount);
             expect(creditBalanceResponseSchema.required).toContain('ledger_balance_minor');
+          },
+        },
+        {
+          name: 'statement responses are bounded and expose reconciling summaries',
+          assert: () => {
+            expect(accountStatementResponseSchema.required).toEqual([
+              'account_id',
+              'asset_id',
+              'from',
+              'as_of',
+              'opening',
+              'closing',
+              'data',
+              'next_cursor',
+            ]);
+            expect(accountStatementResponseSchema.description).toContain('Across all cursor pages');
+            expect(accountStatementResponseSchema.properties.data.description).toContain(
+              '(effective_at, id)',
+            );
+            expect(accountStatementResponseSchema.properties.next_cursor.description).toContain(
+              'tenant, account, from, and as_of',
+            );
+            expect(creditLotStatementResponseSchema.required).toContain('opening_available_minor');
+            expect(creditLotStatementResponseSchema.required).toContain('closing_available_minor');
+            expect(creditLotStatementResponseSchema.properties.data.type).toBe('array');
+            expect(creditLotStatementResponseSchema.properties.data.description).toContain(
+              '(created_at, id)',
+            );
+            expect(
+              creditLotStatementResponseSchema.properties.data.items.properties.kind.enum,
+            ).toEqual(CREDIT_LOT_MOVEMENT_KINDS);
+            expect(
+              creditLotStatementResponseSchema.properties.data.items.properties.effective_at
+                .description,
+            ).toContain('creation time');
           },
         },
       ],
@@ -172,6 +387,34 @@ describe('framework-agnostic contract suite', () => {
         },
       },
       {
+        name: 'refund requires a reference and a positive integer amount',
+        assert: () => {
+          expect(refundCreditGrantBodySchema.required).toEqual(['reference', 'amount_minor']);
+          expect(refundCreditGrantBodySchema.properties.amount_minor).toEqual({
+            type: 'string',
+            pattern: '^[1-9][0-9]*$',
+          });
+          expect(refundCreditGrantBodySchema.additionalProperties).toBeFalse();
+        },
+      },
+      {
+        name: 'adjustment requires audit fields and keeps attributes optional',
+        assert: () => {
+          expect(createAdjustmentBodySchema.required).toEqual([
+            'ledger_id',
+            'account_id',
+            'offset_account_id',
+            'reference',
+            'amount_minor',
+            'description',
+            'reason_code',
+            'actor_id',
+          ]);
+          expect(createAdjustmentBodySchema.required).not.toContain('attributes');
+          expect(createAdjustmentBodySchema.additionalProperties).toBeFalse();
+        },
+      },
+      {
         name: 'api key payload forbids additional properties',
         assert: () => expect(createApiKeyBodySchema.additionalProperties).toBeFalse(),
       },
@@ -180,6 +423,7 @@ describe('framework-agnostic contract suite', () => {
 
   it('stays aligned with openapi source for migrated endpoints', () => {
     const openapi = readFileSync(openapiPath, 'utf8');
+    const openapiDocument = Bun.YAML.parse(openapi) as OpenApiDocument;
     expect(openapi).toContain('/v1/transactions:');
     expect(openapi).toContain('/v1/accounts:');
     expect(openapi).toContain('/v1/admin/api-keys:');
@@ -192,11 +436,428 @@ describe('framework-agnostic contract suite', () => {
     expect(openapi).toContain(
       'description: Optional JSON object with caller-defined transaction metadata. Null, arrays, and primitives are rejected.',
     );
-    expect(openapi).toContain('CreateAccountRequest:');
+    const openapiCreateAccount = openapiDocument.components?.schemas?.CreateAccountRequest;
+    const openapiAccount = openapiDocument.components?.schemas?.Account;
+    expect(openapiCreateAccount?.additionalProperties).toBe(
+      createAccountBodySchema.additionalProperties,
+    );
+    expect(openapiCreateAccount?.required).toEqual([...createAccountBodySchema.required]);
+    expect(openapiCreateAccount?.properties?.grant_enabled).toMatchObject(
+      createAccountBodySchema.properties.grant_enabled,
+    );
+    expect(openapiAccount?.required).toEqual([...accountResponseSchema.required]);
+    expect(openapiAccount?.properties?.grant_enabled).toMatchObject(
+      accountResponseSchema.properties.grant_enabled,
+    );
     expect(openapi).toContain('CreateApiKeyRequest:');
     expect(openapi).toContain('/v1/credit-grants:');
     expect(openapi).toContain('/v1/accounts/{id}/credit-balance:');
     expect(openapi).toContain('CreditGrantLineagePage:');
     expect(openapi).toContain('CreateCreditGrantRequest:');
+    expect(openapi).toContain('/v1/credit-grants/{id}/refund:');
+    expect(openapi).toContain('/v1/adjustments/credit:');
+    expect(openapi).toContain('/v1/adjustments/debit:');
+    expect(openapi).toContain('RefundCreditGrantRequest:');
+    expect(openapi).toContain('CreateAdjustmentRequest:');
+    expect(openapi).toContain('/v1/accounts/{id}/statement:');
+    expect(openapi).toContain('/v1/accounts/{id}/credit-statement:');
+    expect(openapi).toContain('AccountStatement:');
+    expect(openapi).toContain('CreditLotStatement:');
+    expect(openapi).toContain(`enum: [${CREDIT_LOT_MOVEMENT_KINDS.join(', ')}]`);
+
+    const schemas = openapiDocument.components?.schemas;
+    expect(schemas?.RefundCreditGrantRequest).toEqual(refundCreditGrantBodySchema);
+    expect(schemas?.CreditGrantRefund).toEqual(refundCreditGrantResponseSchema);
+    expect(schemas?.CreateAdjustmentRequest).toEqual(createAdjustmentBodySchema);
+    expect(schemas?.Adjustment).toEqual(adjustmentResponseSchema);
+
+    const assertPostContract = (
+      path: string,
+      requestSchema: string,
+      responseSchema: string,
+    ): void => {
+      const operation = openapiDocument.paths?.[path]?.post;
+      expect(operation?.requestBody).toEqual({
+        required: true,
+        content: {
+          'application/json': { schema: { $ref: `#/components/schemas/${requestSchema}` } },
+        },
+      });
+      const authorizationResponses = path.startsWith('/v1/adjustments/') ? ['403'] : [];
+      expect(Object.keys(operation?.responses ?? {}).sort()).toEqual([
+        '200',
+        '201',
+        '400',
+        '401',
+        ...authorizationResponses,
+        '404',
+        '409',
+        '413',
+        '429',
+      ]);
+      for (const status of authorizationResponses) {
+        expect(operation?.responses?.[status]).toEqual({
+          $ref: '#/components/responses/ForbiddenError',
+        });
+      }
+      for (const status of ['200', '201']) {
+        expect(operation?.responses?.[status]).toEqual({
+          description: status === '201' ? expect.any(String) : 'Identical retry',
+          content: {
+            'application/json': { schema: { $ref: `#/components/schemas/${responseSchema}` } },
+          },
+        });
+      }
+      for (const [status, response] of [
+        ['400', 'BadRequestError'],
+        ['401', 'UnauthorizedError'],
+        ['404', 'NotFoundError'],
+        ['409', 'ConflictError'],
+      ] as const) {
+        expect(operation?.responses?.[status]).toEqual({
+          $ref: `#/components/responses/${response}`,
+        });
+      }
+    };
+
+    assertPostContract(
+      '/v1/credit-grants/{id}/refund',
+      'RefundCreditGrantRequest',
+      'CreditGrantRefund',
+    );
+    assertPostContract('/v1/adjustments/credit', 'CreateAdjustmentRequest', 'Adjustment');
+    assertPostContract('/v1/adjustments/debit', 'CreateAdjustmentRequest', 'Adjustment');
+  });
+
+  it('keeps the asset schemas, parameters, and responses aligned with OpenAPI', () => {
+    const document = Bun.YAML.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocument;
+    const schemas = document.components?.schemas;
+    expect(schemas?.CreateAssetRequest).toEqual(createAssetBodySchema);
+    expect(schemas?.Asset).toEqual(assetResponseSchema);
+    expect(schemas?.AssetsListResponse).toEqual({
+      ...assetsListResponseSchema,
+      properties: {
+        ...assetsListResponseSchema.properties,
+        data: { type: 'array', items: { $ref: '#/components/schemas/Asset' } },
+      },
+    });
+
+    const create = document.paths?.['/v1/assets']?.post;
+    const list = document.paths?.['/v1/assets']?.get;
+    const read = document.paths?.['/v1/assets/{id}']?.get;
+    expect(create?.requestBody).toEqual({
+      required: true,
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/CreateAssetRequest' } },
+      },
+    });
+    const responses = [
+      [create, '201', 'Asset', ['400', '401', '403', '409', '413', '429']],
+      [list, '200', 'AssetsListResponse', ['400', '401', '429']],
+      [read, '200', 'Asset', ['400', '401', '404', '429']],
+    ] as const;
+    for (const [operation, status, schema, errors] of responses) {
+      expect(Object.keys(operation?.responses ?? {}).sort()).toEqual([status, ...errors]);
+      expect(operation?.responses?.[status]?.content).toEqual({
+        'application/json': { schema: { $ref: `#/components/schemas/${schema}` } },
+      });
+    }
+    expect(create?.responses?.['403']).toEqual({ $ref: '#/components/responses/ForbiddenError' });
+    expect(create?.responses?.['409']).toEqual({ $ref: '#/components/responses/ConflictError' });
+    expect(read?.responses?.['404']).toEqual({ $ref: '#/components/responses/NotFoundError' });
+    expect(read?.parameters).toEqual([
+      { name: 'id', in: 'path', required: true, schema: assetByIdParamsSchema.properties.id },
+    ]);
+    for (const name of ['limit', 'cursor'] as const) {
+      expect(list?.parameters?.find((parameter) => parameter.name === name)).toMatchObject({
+        in: 'query',
+        required: false,
+        schema: listAssetsQuerySchema.properties[name],
+      });
+    }
+  });
+
+  it('governs bounded reconciliation history contracts', () => {
+    const document = Bun.YAML.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocument;
+    const schemas = document.components?.schemas;
+    for (const [path, pageName, itemName, query, page] of [
+      [
+        '/v1/reconciliation/uploads',
+        'ReconciliationUploadsPage',
+        'ExternalRecordsUpload',
+        listReconUploadsQuerySchema,
+        reconUploadsListResponseSchema,
+      ],
+      [
+        '/v1/reconciliation/runs',
+        'ReconciliationRunsPage',
+        'ReconciliationRunSummary',
+        listReconRunsQuerySchema,
+        reconRunsListResponseSchema,
+      ],
+      [
+        '/v1/reconciliation/uploads/{id}/records',
+        'ReconciliationRecordsPage',
+        'ReconciliationRecord',
+        reconRecordsListQuerySchema,
+        reconRecordsListResponseSchema,
+      ],
+    ] as const) {
+      const operation = document.paths?.[path]?.get;
+      expect(operation?.responses?.['200']).toMatchObject({
+        content: { 'application/json': { schema: { $ref: `#/components/schemas/${pageName}` } } },
+      });
+      expect(operation?.responses?.['400']?.$ref).toBe('#/components/responses/BadRequestError');
+      expect(schemas?.[pageName]).toEqual({
+        ...page,
+        properties: {
+          ...page.properties,
+          data: { type: 'array', items: { $ref: `#/components/schemas/${itemName}` } },
+        },
+      });
+      expect(schemas?.[itemName]).toEqual(page.properties.data.items);
+      for (const name of ['limit', 'cursor'] as const) {
+        expect(operation?.parameters?.find((parameter) => parameter.name === name)).toMatchObject({
+          in: 'query',
+          required: false,
+          schema: query.properties[name],
+        });
+      }
+    }
+
+    expect(schemas?.ReconciliationRun).toEqual({
+      ...reconRunResponseSchema,
+      properties: {
+        ...reconRunResponseSchema.properties,
+        results: { type: 'array', items: { $ref: '#/components/schemas/ReconciliationResult' } },
+      },
+    });
+    expect(reconUploadsListResponseSchema.properties.data.items).toEqual(reconUploadResponseSchema);
+    expect(reconRunsListResponseSchema.properties.data.items).toEqual(
+      reconRunSummaryResponseSchema,
+    );
+    expect(reconRecordsListResponseSchema.properties.data.items).toEqual(reconRecordResponseSchema);
+    expect(listReconUploadsQuerySchema.properties.where).toEqual(
+      whereQueryProperty(reconUploadListFilterFields),
+    );
+    expect(listReconRunsQuerySchema.properties.where).toEqual(
+      whereQueryProperty(reconRunListFilterFields),
+    );
+    expect(
+      document.paths?.['/v1/reconciliation/uploads/{id}']?.get?.responses?.['200'],
+    ).toMatchObject({
+      content: {
+        'application/json': { schema: { $ref: '#/components/schemas/ExternalRecordsUpload' } },
+      },
+    });
+    for (const path of [
+      '/v1/reconciliation/uploads/{id}',
+      '/v1/reconciliation/uploads/{id}/records',
+    ]) {
+      const operation = document.paths?.[path]?.get;
+      expect(operation?.responses?.['404']?.$ref).toBe('#/components/responses/NotFoundError');
+      expect(operation?.parameters?.find((parameter) => parameter.name === 'id')).toMatchObject({
+        in: 'path',
+        required: true,
+        schema: { type: 'string', format: 'uuid' },
+      });
+    }
+  });
+
+  it('documents typed where parameters on every scoped list operation', () => {
+    const document = Bun.YAML.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocument;
+    const ajv = new Ajv({ allErrors: true, strict: false, validateFormats: false });
+    const routes: Record<string, [string, FilterFields]> = {
+      '/v1/accounts': ['AccountsWhere', accountFilterFields],
+      '/v1/assets': ['AssetsWhere', assetFilterFields],
+      '/v1/transactions': ['TransactionsWhere', transactionFilterFields],
+      '/v1/entries': ['EntriesWhere', entryFilterFields],
+      '/v1/ledgers': ['LedgersWhere', ledgerFilterFields],
+      '/v1/admin/api-keys': ['ApiKeysWhere', apiKeyFilterFields],
+      '/v1/reconciliation/uploads': ['ReconciliationUploadsWhere', reconUploadListFilterFields],
+      '/v1/reconciliation/runs': ['ReconciliationRunsWhere', reconRunListFilterFields],
+      '/v1/reconciliation/matching-rules': ['ReconciliationRulesWhere', reconRuleFilterFields],
+      '/v1/reconciliation/runs/{id}/results': [
+        'ReconciliationResultsWhere',
+        reconResultListFilterFields,
+      ],
+      '/v1/credit-grants': ['CreditGrantsWhere', creditGrantFilterFields],
+      '/v1/credit-grants/{id}/allocations': ['CreditLineageWhere', creditLineageFilterFields],
+      '/v1/transactions/{id}/credit-allocations': ['CreditLineageWhere', creditLineageFilterFields],
+      '/v1/accounts/{id}/credit-lots': ['CreditGrantsWhere', creditGrantFilterFields],
+      '/v1/accounts/{id}/balance-history': ['BalanceHistoryWhere', balanceHistoryFilterFields],
+      '/v1/holds': ['HoldsWhere', holdSummaryFilterFields],
+      '/v1/holds/{id}/entries': ['HoldEntriesWhere', holdEntryFilterFields],
+      '/v1/holds/{id}/captures': ['HoldCapturesWhere', holdCaptureFilterFields],
+      '/v1/holds/{id}/credit-allocations': [
+        'HoldCreditAllocationsWhere',
+        holdCreditAllocationFilterFields,
+      ],
+    };
+    for (const [path, [schema, fields]] of Object.entries(routes)) {
+      const parameters = document.paths?.[path]?.get?.parameters ?? [];
+      const where = parameters.find((parameter) => parameter.name === 'where');
+      expect(where).toBeDefined();
+      expect(where).toMatchObject({
+        in: 'query',
+        required: false,
+        content: { 'application/json': { schema: { $ref: `#/components/schemas/${schema}` } } },
+      });
+      expect(document.components?.schemas?.[schema]).toEqual(whereFieldsToJsonSchema(fields));
+
+      const example =
+        where?.content &&
+        (where.content as { 'application/json'?: { example?: unknown } })['application/json']
+          ?.example;
+      expect(example).toBeDefined();
+      const validator = ajv.compile(document.components?.schemas?.[schema] as OpenApiSchema);
+      expect(validator(example)).toBe(true);
+      expect(parseWhere(JSON.stringify(example), fields)).not.toBeNull();
+    }
+
+    for (const path of [
+      '/v1/ledgers',
+      '/v1/admin/api-keys',
+      '/v1/reconciliation/matching-rules',
+      '/v1/reconciliation/runs/{id}/results',
+    ]) {
+      expect(document.paths?.[path]?.get?.responses?.['400']).toEqual({
+        $ref: '#/components/responses/BadRequestError',
+      });
+    }
+
+    const resultsPath = '/v1/reconciliation/runs/{id}/results';
+    const resultsOperation = document.paths?.[resultsPath]?.get;
+    const resultParameters = resultsOperation?.parameters ?? [];
+    expect(resultParameters.find((parameter) => parameter.name === 'id')).toMatchObject({
+      in: 'path',
+      required: true,
+      schema: { type: 'string', format: 'uuid' },
+    });
+    expect(resultParameters.find((parameter) => parameter.name === 'limit')).toMatchObject({
+      in: 'query',
+      required: false,
+      schema: { type: 'integer', minimum: 1, maximum: MAX_PAGE_LIMIT, default: 50 },
+    });
+    expect(resultParameters.find((parameter) => parameter.name === 'cursor')).toMatchObject({
+      in: 'query',
+      required: false,
+      schema: { type: 'string', minLength: 1 },
+    });
+    const resultsWhere = resultParameters.find((parameter) => parameter.name === 'where');
+    expect(
+      (resultsWhere?.content as { 'application/json'?: { example?: unknown } } | undefined)?.[
+        'application/json'
+      ]?.example,
+    ).toEqual({ status: { eq: 'conflict' } });
+    expect(reconResultsListQuerySchema.properties.where).toEqual(
+      whereQueryProperty(reconResultListFilterFields),
+    );
+    expect(document.components?.schemas?.ReconciliationResultsListResponse).toEqual({
+      type: 'object',
+      additionalProperties: false,
+      required: ['data', 'next_cursor'],
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/ReconciliationResult' } },
+        next_cursor: { type: 'string', nullable: true },
+      },
+    });
+    expect(reconResultsListResponseSchema.properties.data.items).toEqual(reconResultResponseSchema);
+    expect(resultsOperation?.responses?.['200']).toEqual({
+      description: expect.any(String),
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/ReconciliationResultsListResponse' },
+        },
+      },
+    });
+
+    expect(document.components?.schemas?.HoldSummary).toEqual(holdSummaryResponseSchema);
+    expect(document.components?.schemas?.HoldEntry).toEqual(holdEntryResponseSchema);
+    expect(document.components?.schemas?.HoldCapture).toEqual(holdCaptureResponseSchema);
+    expect(document.components?.schemas?.HoldCreditAllocation).toEqual(
+      holdCreditAllocationResponseSchema,
+    );
+    for (const [path, response] of [
+      ['/v1/holds', 'HoldsPage'],
+      ['/v1/holds/{id}/entries', 'HoldEntriesPage'],
+      ['/v1/holds/{id}/captures', 'HoldCapturesPage'],
+      ['/v1/holds/{id}/credit-allocations', 'HoldCreditAllocationsPage'],
+    ]) {
+      expect(document.paths?.[path]?.get?.responses?.['200']).toMatchObject({
+        content: { 'application/json': { schema: { $ref: `#/components/schemas/${response}` } } },
+      });
+    }
+    expect(document.paths?.['/v1/holds/{id}']?.get?.responses?.['200']).toMatchObject({
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/HoldSummary' } } },
+    });
+    const holdListContracts = [
+      ['/v1/holds', listHoldsQuerySchema, false],
+      ['/v1/holds/{id}/entries', listHoldEntriesQuerySchema, true],
+      ['/v1/holds/{id}/captures', listHoldCapturesQuerySchema, true],
+      ['/v1/holds/{id}/credit-allocations', listHoldCreditAllocationsQuerySchema, true],
+    ] as const;
+    for (const [path, querySchema, hasParentId] of holdListContracts) {
+      const operation = document.paths?.[path]?.get;
+      const parameters = operation?.parameters ?? [];
+      expect(querySchema.properties.limit).toEqual({
+        type: 'integer',
+        minimum: 1,
+        maximum: MAX_PAGE_LIMIT,
+        default: 50,
+      });
+      expect(querySchema.properties.cursor).toEqual({ type: 'string', minLength: 1 });
+      expect(querySchema.properties.where.maxLength).toBe(8192);
+      expect(parameters).toContainEqual({ $ref: '#/components/parameters/Limit' });
+      expect(parameters).toContainEqual({ $ref: '#/components/parameters/Cursor' });
+      if (hasParentId) {
+        expect(parameters).toContainEqual({
+          in: 'path',
+          name: 'id',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        });
+      }
+      expect(Object.keys(operation?.responses ?? {}).sort()).toEqual(
+        hasParentId ? ['200', '400', '401', '404', '429'] : ['200', '400', '401', '429'],
+      );
+      expect(operation?.responses?.['400']).toEqual({
+        $ref: '#/components/responses/BadRequestError',
+      });
+      expect(operation?.responses?.['401']).toEqual({
+        $ref: '#/components/responses/UnauthorizedError',
+      });
+      if (hasParentId) {
+        expect(operation?.responses?.['404']).toEqual({
+          $ref: '#/components/responses/NotFoundError',
+        });
+      }
+    }
+    expect(Object.keys(document.paths?.['/v1/holds/{id}']?.get?.responses ?? {}).sort()).toEqual([
+      '200',
+      '400',
+      '401',
+      '404',
+      '429',
+    ]);
+    expect(resultsOperation?.responses?.['404']).toEqual({
+      $ref: '#/components/responses/NotFoundError',
+    });
+    const resultExample = {
+      id: '00000000-0000-4000-8000-000000000001',
+      run_id: '00000000-0000-4000-8000-000000000002',
+      external_record_id: null,
+      external_id: null,
+      transaction_id: null,
+      status: 'unmatched_internal',
+      reason: 'no_matching_external_record',
+      candidate_transaction_ids: [],
+      created_at: '2026-01-01T00:00:00.000Z',
+    };
+    const resultValidator = new Ajv({ strict: false, validateFormats: false }).compile(
+      reconResultResponseSchema,
+    );
+    expect(resultValidator(resultExample)).toBe(true);
+    expect(reconResultsListResponseSchema.properties.data.items).toEqual(reconResultResponseSchema);
   });
 });

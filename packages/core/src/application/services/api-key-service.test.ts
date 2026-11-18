@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import { ApiKeyEntity, ApiKeyRole } from '@luxledger/core';
-import type { ApiKeyRepository } from '@luxledger/core/application';
-import {
-  ApiKeyService,
-  type BootstrapAdminRepositoryInput,
-  type BootstrapAdminResult,
-  ForbiddenError,
-  InvariantViolationError,
-  UnauthorizedError,
-} from '@luxledger/core/application';
+import { ApiKeyEntity, ApiKeyRole } from '@borecount/core';
+import type { ApiKeyRepository, PaginatedResult } from '@borecount/core/application';
+import { ApiKeyService } from '@borecount/core/application';
+import { ForbiddenError, InvariantViolationError, UnauthorizedError } from '../../errors';
 
 const hash = (value: string): string => new Bun.CryptoHasher('sha256').update(value).digest('hex');
 
@@ -19,23 +13,6 @@ class InMemoryApiKeyRepository implements ApiKeyRepository {
     for (const key of seed) {
       this.keys.set(key.id, key);
     }
-  }
-
-  public async bootstrapInitialAdmin(
-    input: BootstrapAdminRepositoryInput,
-  ): Promise<BootstrapAdminResult> {
-    if (this.keys.size > 0) {
-      return { created: false };
-    }
-
-    const tenantId = `tenant-${input.tenantName.toLowerCase().replaceAll(/\s+/g, '-')}`;
-    const created = await this.create({
-      tenantId,
-      name: input.keyName,
-      role: ApiKeyRole.ADMIN,
-      keyHash: input.keyHash,
-    });
-    return { created: true, tenantId, apiKeyId: created.id };
   }
 
   public async findActiveByHash(keyHash: string): Promise<ApiKeyEntity | null> {
@@ -72,8 +49,15 @@ class InMemoryApiKeyRepository implements ApiKeyRepository {
     return key;
   }
 
-  public async list(tenantId: string): Promise<ApiKeyEntity[]> {
-    return [...this.keys.values()].filter((key) => key.tenantId === tenantId);
+  public async list(
+    query: Parameters<ApiKeyRepository['list']>[0],
+  ): Promise<PaginatedResult<ApiKeyEntity>> {
+    return {
+      data: [...this.keys.values()]
+        .filter((key) => key.tenantId === query.tenantId)
+        .slice(0, query.limit),
+      nextCursor: null,
+    };
   }
 
   public async revoke(tenantId: string, apiKeyId: string): Promise<boolean> {
@@ -142,8 +126,8 @@ describe('ApiKeyService', () => {
     expect(created.apiKey.startsWith('llk_')).toBeTrue();
 
     await service.revokeApiKey(admin, created.key.id);
-    const list = await service.listApiKeys(admin);
-    const revoked = list.find((key) => key.id === created.key.id);
+    const list = await service.listApiKeys(admin, { limit: 50 });
+    const revoked = list.data.find((key) => key.id === created.key.id);
     expect(revoked?.revokedAt).toBeDefined();
   });
 
@@ -156,6 +140,20 @@ describe('ApiKeyService', () => {
         role: ApiKeyRole.SERVICE,
       }),
     ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(service.listApiKeys(actor, { limit: 10 })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it('validates API key pagination before querying', async () => {
+    const admin = await service.authenticate(adminKey);
+    await expect(service.listApiKeys(admin, { limit: 0 })).rejects.toBeInstanceOf(
+      InvariantViolationError,
+    );
+    await expect(
+      service.listApiKeys(admin, {
+        limit: 10,
+        where: { keyHash: { eq: hash('private') } },
+      } as never),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
   });
 
   it('createApiKey validates non-empty name', async () => {
@@ -167,31 +165,6 @@ describe('ApiKeyService', () => {
         role: ApiKeyRole.SERVICE,
       }),
     ).rejects.toBeInstanceOf(InvariantViolationError);
-  });
-
-  it('bootstrapInitialAdmin creates first admin key when key store is empty', async () => {
-    const emptyRepository = new InMemoryApiKeyRepository([]);
-    const bootstrapService = new ApiKeyService(emptyRepository);
-
-    const result = await bootstrapService.bootstrapInitialAdmin({
-      tenantName: 'Bootstrap Tenant',
-      keyName: 'Initial admin',
-      rawApiKey: 'llk_bootstrap_admin',
-    });
-
-    expect(result.created).toBeTrue();
-    expect(result.tenantId).toBeDefined();
-    expect(result.apiKeyId).toBeDefined();
-  });
-
-  it('bootstrapInitialAdmin skips when at least one key already exists', async () => {
-    const result = await service.bootstrapInitialAdmin({
-      tenantName: 'Ignored',
-      keyName: 'Ignored',
-      rawApiKey: 'llk_ignored',
-    });
-
-    expect(result).toEqual({ created: false });
   });
 
   it('assertAccessTokenIsActive rejects revoked key', async () => {

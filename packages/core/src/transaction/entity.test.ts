@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'bun:test';
-
 import { AccountId, LedgerId, Money, TransactionId } from '../base';
 import { EntryEntity } from '../entry/entity';
-import { TransactionEntity } from './';
 import {
   AssetMismatchError,
   MissingReferenceError,
   NotEnoughEntriesError,
   UnbalancedTransactionError,
-} from './errors';
+} from '../errors';
+import { TransactionEntity } from './';
 
 const buildEntry = (input: {
   accountId: string;

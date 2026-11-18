@@ -1,4 +1,4 @@
-import { aggregateAccountEntries, parseAccountSide } from '@luxledger/core';
+import { aggregateAccountEntries, parseAccountSide } from '@borecount/core';
 import {
   assertAvailableBalance,
   type CommitHoldInput,
@@ -6,13 +6,15 @@ import {
   type CreateHoldInput,
   type CreateHoldResult,
   type HoldApplicationRepository,
+  type VoidHoldInput,
+  type VoidHoldResult,
+} from '@borecount/core/application';
+import {
   HoldLifecycleMismatchError,
   HoldNotFoundError,
   InvariantViolationError,
   RepositoryError,
-  type VoidHoldInput,
-  type VoidHoldResult,
-} from '@luxledger/core/application';
+} from '@borecount/core/errors';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { DbClient } from '../client';
@@ -23,12 +25,18 @@ import {
   allocateGrantCapacityForHold,
   attachReservedGrantConsumption,
 } from './grant-hold-allocation';
+import { DrizzleHoldReadRepository } from './hold-read-repository';
 import { totalDebit, validatePosting } from './posting-validation';
 
 type HoldRow = typeof schema.holds.$inferSelect;
 
-export class DrizzleHoldRepository implements HoldApplicationRepository {
-  public constructor(private readonly client: DbClient) {}
+export class DrizzleHoldRepository
+  extends DrizzleHoldReadRepository
+  implements HoldApplicationRepository
+{
+  public constructor(private readonly client: DbClient) {
+    super(client);
+  }
 
   public async create(input: CreateHoldInput): Promise<CreateHoldResult> {
     return this.client.runTenantTx(input.tenantId, 'create hold', async (tx) => {

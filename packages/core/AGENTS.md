@@ -1,4 +1,4 @@
-# @luxledger/core Instructions
+# @borecount/core Instructions
 
 These rules extend the repository root instructions for `packages/core`.
 
@@ -8,7 +8,10 @@ These rules extend the repository root instructions for `packages/core`.
   ports, unit-of-work contracts, and persistence-neutral workflows.
 - Keep repositories and application services focused by resource/responsibility. Do not introduce a
   new combined service or compatibility facade as the primary production API.
-- Put shared primitives in `src/base`, application-facing contracts and orchestration in
+- Keep all reusable error classes and classification helpers in `src/errors`, exposed only through
+  `@borecount/core/errors`. Host-consumable error declarations such as `RateLimitExceededError`
+  belong to this catalogue; rate-limit policy and HTTP serialization remain outside core.
+- Put other shared primitives in `src/base`, application-facing contracts and orchestration in
   `src/application`, and bounded domain behavior in its named module.
 - Keep repository interfaces expressed only in domain/application types. Never expose SQL, Drizzle,
   PostgreSQL rows, HTTP requests, or framework types.
@@ -18,7 +21,7 @@ These rules extend the repository root instructions for `packages/core`.
 ## Boundaries
 
 - This package has zero external runtime dependencies.
-- Do not import `@luxledger/http`, a route adapter, a persistence adapter, or host application code.
+- Do not import `@borecount/http`, a route adapter, a persistence adapter, or host application code.
 - Do not move an invariant to an adapter because it is convenient to enforce there. Adapters may add
   defense-in-depth constraints, but core remains the authoritative expression of business policy.
 - Define transaction requirements through persistence-neutral ports. Concrete transaction, RLS, and
@@ -33,6 +36,13 @@ These rules extend the repository root instructions for `packages/core`.
 - When adding a public symbol, update the appropriate module `index.ts`, root `src/index.ts` when
   needed, package exports/build entry points if a new subpath is introduced, and README examples.
 - Avoid exporting implementation helpers unless they are intentionally supported contracts.
+
+## Domain Guarantees
+
+- Core owns the shared error catalogue; raw framework/database failures are not public errors.
+  Keep framework response schemas, status/body/header mapping, and host admission policy out of core.
+- Preserve explicit transaction requirements for state changes and balance projections, and
+  idempotency semantics in addition to database uniqueness.
 
 ## Tests
 

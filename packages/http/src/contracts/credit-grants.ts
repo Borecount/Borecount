@@ -1,3 +1,5 @@
+import { whereQueryProperty } from '../query/list-filter';
+import { creditGrantFilterFields, creditLineageFilterFields } from '../query/list-filter-fields';
 import type { InferSchema } from '../schema-types';
 import { NonEmptyTrimmedStringSchema } from './common';
 import { createPaginatedResponseSchema, mergePaginationQuerySchema } from './pagination';
@@ -70,6 +72,25 @@ export const reverseCreditGrantBodySchema = {
   properties: { reference: NonEmptyTrimmedStringSchema },
 } as const;
 
+export const refundCreditGrantBodySchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['reference', 'amount_minor'],
+  properties: { reference: NonEmptyTrimmedStringSchema, amount_minor: minor },
+} as const;
+
+export const refundCreditGrantResponseSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['grant_id', 'transaction_id', 'amount_minor', 'created'],
+  properties: {
+    grant_id: uuid,
+    transaction_id: uuid,
+    amount_minor: minor,
+    created: { type: 'boolean' },
+  },
+} as const;
+
 export const creditGrantLotResponseSchema = {
   type: 'object',
   additionalProperties: false,
@@ -138,6 +159,7 @@ export const creditGrantLotsPageResponseSchema = createPaginatedResponseSchema(
 
 export const listCreditGrantsQuerySchemaExtra = {
   properties: {
+    where: whereQueryProperty(creditGrantFilterFields),
     account_id: uuid,
     reference: NonEmptyTrimmedStringSchema,
     external_reference: NonEmptyTrimmedStringSchema,
@@ -146,6 +168,12 @@ export const listCreditGrantsQuerySchemaExtra = {
 export const listCreditGrantsQuerySchema = mergePaginationQuerySchema(
   listCreditGrantsQuerySchemaExtra,
 );
+export const listCreditLineageQuerySchema = mergePaginationQuerySchema({
+  properties: { where: whereQueryProperty(creditLineageFilterFields) },
+});
+export const listCreditLotsQuerySchema = mergePaginationQuerySchema({
+  properties: { where: whereQueryProperty(creditGrantFilterFields) },
+});
 
 export const processCreditGrantExpirationsBodySchema = {
   type: 'object',
@@ -193,6 +221,8 @@ export const creditGrantExpirationResponseSchema = {
 
 export type CreateCreditGrantRequest = InferSchema<typeof createCreditGrantBodySchema>;
 export type ReverseCreditGrantRequest = InferSchema<typeof reverseCreditGrantBodySchema>;
+export type RefundCreditGrantRequest = InferSchema<typeof refundCreditGrantBodySchema>;
+export type RefundCreditGrantResponse = InferSchema<typeof refundCreditGrantResponseSchema>;
 export type CreditGrantResponse = InferSchema<typeof creditGrantResponseSchema>;
 export type CreditBalanceResponse = InferSchema<typeof creditBalanceResponseSchema>;
 export type CreditGrantIdParams = InferSchema<typeof creditGrantIdParamsSchema>;

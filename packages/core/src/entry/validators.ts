@@ -1,4 +1,4 @@
-import { InvalidAmountError } from '../transaction/errors';
+import { InvalidAmountError } from '../errors';
 
 export function validateSignedEntryAmount(signedAmountMinor: bigint): void {
   if (signedAmountMinor === 0n) {

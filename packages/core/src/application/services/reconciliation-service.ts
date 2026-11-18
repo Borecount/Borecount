@@ -1,17 +1,66 @@
+import {
+  InvariantViolationError,
+  ReconRunNotFoundError,
+  ReconUploadNotFoundError,
+} from '../../errors';
+import { reconRuleListFilter } from '../../reconciliation';
 import { assertNonEmpty } from '../../utils';
-import { InvariantViolationError, ReconRunNotFoundError } from '../errors';
+import { validateListWhere } from '../list-filters';
+import { validatePaginationQuery } from '../pagination-query';
 import type { ReconciliationApplicationRepository } from '../repositories.interface';
 import type {
   CreateReconRuleInput,
   IngestReconRecordsInput,
+  PaginatedResult,
+  PaginationQuery,
+  ReconRecordListItem,
+  ReconRecordPaginationQuery,
+  ReconResult,
+  ReconResultPaginationQuery,
   ReconRule,
   ReconRun,
+  ReconRunSummary,
   ReconUpload,
   RunReconInput,
 } from '../types';
+import { reconResultListFilter, reconRunListFilter, reconUploadListFilter } from '../types';
 
 export class ReconciliationService {
   public constructor(private readonly repository: ReconciliationApplicationRepository) {}
+
+  public async getUpload(tenantId: string, uploadId: string): Promise<ReconUpload> {
+    assertNonEmpty(tenantId, 'tenantId is required');
+    assertNonEmpty(uploadId, 'reconciliation upload id is required');
+    const upload = await this.repository.getUpload(tenantId, uploadId);
+    if (upload === null) throw new ReconUploadNotFoundError(uploadId);
+    return upload;
+  }
+
+  public async listUploads(
+    query: PaginationQuery<typeof reconUploadListFilter>,
+  ): Promise<PaginatedResult<ReconUpload>> {
+    validatePaginationQuery(query);
+    validateListWhere(reconUploadListFilter, query.where);
+    return this.repository.listUploads(query);
+  }
+
+  public async listRuns(
+    query: PaginationQuery<typeof reconRunListFilter>,
+  ): Promise<PaginatedResult<ReconRunSummary>> {
+    validatePaginationQuery(query);
+    validateListWhere(reconRunListFilter, query.where);
+    return this.repository.listRuns(query);
+  }
+
+  public async listRecords(
+    query: ReconRecordPaginationQuery,
+  ): Promise<PaginatedResult<ReconRecordListItem>> {
+    validatePaginationQuery(query);
+    assertNonEmpty(query.uploadId, 'reconciliation upload id is required');
+    const page = await this.repository.listRecords(query);
+    if (page === null) throw new ReconUploadNotFoundError(query.uploadId);
+    return page;
+  }
 
   public async ingest(input: IngestReconRecordsInput): Promise<ReconUpload> {
     assertNonEmpty(input.tenantId, 'tenantId is required');
@@ -71,9 +120,23 @@ export class ReconciliationService {
     return this.repository.createRule(input);
   }
 
-  public async listRules(tenantId: string): Promise<ReconRule[]> {
-    assertNonEmpty(tenantId, 'tenantId is required');
-    return this.repository.listRules(tenantId);
+  public async listRules(
+    query: PaginationQuery<typeof reconRuleListFilter>,
+  ): Promise<PaginatedResult<ReconRule>> {
+    validatePaginationQuery(query);
+    validateListWhere(reconRuleListFilter, query.where);
+    return this.repository.listRules(query);
+  }
+
+  public async listResults(
+    query: ReconResultPaginationQuery,
+  ): Promise<PaginatedResult<ReconResult>> {
+    validatePaginationQuery(query);
+    assertNonEmpty(query.runId, 'reconciliation run id is required');
+    validateListWhere(reconResultListFilter, query.where);
+    const page = await this.repository.listResults(query);
+    if (page === null) throw new ReconRunNotFoundError(query.runId);
+    return page;
   }
 
   public async run(input: RunReconInput): Promise<ReconRun> {

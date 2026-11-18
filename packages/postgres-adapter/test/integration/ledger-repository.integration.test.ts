@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
-import { InvariantViolationError } from '@luxledger/core/application';
+import { InvariantViolationError } from '@borecount/core/errors';
 import { eq } from 'drizzle-orm';
 import { DrizzleAccountRepository } from '../../src/repositories/account-repository';
 import { DrizzleBalanceRepository } from '../../src/repositories/balance-repository';
@@ -77,9 +77,9 @@ describe('Drizzle ledger repository', () => {
     await ledgerRepository.create({ tenantId: tenantA, name: 'A-2' });
     await ledgerRepository.create({ tenantId: tenantB, name: 'B-1' });
 
-    const tenantLedgers = await ledgerRepository.list(tenantA);
+    const tenantLedgers = await ledgerRepository.list({ tenantId: tenantA, limit: 10 });
 
-    expect(tenantLedgers.length).toBe(2);
-    expect(tenantLedgers.every((ledger) => ledger.tenantId === tenantA)).toBeTrue();
+    expect(tenantLedgers.data.length).toBe(2);
+    expect(tenantLedgers.data.every((ledger) => ledger.tenantId === tenantA)).toBeTrue();
   });
 });

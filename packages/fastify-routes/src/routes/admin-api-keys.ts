@@ -1,17 +1,21 @@
-import type { ApiKeyEntity } from '@luxledger/core';
-import type { ApiKeyService } from '@luxledger/core/application';
+import type { ApiKeyEntity } from '@borecount/core';
+import type { ApiKeyService, apiKeyListFilter, WhereFor } from '@borecount/core/application';
+import { apiKeyFilterFields, invalidWhereError, readWhereParameter } from '@borecount/http';
 import {
   type ApiKeyContract,
   type ApiKeyRole,
   type CreateApiKeyRequest,
   createApiKeyBodySchema,
   createApiKeyResponseSchema,
+  listApiKeysQuerySchema,
   listApiKeysResponseSchema,
   type RevokeApiKeyParams,
   revokeApiKeyParamsSchema,
-} from '@luxledger/http/contracts';
-import { toApiKeyContract } from '@luxledger/http/mappers';
+} from '@borecount/http/contracts';
+import { toApiKeyContract } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
+import { handleValidationError } from '../errors/validation-error-handler';
 import { BaseEntityRoute } from '../routing/base-route';
 
 export class AdminApiKeyRoutes extends BaseEntityRoute<ApiKeyEntity, ApiKeyContract> {
@@ -33,6 +37,7 @@ export class AdminApiKeyRoutes extends BaseEntityRoute<ApiKeyEntity, ApiKeyContr
     server.post<{ Body: CreateApiKeyRequest }>(
       '/v1/admin/api-keys',
       {
+        errorHandler: handleValidationError,
         schema: {
           body: createApiKeyBodySchema,
           response: {
@@ -65,10 +70,12 @@ export class AdminApiKeyRoutes extends BaseEntityRoute<ApiKeyEntity, ApiKeyContr
   }
 
   private registerListApiKeys(server: FastifyInstance): void {
-    server.get(
+    server.get<{ Querystring: { where?: string; limit?: number; cursor?: string } }>(
       '/v1/admin/api-keys',
       {
+        errorHandler: handleValidationError,
         schema: {
+          querystring: listApiKeysQuerySchema,
           response: {
             200: listApiKeysResponseSchema,
           },
@@ -76,14 +83,27 @@ export class AdminApiKeyRoutes extends BaseEntityRoute<ApiKeyEntity, ApiKeyContr
       },
       async (request, reply) =>
         this.handle(reply, async () => {
-          const keys = await this.apiKeyService.listApiKeys({
-            apiKeyId: request.apiKeyId as string,
-            tenantId: request.tenantId as string,
-            role: request.apiKeyRole as ApiKeyRole,
-          });
+          const where = readWhereParameter<WhereFor<typeof apiKeyListFilter>>(
+            request.raw.url ?? '',
+            apiKeyFilterFields,
+          );
+          if (where === null) throw invalidWhereError();
+          const keys = await this.apiKeyService.listApiKeys(
+            {
+              apiKeyId: request.apiKeyId as string,
+              tenantId: request.tenantId as string,
+              role: request.apiKeyRole as ApiKeyRole,
+            },
+            {
+              limit: resolveLimit(request.query.limit),
+              cursor: request.query.cursor,
+              where,
+            },
+          );
 
           return reply.status(200).send({
-            data: this.dtoList(keys),
+            data: this.dtoList(keys.data),
+            next_cursor: keys.nextCursor,
           });
         }),
     );
@@ -93,6 +113,7 @@ export class AdminApiKeyRoutes extends BaseEntityRoute<ApiKeyEntity, ApiKeyContr
     server.post<{ Params: RevokeApiKeyParams }>(
       '/v1/admin/api-keys/:id/revoke',
       {
+        errorHandler: handleValidationError,
         schema: {
           params: revokeApiKeyParamsSchema,
         },

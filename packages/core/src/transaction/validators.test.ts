@@ -6,7 +6,7 @@ import {
   MissingReferenceError,
   NotEnoughEntriesError,
   UnbalancedTransactionError,
-} from './errors';
+} from '../errors';
 import {
   validateDoubleEntry,
   validateEntryAmounts,

@@ -1,31 +1,38 @@
 import {
-  AccountNotFoundError,
+  type BasePaginationQuery,
   type CreateCreditGrantInput,
   type CreditBalance,
   type CreditGrant,
-  CreditGrantConflictError,
   type CreditGrantExpirationItem,
   type CreditGrantExpirationResult,
   type CreditGrantLineage,
   type CreditGrantListQuery,
   type CreditGrantLotBalance,
-  CreditGrantNotFoundError,
+  type CreditGrantRefundResult,
   type CreditGrantRepository,
   type CreditGrantResult,
   type CreditLineageQuery,
   type CreditLotListQuery,
-  InvariantViolationError,
+  creditGrantListFilter,
+  creditLineageListFilter,
   type PaginatedResult,
-  type PaginationQuery,
   type ProcessCreditGrantExpirationsInput,
+  type RefundCreditGrantInput,
   type ReverseCreditGrantInput,
-} from '@luxledger/core/application';
-import type { AnyColumn } from 'drizzle-orm';
+} from '@borecount/core/application';
+import { generateUuidV7 } from '@borecount/core/base';
+import {
+  AccountNotFoundError,
+  CreditGrantConflictError,
+  CreditGrantNotFoundError,
+  InvariantViolationError,
+} from '@borecount/core/errors';
 import { and, desc, eq, getTableColumns, inArray, type SQL, sql } from 'drizzle-orm';
 import type { DbClient, DrizzleDatabase } from '../client';
+import { exactTimestamp } from '../exact-timestamp';
+import { listWhereScope, listWhereSql } from '../list-where';
 import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
-import { generateUuidV7 } from '../uuid-v7';
 import { lockGrantEnabledAccountsForMutation } from './account-mutation-lock';
 import { DrizzleTransactionRepository } from './transaction-repository';
 
@@ -38,8 +45,14 @@ type ExpirationCandidate = CreditGrantExpirationItem & {
   createdAt: Date;
 };
 
-const exactTimestamp = (column: AnyColumn): SQL<string> =>
-  sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+const lineageListColumns = {
+  grantId: schema.creditGrantEntries.grantId,
+  entryId: schema.creditGrantEntries.entryId,
+  transactionId: schema.entries.transactionId,
+  kind: schema.creditGrantEntries.kind,
+  amountMinor: schema.creditGrantEntries.amountMinor,
+  createdAt: schema.entries.createdAt,
+};
 
 export class DrizzleCreditGrantRepository implements CreditGrantRepository {
   private readonly transactions: DrizzleTransactionRepository;
@@ -120,7 +133,7 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
         )
         .limit(1);
       await this.assertFundingAccountInTx(input, account, fundingAccount);
-      const id = generateUuidV7();
+      const id = generateUuidV7(new Date());
       const posted = await this.transactions.postCreditGrantInTx(tx, {
         tenantId: input.tenantId,
         ledgerId: input.ledgerId,
@@ -216,12 +229,14 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
           and(
             eq(schema.creditGrantEntries.tenantId, input.tenantId),
             eq(schema.creditGrantEntries.grantId, row.id),
-            sql`${schema.creditGrantEntries.kind} in ('CONSUMPTION', 'EXPIRATION')`,
+            sql`${schema.creditGrantEntries.kind} in ('CONSUMPTION', 'EXPIRATION', 'REFUND')`,
           ),
         )
         .limit(1);
       if (priorUse) {
-        throw new CreditGrantConflictError('Consumed or expired grant cannot be fully reversed');
+        throw new CreditGrantConflictError(
+          'Consumed, refunded, or expired grant cannot be fully reversed',
+        );
       }
       const balanceAccount = await this.findCreditAccount(tx, input.tenantId, row.accountId);
       await this.balanceInTx(tx, input.tenantId, row.accountId);
@@ -262,6 +277,157 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
     });
   }
 
+  public refund(input: RefundCreditGrantInput): Promise<CreditGrantRefundResult> {
+    return this.client.runTenantTx(input.tenantId, 'refund credit grant', async (tx) => {
+      const reference = `credit-grant-refund:${input.reference}`;
+      const [candidate] = await tx
+        .select()
+        .from(schema.creditGrants)
+        .where(
+          and(
+            eq(schema.creditGrants.tenantId, input.tenantId),
+            eq(schema.creditGrants.id, input.grantId),
+          ),
+        )
+        .limit(1);
+      if (!candidate) throw new CreditGrantNotFoundError(input.grantId);
+
+      await lockGrantEnabledAccountsForMutation(tx, input.tenantId, [candidate.accountId]);
+      const [row] = await tx
+        .select()
+        .from(schema.creditGrants)
+        .where(
+          and(
+            eq(schema.creditGrants.tenantId, input.tenantId),
+            eq(schema.creditGrants.id, input.grantId),
+          ),
+        )
+        .for('update')
+        .limit(1);
+      if (!row) throw new CreditGrantNotFoundError(input.grantId);
+
+      const [account] = await tx
+        .select({ currency: schema.accounts.currency })
+        .from(schema.accounts)
+        .where(
+          and(eq(schema.accounts.tenantId, input.tenantId), eq(schema.accounts.id, row.accountId)),
+        )
+        .limit(1);
+      if (!account) throw new AccountNotFoundError(row.accountId);
+      const entries = [
+        {
+          accountId: row.accountId,
+          signedAmountMinor: input.amountMinor,
+          currency: account.currency,
+        },
+        {
+          accountId: row.fundingAccountId,
+          signedAmountMinor: -input.amountMinor,
+          currency: account.currency,
+        },
+      ];
+
+      const [existingRefund] = await tx
+        .select({
+          transactionId: schema.entries.transactionId,
+          grantId: schema.creditGrantEntries.grantId,
+          amountMinor: schema.creditGrantEntries.amountMinor,
+        })
+        .from(schema.transactions)
+        .innerJoin(schema.entries, eq(schema.entries.transactionId, schema.transactions.id))
+        .innerJoin(
+          schema.creditGrantEntries,
+          and(
+            eq(schema.creditGrantEntries.entryId, schema.entries.id),
+            eq(schema.creditGrantEntries.kind, 'REFUND'),
+          ),
+        )
+        .where(
+          and(
+            eq(schema.transactions.tenantId, input.tenantId),
+            eq(schema.transactions.reference, reference),
+          ),
+        )
+        .limit(1);
+      if (existingRefund) {
+        if (existingRefund.grantId !== row.id || existingRefund.amountMinor !== input.amountMinor) {
+          throw new CreditGrantConflictError('Credit grant refund reference payload mismatch');
+        }
+        const posted = await this.transactions.postCreditGrantRefundInTx(tx, {
+          tenantId: input.tenantId,
+          ledgerId: row.ledgerId,
+          reference,
+          currency: account.currency,
+          entries,
+        });
+        return {
+          grantId: row.id,
+          transactionId: posted.transactionId,
+          amountMinor: input.amountMinor,
+          created: false,
+        };
+      }
+
+      const [referenceOwner] = await tx
+        .select({ id: schema.transactions.id })
+        .from(schema.transactions)
+        .where(
+          and(
+            eq(schema.transactions.tenantId, input.tenantId),
+            eq(schema.transactions.reference, reference),
+          ),
+        )
+        .limit(1);
+      if (referenceOwner) {
+        throw new CreditGrantConflictError('Credit grant refund reference payload mismatch');
+      }
+
+      const [clock] = await tx.execute<{ databaseNow: Date }>(
+        sql`select transaction_timestamp() as "databaseNow"`,
+      );
+      if (!clock) throw new CreditGrantConflictError('Unable to read refund clock');
+      const databaseNow = new Date(clock.databaseNow);
+      if (row.expiresAt && row.expiresAt.getTime() <= databaseNow.getTime()) {
+        throw new CreditGrantConflictError('Expired grant capacity cannot be refunded');
+      }
+
+      const [capacity] = await tx
+        .select({
+          remainingMinor: schema.creditGrantCapacityVersions.remainingMinor,
+          reservedMinor: schema.creditGrantCapacityVersions.reservedMinor,
+        })
+        .from(schema.creditGrantCapacityVersions)
+        .where(
+          and(
+            eq(schema.creditGrantCapacityVersions.tenantId, input.tenantId),
+            eq(schema.creditGrantCapacityVersions.grantId, row.id),
+          ),
+        )
+        .orderBy(desc(schema.creditGrantCapacityVersions.version))
+        .limit(1);
+      const refundableMinor = (capacity?.remainingMinor ?? 0n) - (capacity?.reservedMinor ?? 0n);
+      if (input.amountMinor > refundableMinor) {
+        throw new CreditGrantConflictError('Refund amount exceeds current unspent grant capacity');
+      }
+
+      const posted = await this.transactions.postCreditGrantRefundInTx(tx, {
+        tenantId: input.tenantId,
+        ledgerId: row.ledgerId,
+        reference,
+        currency: account.currency,
+        effectiveAt: databaseNow,
+        entries,
+      });
+      await this.linkWalletEntry(tx, row, posted.transactionId, 'REFUND');
+      return {
+        grantId: row.id,
+        transactionId: posted.transactionId,
+        amountMinor: input.amountMinor,
+        created: true,
+      };
+    });
+  }
+
   public findById(tenantId: string, grantId: string): Promise<CreditGrant | null> {
     return this.client.runTenantTx(tenantId, 'read credit grant', async (tx) => {
       const [row] = await tx
@@ -281,7 +447,13 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
 
   public list(query: CreditGrantListQuery): Promise<PaginatedResult<CreditGrant>> {
     return this.client.runTenantTx(query.tenantId, 'list credit grants', async (tx) => {
+      const where = listWhereSql(
+        getTableColumns(schema.creditGrants),
+        creditGrantListFilter,
+        query.where,
+      );
       const predicates = [eq(schema.creditGrants.tenantId, query.tenantId)];
+      if (where) predicates.push(where);
       if (query.accountId) predicates.push(eq(schema.creditGrants.accountId, query.accountId));
       if (query.reference) predicates.push(eq(schema.creditGrants.reference, query.reference));
       if (query.externalReference) {
@@ -289,6 +461,7 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
       }
       const page = await this.selectGrantPage(tx, query, predicates, {
         resource: 'credit-grants',
+        ...listWhereScope(query.where),
         tenantId: query.tenantId,
         accountId: query.accountId ?? null,
         reference: query.reference ?? null,
@@ -304,19 +477,22 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
   public listLots(query: CreditLotListQuery): Promise<PaginatedResult<CreditGrantLotBalance>> {
     return this.client.runTenantTx(query.tenantId, 'list credit grant lots', async (tx) => {
       const account = await this.findCreditAccount(tx, query.tenantId, query.accountId);
-      const page = await this.selectGrantPage(
-        tx,
-        query,
-        [
-          eq(schema.creditGrants.tenantId, query.tenantId),
-          eq(schema.creditGrants.accountId, query.accountId),
-        ],
-        {
-          resource: 'credit-grant-lots',
-          tenantId: query.tenantId,
-          accountId: query.accountId,
-        },
+      const predicates = [
+        eq(schema.creditGrants.tenantId, query.tenantId),
+        eq(schema.creditGrants.accountId, query.accountId),
+      ];
+      const where = listWhereSql(
+        getTableColumns(schema.creditGrants),
+        creditGrantListFilter,
+        query.where,
       );
+      if (where) predicates.push(where);
+      const page = await this.selectGrantPage(tx, query, predicates, {
+        resource: 'credit-grant-lots',
+        ...listWhereScope(query.where),
+        tenantId: query.tenantId,
+        accountId: query.accountId,
+      });
       return {
         data: await this.toLots(tx, account, page.rows),
         nextCursor: page.nextCursor,
@@ -326,10 +502,12 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
 
   public listLineage(query: CreditLineageQuery): Promise<PaginatedResult<CreditGrantLineage>> {
     return this.client.runTenantTx(query.tenantId, 'list credit grant lineage', async (tx) => {
+      const where = listWhereSql(lineageListColumns, creditLineageListFilter, query.where);
       const predicates = [
         eq(schema.creditGrantEntries.tenantId, query.tenantId),
-        sql`${schema.creditGrantEntries.kind} in ('CONSUMPTION', 'COMPENSATION', 'EXPIRATION')`,
+        sql`${schema.creditGrantEntries.kind} in ('CONSUMPTION', 'COMPENSATION', 'EXPIRATION', 'REFUND')`,
       ];
+      if (where) predicates.push(where);
       if (query.grantId) predicates.push(eq(schema.creditGrantEntries.grantId, query.grantId));
       if (query.transactionId) {
         predicates.push(eq(schema.entries.transactionId, query.transactionId));
@@ -342,6 +520,7 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
         query,
         scope: {
           resource: 'credit-grant-lineage',
+          ...listWhereScope(query.where),
           tenantId: query.tenantId,
           grantId: query.grantId ?? null,
           transactionId: query.transactionId ?? null,
@@ -395,7 +574,7 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
 
   private selectGrantPage(
     tx: Tx,
-    query: PaginationQuery,
+    query: BasePaginationQuery,
     predicates: SQL[],
     scope: Record<string, string | null>,
   ) {
@@ -803,7 +982,7 @@ export class DrizzleCreditGrantRepository implements CreditGrantRepository {
     tx: Tx,
     row: GrantRow,
     transactionId: string,
-    kind: 'ISSUANCE' | 'REVERSAL' | 'EXPIRATION',
+    kind: 'ISSUANCE' | 'REVERSAL' | 'EXPIRATION' | 'REFUND',
   ): Promise<void> {
     const walletEntries = await tx
       .select({

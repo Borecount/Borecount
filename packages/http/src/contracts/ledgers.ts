@@ -1,5 +1,8 @@
+import { whereQueryProperty } from '../query/list-filter';
+import { ledgerFilterFields } from '../query/list-filter-fields';
 import type { InferSchema } from '../schema-types';
 import { NonEmptyTrimmedStringSchema } from './common';
+import { createPaginatedResponseSchema, mergePaginationQuerySchema } from './pagination';
 
 export const createLedgerBodySchema = {
   type: 'object',
@@ -9,6 +12,10 @@ export const createLedgerBodySchema = {
     name: NonEmptyTrimmedStringSchema,
   },
 } as const;
+
+export const listLedgersQuerySchema = mergePaginationQuerySchema({
+  properties: { where: whereQueryProperty(ledgerFilterFields) },
+});
 
 export const ledgerByIdParamsSchema = {
   type: 'object',
@@ -46,10 +53,7 @@ export const ledgerResponseSchema = {
   },
 } as const;
 
-export const ledgersListResponseSchema = {
-  type: 'array',
-  items: ledgerResponseSchema,
-} as const;
+export const ledgersListResponseSchema = createPaginatedResponseSchema(ledgerResponseSchema);
 
 export const trialBalanceAccountResponseSchema = {
   type: 'object',

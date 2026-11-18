@@ -1,4 +1,4 @@
-# @luxledger/postgres-adapter Instructions
+# @borecount/postgres-adapter Instructions
 
 These rules extend the repository root instructions for `packages/postgres-adapter` and describe the
 target package boundary. The current package contains broader application and policy code that should
@@ -6,7 +6,7 @@ be extracted over time; its current location is not architectural precedent.
 
 ## Narrow Target Boundary
 
-Keep code here only when it is specifically required to implement LuxLedger persistence with
+Keep code here only when it is specifically required to implement Borecount persistence with
 PostgreSQL and Drizzle:
 
 - PostgreSQL client/session setup and pool configuration;
@@ -18,8 +18,8 @@ PostgreSQL and Drizzle:
 
 Use this placement test before adding or expanding code: **would the code still be needed with a
 different database implementation?** If yes, it does not belong here. Put domain rules and reusable
-policy in `@luxledger/core`, persistence-neutral application orchestration behind core ports, HTTP
-behavior in `@luxledger/http`, and host composition in the host or a dedicated composition package.
+policy in `@borecount/core`, persistence-neutral application orchestration behind core ports, HTTP
+behavior in `@borecount/http`, and host composition in the host or a dedicated composition package.
 
 Do not add any new reusable application policy or orchestration that would remain useful with another
 persistence backend. Examples include generic service composition, business validation/allocation
@@ -30,8 +30,8 @@ record the extraction as follow-up work instead of performing an incidental refa
 
 ## Dependency and Error Boundaries
 
-- Production code may depend on `@luxledger/core` and PostgreSQL/Drizzle implementation libraries.
-  It must not import `@luxledger/http`, framework route packages, or host application code.
+- Production code may depend on `@borecount/core` and PostgreSQL/Drizzle implementation libraries.
+  It must not import `@borecount/http`, framework route packages, or host application code.
 - Implement core repository and unit-of-work ports; do not redefine their business contracts locally.
 - Keep repository implementations separated by resource/responsibility. Do not recreate a monolithic
   repository or compatibility facade as the primary production API.
@@ -50,6 +50,8 @@ record the extraction as follow-up work instead of performing an incidental refa
   and associated lineage atomic.
 - Follow the documented deterministic account/grant lock order. Changes to locking require real
   concurrent integration coverage and must not weaken correctness to improve throughput.
+- Enforce the unique `(tenant_id, reference)` idempotency index; do not introduce soft deletes in
+  core tables or implicit balance recalculation outside a transaction.
 - Database constraints and RLS are defense in depth; mirror business invariants in core rather than
   making PostgreSQL their only definition.
 

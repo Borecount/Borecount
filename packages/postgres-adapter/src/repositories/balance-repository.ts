@@ -1,21 +1,26 @@
-import { AccountSide, calculateAvailableMinor, isUuidV7, parseAccountSide } from '@luxledger/core';
+import { AccountSide, calculateAvailableMinor, parseAccountSide } from '@borecount/core';
 import {
   type BalanceApplicationRepository,
   type BalanceAtQuery,
   type BalanceHistoryQuery,
   type BalanceSnapshotEvent,
+  balanceHistoryListFilter,
   type HistoricalBalance,
-  InvariantViolationError,
-  LedgerNotFoundError,
   type LedgerTrialBalanceQuery,
   type PaginatedResult,
-  RepositoryError,
   type TrialBalance,
   type TrialBalanceAccount,
-} from '@luxledger/core/application';
-import { and, asc, desc, eq, gt, gte, lte, or, sql } from 'drizzle-orm';
-import stringify from 'safe-stable-stringify';
+} from '@borecount/core/application';
+import {
+  InvariantViolationError,
+  LedgerNotFoundError,
+  RepositoryError,
+} from '@borecount/core/errors';
+import { and, asc, desc, eq, getTableColumns, gte, lte } from 'drizzle-orm';
 import type { DbClient } from '../client';
+import { exactTimestamp } from '../exact-timestamp';
+import { listWhereScope, listWhereSql } from '../list-where';
+import { paginateByCursor } from '../paginate-by-cursor';
 import * as schema from '../schema';
 
 export class DrizzleBalanceRepository implements BalanceApplicationRepository {
@@ -128,33 +133,58 @@ export class DrizzleBalanceRepository implements BalanceApplicationRepository {
     query: BalanceHistoryQuery,
   ): Promise<PaginatedResult<BalanceSnapshotEvent>> {
     return this.client.runTenantTx(query.tenantId, 'get balance history', async (tx) => {
-      const cursor = this.decodeCursor(query.cursor);
-      const rows = await tx
-        .select()
-        .from(schema.balanceSnapshots)
-        .where(
-          and(
-            eq(schema.balanceSnapshots.tenantId, query.tenantId),
-            eq(schema.balanceSnapshots.accountId, query.accountId),
-            gte(schema.balanceSnapshots.effectiveAt, query.from),
-            lte(schema.balanceSnapshots.effectiveAt, query.to),
-            cursor
-              ? or(
-                  gt(schema.balanceSnapshots.effectiveAt, cursor.effectiveAt),
-                  and(
-                    eq(schema.balanceSnapshots.effectiveAt, cursor.effectiveAt),
-                    gt(schema.balanceSnapshots.id, cursor.id),
-                  ),
-                )
-              : sql`true`,
-          ),
-        )
-        .orderBy(asc(schema.balanceSnapshots.effectiveAt), asc(schema.balanceSnapshots.id))
-        .limit(query.limit + 1);
-
-      const hasMore = rows.length > query.limit;
-      const dataRows = hasMore ? rows.slice(0, query.limit) : rows;
-      const data = dataRows.map((row) => ({
+      const where = listWhereSql(
+        getTableColumns(schema.balanceSnapshots),
+        balanceHistoryListFilter,
+        query.where,
+      );
+      const page = await paginateByCursor({
+        query,
+        scope: {
+          resource: 'balance-history',
+          tenantId: query.tenantId,
+          accountId: query.accountId,
+          from: query.from.toISOString(),
+          to: query.to.toISOString(),
+          ...listWhereScope(query.where),
+        },
+        order: [
+          {
+            column: schema.balanceSnapshots.effectiveAt,
+            key: 'effective_at',
+            type: 'timestamp',
+            getValue: (
+              row: typeof schema.balanceSnapshots.$inferSelect & { cursorEffectiveAt: string },
+            ) => row.cursorEffectiveAt,
+          },
+          {
+            column: schema.balanceSnapshots.id,
+            key: 'id',
+            type: 'uuid',
+            getValue: (row) => row.id,
+          },
+        ],
+        selectRows: ({ cursorPredicate, limit, orderBy }) =>
+          tx
+            .select({
+              ...getTableColumns(schema.balanceSnapshots),
+              cursorEffectiveAt: exactTimestamp(schema.balanceSnapshots.effectiveAt),
+            })
+            .from(schema.balanceSnapshots)
+            .where(
+              and(
+                eq(schema.balanceSnapshots.tenantId, query.tenantId),
+                eq(schema.balanceSnapshots.accountId, query.accountId),
+                gte(schema.balanceSnapshots.effectiveAt, query.from),
+                lte(schema.balanceSnapshots.effectiveAt, query.to),
+                where,
+                cursorPredicate,
+              ),
+            )
+            .orderBy(...orderBy)
+            .limit(limit),
+      });
+      const data = page.rows.map((row) => ({
         id: row.id,
         tenantId: row.tenantId,
         ledgerId: row.ledgerId,
@@ -166,48 +196,7 @@ export class DrizzleBalanceRepository implements BalanceApplicationRepository {
         effectiveAt: row.effectiveAt,
         createdAt: row.createdAt,
       }));
-      const last = data.at(-1);
-      return {
-        data,
-        nextCursor: hasMore && last ? this.encodeCursor(last.effectiveAt, last.id) : null,
-      };
+      return { data, nextCursor: page.nextCursor };
     });
-  }
-
-  private encodeCursor(effectiveAt: Date, id: string): string {
-    const serialized = stringify({
-      effectiveAt: effectiveAt.toISOString(),
-      id,
-    });
-    if (serialized === undefined) {
-      throw new InvariantViolationError('Invalid cursor');
-    }
-    return Buffer.from(serialized, 'utf8').toString('base64url');
-  }
-
-  private decodeCursor(cursor: string | undefined): { effectiveAt: Date; id: string } | null {
-    if (!cursor) {
-      return null;
-    }
-    try {
-      const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as Record<
-        string,
-        unknown
-      >;
-      if (
-        typeof parsed.effectiveAt !== 'string' ||
-        typeof parsed.id !== 'string' ||
-        !isUuidV7(parsed.id)
-      ) {
-        throw new InvariantViolationError('Invalid cursor');
-      }
-      const effectiveAt = new Date(parsed.effectiveAt);
-      if (Number.isNaN(effectiveAt.getTime())) {
-        throw new InvariantViolationError('Invalid cursor');
-      }
-      return { effectiveAt, id: parsed.id };
-    } catch {
-      throw new InvariantViolationError('Invalid cursor');
-    }
   }
 }

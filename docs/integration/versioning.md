@@ -1,17 +1,19 @@
 # Versioning, Migrations, and Publication
 
-LuxLedger publishes every public package and the OpenAPI contract as one
-coordinated semantic version. The complete version, breaking-change,
+Borecount public packages share a `major.minor` compatibility line and have
+independent patch versions. OpenAPI follows the HTTP package version. The complete version, breaking-change,
 deprecation, npm tag, provenance, and release checklist policy lives in the
 [release policy](../governance/release-policy.md).
 
-The current coordinated release is `0.4.0`; see its
-[release notes](../releases/0.4.0.md) and the repository [changelog](../../CHANGELOG.md).
+The current compatibility line is `0.8.x`; the PostgreSQL adapter is `0.8.1`
+and the other packages remain `0.8.0`. See the
+[adapter release notes](../releases/postgres-adapter-0.8.1.md) and the repository [changelog](../../CHANGELOG.md).
 
 ## Migration policy
 
-Migrations in `drizzle/` are ordered by the numeric filename prefix and are
-append-only after publication. A release may add a new migration but must not
+After the pre-production baseline reset described below, migrations in
+`drizzle/` are ordered by the numeric filename prefix and are append-only after
+publication. A release may add a new migration but must not
 edit, reorder, or delete a migration shipped in an earlier version. Production
 migrations are forward-only: application rollback does not roll the database
 back. A corrective schema change is a new migration.
@@ -22,13 +24,22 @@ For a rolling deployment, every intermediate schema must support both the old
 and new application versions; otherwise use a maintenance deployment. Database
 downgrades are unsupported.
 
-The current pre-production chain starts at `0000_initial-schema.sql`. Databases
-created from the retired history that predates that baseline must be recreated;
-there is no supported in-place bridge from the retired chain.
+The current pre-production baseline is
+[`0000_2026-11-09-baseline.sql`](../../drizzle/0000_2026-11-09-baseline.sql). It replaces all
+previous migrations. Recreate any development or test database initialized
+with a previous chain, then apply the current baseline to the empty database.
+Backups from a previous chain belong with the matching release and migration
+history. Historical release notes describe the migrations shipped at the time.
+
+The PostgreSQL adapter includes the released SQL files and journal. Hosts obtain their directory
+from `@borecount/postgres-adapter/migrations` (`borecountMigrationsPath`); see the
+[package migration example](https://github.com/Borecount/Borecount/blob/main/packages/postgres-adapter/README.md#packaged-postgresql-migrations).
+Apply this chain through the library journal, keeping host migrations in a separate journal.
 
 ## Upgrade verification
 
-Every schema-changing release must add a real-PostgreSQL test that starts from
+For releases following this baseline reset, every schema-changing release must
+add a real-PostgreSQL test that starts from
 the latest published version's complete migration chain and representative data,
 applies only the candidate migrations, and verifies both data preservation and
 new constraints. Clean-install migration and backup/restore verification remain
@@ -43,8 +54,10 @@ sufficient.
 
 1. Read every intervening release note and the changelog.
 2. Back up PostgreSQL and verify the backup can be restored.
-3. Upgrade the complete `@luxledger/*` set and commit the lockfile.
-4. Apply new migrations in numeric order; never run down migrations.
+3. Upgrade changed packages within the same `major.minor` line and commit the lockfile.
+   Upgrade the complete set when changing the compatibility line.
+4. Recreate dev/test databases when adopting the new pre-production baseline.
+   For subsequent upgrades, apply new migrations in numeric order.
 5. Run application smoke tests and ledger reconciliation before resuming writes.
 
 The [idempotency reference](./idempotency.md) defines retry behavior for every

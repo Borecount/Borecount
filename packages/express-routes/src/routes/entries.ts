@@ -1,6 +1,7 @@
-import type { ApplicationServices } from '@luxledger/core/application';
-import type { EntriesPageResponse } from '@luxledger/http/contracts';
-import { toEntryResponse } from '@luxledger/http/mappers';
+import type { ApplicationServices, entryListFilter, WhereFor } from '@borecount/core/application';
+import { entryFilterFields, readWhereParameter } from '@borecount/http';
+import type { EntriesPageResponse } from '@borecount/http/contracts';
+import { toEntryResponse } from '@borecount/http/mappers';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
 import { parsePaginationQuery } from '../query/pagination';
@@ -13,7 +14,11 @@ export const registerEntryRoutes = (app: Application, services: EntryRouteServic
   app.get('/v1/entries', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
       const pagination = parsePaginationQuery(req.query);
-      if (pagination === null) {
+      const where = readWhereParameter<WhereFor<typeof entryListFilter>>(
+        req.originalUrl,
+        entryFilterFields,
+      );
+      if (pagination === null || where === null) {
         sendInvalidInput(res, 'Invalid querystring');
         return;
       }
@@ -22,6 +27,7 @@ export const registerEntryRoutes = (app: Application, services: EntryRouteServic
         tenantId: context.tenantId,
         limit: pagination.limit,
         cursor: pagination.cursor,
+        where,
       });
       const response: EntriesPageResponse = {
         data: page.data.map(toEntryResponse),

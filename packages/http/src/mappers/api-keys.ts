@@ -1,5 +1,5 @@
-import type { ApiKeyEntity } from '@luxledger/core';
-import type { CreateApiKeyResult } from '@luxledger/core/application';
+import type { ApiKeyEntity } from '@borecount/core';
+import type { CreateApiKeyResult } from '@borecount/core/application';
 import type {
   ApiKeyContract,
   CreateApiKeyResponse,
@@ -15,8 +15,12 @@ export const toApiKeyContract = (key: ApiKeyEntity): ApiKeyContract => ({
   revoked_at: key.revokedAt ? key.revokedAt.toISOString() : null,
 });
 
-export const toListApiKeysResponse = (keys: ApiKeyEntity[]): ListApiKeysResponse => ({
+export const toListApiKeysResponse = (
+  keys: ApiKeyEntity[],
+  nextCursor: string | null,
+): ListApiKeysResponse => ({
   data: keys.map(toApiKeyContract),
+  next_cursor: nextCursor,
 });
 
 export const toCreateApiKeyResponse = (result: CreateApiKeyResult): CreateApiKeyResponse => ({

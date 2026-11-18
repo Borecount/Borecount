@@ -1,15 +1,24 @@
-# @luxledger/fastify-routes
+# @borecount/fastify-routes
 
-Fastify route registration package for LuxLedger HTTP routes.
+Fastify route registration package for Borecount HTTP routes.
 
 ## Registering the adapter
 
 ```ts
-import { registerLedgerAdapter } from '@luxledger/fastify-routes';
+import { registerLedgerAdapter } from '@borecount/fastify-routes';
 
-registerLedgerAdapter(server, {
-  ledgerService,
-  apiKeyService,
+registerLedgerAdapter(server, applicationServices, {
+  authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, apiKeyRole, body }) => {
+    const actorId = await resolveEffectiveActor({
+      principal: request.authenticatedPrincipal,
+      direction,
+      tenantId,
+      apiKeyId,
+      apiKeyRole,
+      claimedActorId: body.actor_id,
+    });
+    return { actorId };
+  },
 });
 ```
 
@@ -19,12 +28,7 @@ This package reads no environment variables. Authentication, JWT, rate limiting,
 
 ## Expected dependencies
 
-`registerLedgerAdapter` expects:
-
-- `ledgerService` (`LedgerService`) for ledger/account/transaction/entry route handlers.
-- `apiKeyService` (`ApiKeyService`) for admin API key route handlers.
-
-Both are application services from `@luxledger/core/application`.
+`registerLedgerAdapter` expects `ApplicationServices` from `@borecount/core/application`.
 
 ## Supported route families
 
@@ -36,6 +40,16 @@ The adapter registers these route families:
 - `entries` (`/v1/entries`)
 - `admin api keys` (`/v1/admin/api-keys`)
 
-The complete and versioned route surface, including bulk posting, reversal/correction, historical balances, holds, and reconciliation, is defined by [`@luxledger/http` OpenAPI](../http/openapi/openapi.yaml). Hosts must register authentication before these routes and keep business logic in application services.
+The complete and versioned route surface, including bulk posting, reversal/correction, historical balances, holds, and reconciliation, is defined by [`@borecount/http` OpenAPI](../http/openapi/openapi.yaml). Hosts must register authentication before these routes and keep business logic in application services.
 
-Pin compatible LuxLedger package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
+Asset, ledger, API key, reconciliation matching-rule, upload, and run list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Upload records and reconciliation run results are independently paginated through `GET /v1/reconciliation/uploads/{id}/records` and `GET /v1/reconciliation/runs/{id}/results`.
+
+Tenant clients can discover asset scales with `GET /v1/assets` and `GET /v1/assets/{id}`.
+`POST /v1/assets` requires an authenticated `ADMIN` context supplied by the host.
+The create body takes `code` and `scale`. Codes are trimmed and uppercased, scales are integers
+from 0 through 18, and duplicate codes within a tenant return `409 ASSET_CODE_CONFLICT`.
+Clients can reuse the same SERVICE credentials they use for other tenant reads.
+
+Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
+
+Pass host policy in the third argument, `LedgerAdapterOptions`. `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. For an explicitly trusted service integration, pass `{ authorizeAdjustment: false }`; schema validation and auth-context checks still apply, but the adapter does not authorize direction or verify the actor claim. Missing, `undefined`, `null`, or another invalid option value fails registration synchronously. Existing hosts must add a callback or explicitly opt out before upgrading. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).

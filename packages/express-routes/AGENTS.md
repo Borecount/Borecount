@@ -1,4 +1,4 @@
-# @luxledger/express-routes Instructions
+# @borecount/express-routes Instructions
 
 These rules extend the repository root instructions for `packages/express-routes`.
 
@@ -6,8 +6,8 @@ These rules extend the repository root instructions for `packages/express-routes
 
 - Own only Express registration, middleware/request adaptation, request-context typing, and
   Express/Ajv-specific validation and error integration.
-- Consume application services from `@luxledger/core/application` and shared contracts, schemas,
-  mappers, pagination helpers, and error shapes from `@luxledger/http`.
+- Consume application services from `@borecount/core/application` and shared contracts, schemas,
+  mappers, pagination helpers, and error shapes from `@borecount/http`.
 - Do not implement business or persistence rules, construct repositories/services, access a database,
   read environment variables, or own authentication/JWT/rate-limit/server lifecycle behavior.
 - The host must install authentication middleware that populates `tenantId`, `apiKeyId`, and

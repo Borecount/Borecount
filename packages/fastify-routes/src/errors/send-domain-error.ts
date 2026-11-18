@@ -1,11 +1,13 @@
-import { toHttpErrorPayload } from '@luxledger/http/errors';
+import { toHttpErrorPayload } from '@borecount/http/errors';
 import type { FastifyReply } from 'fastify';
+import { sendInvalidInput } from './send-invalid-input';
+import { isQuerystringValidationError } from './validation-error-handler';
 
 export const sendDomainError = (reply: FastifyReply, error: unknown): FastifyReply => {
-  const payload = toHttpErrorPayload(error);
-  return reply.status(payload.statusCode).send({
-    error: payload.error,
-    message: payload.message,
-    ...(payload.details === undefined ? {} : { details: payload.details }),
-  });
+  if (isQuerystringValidationError(error)) {
+    return sendInvalidInput(reply, 'Invalid querystring');
+  }
+  const { statusCode, headers, body } = toHttpErrorPayload(error);
+  if (headers) reply.headers(headers);
+  return reply.status(statusCode).send(body);
 };

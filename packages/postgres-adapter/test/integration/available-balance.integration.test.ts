@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import {
   BulkTransactionError,
+  InvalidAmountError,
   InvariantViolationError,
   OverdraftPolicyViolationError,
   RepositoryError,
-} from '@luxledger/core/application';
-import { InvalidAmountError } from '@luxledger/core/transaction';
+} from '@borecount/core/errors';
 import { eq } from 'drizzle-orm';
 import { DrizzleHoldRepository } from '../../src/repositories/hold-repository';
 import { DrizzleTransactionRepository } from '../../src/repositories/transaction-repository';

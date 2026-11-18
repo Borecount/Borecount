@@ -2,7 +2,7 @@
 
 ## Scope
 
-This runbook defines the MVP local backup/restore drill baseline for LL-35.
+This runbook defines the MVP local backup/restore drill baseline.
 
 Recovery targets in scope:
 
@@ -71,7 +71,9 @@ Use helper script:
 
 ## Restore Commands (Local MVP)
 
-Note: this drill restores schema + data into the same local DB names.
+This drill restores schema and data into the same local database names. Use a
+backup taken with the current migration chain. Restore a backup from a retired
+chain only with its matching release and migration history.
 
 Use helper script:
 
@@ -114,7 +116,6 @@ Use helper script:
 ## Execution Baseline (Observed)
 
 - Drill date: `2026-05-14`
-- Branch: `codex/LL-35-backup-restore-drill`
 - Backup artifacts:
   - `./tmp/backups/luxledger.dump` (`13K`)
   - `./tmp/backups/luxledger_test.dump` (`20K`)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { JsonObject } from '@luxledger/core/base';
+import type { JsonObject } from '@borecount/core/base';
 import Ajv from 'ajv';
 import {
   bulkCreateTransactionRequestSchema,

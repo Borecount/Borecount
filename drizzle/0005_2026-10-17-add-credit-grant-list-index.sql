@@ -1,1 +1,0 @@
-CREATE INDEX "credit_grants_tenant_created_id_idx" ON "credit_grants" USING btree ("tenant_id","created_at","id");

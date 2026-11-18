@@ -1,4 +1,18 @@
-import type { ApplicationServices } from '@luxledger/core/application';
+import type {
+  ApplicationServices,
+  holdCaptureListFilter,
+  holdCreditAllocationListFilter,
+  holdEntryListFilter,
+  holdListFilter,
+  WhereFor,
+} from '@borecount/core/application';
+import {
+  holdCaptureFilterFields,
+  holdCreditAllocationFilterFields,
+  holdEntryFilterFields,
+  holdSummaryFilterFields,
+  readWhereParameter,
+} from '@borecount/http';
 import {
   type CommitHoldRequest,
   type CommitHoldResponse,
@@ -6,12 +20,24 @@ import {
   type CreateHoldResponse,
   commitHoldRequestSchema,
   createHoldRequestSchema,
-  type HoldByIdParams,
+  type HoldIdParams,
+  listHoldCapturesQuerySchema,
+  listHoldCreditAllocationsQuerySchema,
+  listHoldEntriesQuerySchema,
+  listHoldsQuerySchema,
   type VoidHoldResponse,
-} from '@luxledger/http/contracts';
-import { parseUuidParam } from '@luxledger/http/validation-utils';
+} from '@borecount/http/contracts';
+import {
+  toHoldCaptureResponse,
+  toHoldCreditAllocationResponse,
+  toHoldEntryResponse,
+  toHoldSummaryResponse,
+  toPaginatedResponse,
+} from '@borecount/http/mappers';
+import { parseUuidParam } from '@borecount/http/validation-utils';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
+import { parsePaginationQuery } from '../query/pagination';
 import { requireContext } from '../request/context';
 import { validate } from '../request/validation';
 import type { RequestWithContext } from '../types';
@@ -19,6 +45,148 @@ import type { RequestWithContext } from '../types';
 type HoldRouteServices = Pick<ApplicationServices, 'holds'>;
 
 export const registerHoldRoutes = (app: Application, services: HoldRouteServices): void => {
+  app.get('/v1/holds/:id', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
+      if (params === null) {
+        sendInvalidInput(res, 'Invalid path parameter');
+        return;
+      }
+      const context = requireContext(req);
+      const hold = await services.holds.getById(context.tenantId, params.id);
+      res.status(200).json(toHoldSummaryResponse(hold));
+    }),
+  );
+
+  app.get('/v1/holds', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const pagination = parsePaginationQuery(req.query);
+      if (
+        pagination === null ||
+        validate(listHoldsQuerySchema, { ...req.query, limit: pagination.limit }) === null
+      ) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const where = readWhereParameter<WhereFor<typeof holdListFilter>>(
+        req.originalUrl,
+        holdSummaryFilterFields,
+      );
+      if (where === null) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const context = requireContext(req);
+      const page = await services.holds.list({ tenantId: context.tenantId, ...pagination, where });
+      res.status(200).json(toPaginatedResponse(page, toHoldSummaryResponse));
+    }),
+  );
+
+  app.get('/v1/holds/:id/entries', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
+      if (params === null) {
+        sendInvalidInput(res, 'Invalid path parameter');
+        return;
+      }
+      const pagination = parsePaginationQuery(req.query);
+      if (
+        pagination === null ||
+        validate(listHoldEntriesQuerySchema, { ...req.query, limit: pagination.limit }) === null
+      ) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const where = readWhereParameter<WhereFor<typeof holdEntryListFilter>>(
+        req.originalUrl,
+        holdEntryFilterFields,
+      );
+      if (where === null) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const context = requireContext(req);
+      const page = await services.holds.listEntries({
+        tenantId: context.tenantId,
+        holdId: params.id,
+        ...pagination,
+        where,
+      });
+      res.status(200).json(toPaginatedResponse(page, toHoldEntryResponse));
+    }),
+  );
+
+  app.get('/v1/holds/:id/captures', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
+      if (params === null) {
+        sendInvalidInput(res, 'Invalid path parameter');
+        return;
+      }
+      const pagination = parsePaginationQuery(req.query);
+      if (
+        pagination === null ||
+        validate(listHoldCapturesQuerySchema, { ...req.query, limit: pagination.limit }) === null
+      ) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const where = readWhereParameter<WhereFor<typeof holdCaptureListFilter>>(
+        req.originalUrl,
+        holdCaptureFilterFields,
+      );
+      if (where === null) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const context = requireContext(req);
+      const page = await services.holds.listCaptures({
+        tenantId: context.tenantId,
+        holdId: params.id,
+        ...pagination,
+        where,
+      });
+      res.status(200).json(toPaginatedResponse(page, toHoldCaptureResponse));
+    }),
+  );
+
+  app.get('/v1/holds/:id/credit-allocations', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
+      if (params === null) {
+        sendInvalidInput(res, 'Invalid path parameter');
+        return;
+      }
+      const pagination = parsePaginationQuery(req.query);
+      if (
+        pagination === null ||
+        validate(listHoldCreditAllocationsQuerySchema, {
+          ...req.query,
+          limit: pagination.limit,
+        }) === null
+      ) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const where = readWhereParameter<WhereFor<typeof holdCreditAllocationListFilter>>(
+        req.originalUrl,
+        holdCreditAllocationFilterFields,
+      );
+      if (where === null) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const context = requireContext(req);
+      const page = await services.holds.listCreditAllocations({
+        tenantId: context.tenantId,
+        holdId: params.id,
+        ...pagination,
+        where,
+      });
+      res.status(200).json(toPaginatedResponse(page, toHoldCreditAllocationResponse));
+    }),
+  );
+
   app.post('/v1/holds', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
       const body = validate<CreateHoldRequest>(createHoldRequestSchema, req.body);
@@ -51,7 +219,7 @@ export const registerHoldRoutes = (app: Application, services: HoldRouteServices
 
   app.post('/v1/holds/:id/commit', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
-      const params = parseUuidParam<keyof HoldByIdParams>(req.params.id, 'id');
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
       const body = validate<CommitHoldRequest>(commitHoldRequestSchema, req.body);
       if (params === null || body === null) {
         sendInvalidInput(res, params === null ? 'Invalid path parameter' : 'Invalid request body');
@@ -77,7 +245,7 @@ export const registerHoldRoutes = (app: Application, services: HoldRouteServices
 
   app.post('/v1/holds/:id/void', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
-      const params = parseUuidParam<keyof HoldByIdParams>(req.params.id, 'id');
+      const params = parseUuidParam<keyof HoldIdParams>(req.params.id, 'id');
       if (params === null) {
         sendInvalidInput(res, 'Invalid path parameter');
         return;

@@ -1,0 +1,50 @@
+{
+  "name": "@borecount/example-self-hosted",
+  "version": "0.8.1",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "configure": "node scripts/config.mjs",
+    "migrate": "node scripts/migrate.mjs",
+    "provision": "tsx src/provision.ts",
+    "new-tenant": "node scripts/tenant.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/release.test.mjs tests/upstream-update.test.mjs tests/database-policy.test.mjs tests/installation.test.mjs",
+    "test:lifecycle": "node tests/self-hosted.test.mjs",
+    "test:compose": "node tests/self-hosted-compose.mjs",
+    "update:upstream": "node scripts/update-upstream.mjs",
+    "setup": "node scripts/manage.mjs setup",
+    "up": "node scripts/manage.mjs up",
+    "down": "node scripts/manage.mjs down",
+    "status": "node scripts/manage.mjs status",
+    "logs": "node scripts/manage.mjs logs",
+    "check": "node scripts/manage.mjs check",
+    "db:migrate": "node scripts/manage.mjs db:migrate",
+    "tenant:add": "node scripts/manage.mjs tenant:add",
+    "tenant:provision": "node scripts/manage.mjs tenant:provision",
+    "compose": "node scripts/manage.mjs compose"
+  },
+  "dependencies": {
+    "@borecount/core": "0.8.0",
+    "@borecount/http": "0.8.0",
+    "@borecount/postgres-adapter": "0.8.1",
+    "@borecount/fastify-routes": "0.8.0",
+    "drizzle-orm": "0.45.2",
+    "fastify": "5.12.8",
+    "postgres": "3.4.8",
+    "tsx": "4.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.12.0",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "fastify": "5.12.8",
+    "drizzle-orm": "0.45.2"
+  }
+}

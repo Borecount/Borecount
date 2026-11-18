@@ -1,4 +1,4 @@
-import type { ApiKeyRole } from '@luxledger/http/contracts';
+import type { ApiKeyRole } from '@borecount/http/contracts';
 import type { Request } from 'express';
 
 export type RequestContext = {

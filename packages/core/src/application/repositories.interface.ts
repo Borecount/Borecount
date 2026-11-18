@@ -1,18 +1,34 @@
 import type { AccountEntity } from '../account/entity';
 import type { ApiKeyEntity } from '../api-key/entity';
 import type { CreateApiKeyInput } from '../api-key/input.interface';
+import type { apiKeyListFilter } from '../api-key/list-filter';
 import type { EntryEntity } from '../entry/entity';
+import type { entryListFilter } from '../entry/list-filter';
 import type { LedgerEntity } from '../ledger/entity';
-import type { ReconRule } from '../reconciliation';
+import type { ledgerListFilter } from '../ledger/list-filter';
+import type { ReconRule, reconRuleListFilter } from '../reconciliation';
 import type { TransactionEntity } from '../transaction/entity';
 import type {
+  HoldCapture,
+  HoldCapturesQuery,
+  HoldCreditAllocation,
+  HoldCreditAllocationsQuery,
+  HoldEntriesQuery,
+  HoldEntry,
+  HoldListQuery,
+  HoldSummary,
+} from './hold-reads';
+import type {
   AccountPaginationQuery,
+  AccountStatement,
+  AccountStatementQuery,
+  AdjustmentDirection,
+  AdjustmentResult,
   Asset,
+  assetListFilter,
   BalanceAtQuery,
   BalanceHistoryQuery,
   BalanceSnapshotEvent,
-  BootstrapAdminRepositoryInput,
-  BootstrapAdminResult,
   BulkCreateTransactionInput,
   BulkCreateTransactionResult,
   CommitHoldInput,
@@ -20,6 +36,7 @@ import type {
   CorrectTransactionInput,
   CorrectTransactionResult,
   CreateAccountInput,
+  CreateAdjustmentInput,
   CreateAssetInput,
   CreateCreditGrantInput,
   CreateHoldInput,
@@ -34,31 +51,48 @@ import type {
   CreditGrantLineage,
   CreditGrantListQuery,
   CreditGrantLotBalance,
+  CreditGrantRefundResult,
   CreditGrantResult,
   CreditLineageQuery,
   CreditLotListQuery,
+  CreditLotStatement,
+  CreditLotStatementQuery,
   HistoricalBalance,
   IngestReconRecordsInput,
   LedgerTrialBalanceQuery,
   PaginatedResult,
   PaginationQuery,
   ProcessCreditGrantExpirationsInput,
+  ReconRecordListItem,
+  ReconRecordPaginationQuery,
+  ReconResult,
+  ReconResultPaginationQuery,
   ReconRun,
+  ReconRunSummary,
   ReconUpload,
+  RefundCreditGrantInput,
   ReverseCreditGrantInput,
   ReverseTransactionInput,
   ReverseTransactionResult,
   RunReconInput,
+  reconRunListFilter,
+  reconUploadListFilter,
   TransactionPaginationQuery,
   TrialBalance,
   VoidHoldInput,
   VoidHoldResult,
 } from './types';
 
+export interface AdjustmentRepository {
+  create(direction: AdjustmentDirection, input: CreateAdjustmentInput): Promise<AdjustmentResult>;
+}
+
 export interface CreditGrantRepository {
   create(input: CreateCreditGrantInput): Promise<CreditGrantResult>;
   /** Reverses only the specified grant when its own remaining capacity equals its original amount. */
   reverse(input: ReverseCreditGrantInput): Promise<CreditGrantResult>;
+  /** Removes only current unspent, unreserved, and unexpired capacity from one grant. */
+  refund(input: RefundCreditGrantInput): Promise<CreditGrantRefundResult>;
   findById(tenantId: string, grantId: string): Promise<CreditGrant | null>;
   getBalance(tenantId: string, accountId: string): Promise<CreditBalance>;
   list(query: CreditGrantListQuery): Promise<PaginatedResult<CreditGrant>>;
@@ -71,23 +105,23 @@ export interface CreditGrantRepository {
 }
 
 export interface AssetRepository {
+  /** Reject a duplicate tenant/code pair with AssetCodeConflictError. */
   create(input: CreateAssetInput): Promise<Asset>;
   findById(tenantId: string, assetId: string): Promise<Asset | null>;
-  list(tenantId: string): Promise<Asset[]>;
+  list(query: PaginationQuery<typeof assetListFilter>): Promise<PaginatedResult<Asset>>;
 }
 
 export interface LedgerRepository {
   create(input: CreateLedgerInput): Promise<LedgerEntity>;
   findById(tenantId: string, ledgerId: string): Promise<LedgerEntity | null>;
-  list(tenantId: string): Promise<LedgerEntity[]>;
+  list(query: PaginationQuery<typeof ledgerListFilter>): Promise<PaginatedResult<LedgerEntity>>;
 }
 
 export interface ApiKeyRepository {
-  bootstrapInitialAdmin(input: BootstrapAdminRepositoryInput): Promise<BootstrapAdminResult>;
   findActiveByHash(keyHash: string): Promise<ApiKeyEntity | null>;
   findById(apiKeyId: string): Promise<ApiKeyEntity | null>;
   create(input: CreateApiKeyInput): Promise<ApiKeyEntity>;
-  list(tenantId: string): Promise<ApiKeyEntity[]>;
+  list(query: PaginationQuery<typeof apiKeyListFilter>): Promise<PaginatedResult<ApiKeyEntity>>;
   revoke(tenantId: string, apiKeyId: string): Promise<boolean>;
 }
 
@@ -104,13 +138,22 @@ export interface TransactionApplicationRepository {
   correct(input: CorrectTransactionInput): Promise<CorrectTransactionResult>;
   findById(tenantId: string, transactionId: string): Promise<TransactionEntity | null>;
   list(query: TransactionPaginationQuery): Promise<PaginatedResult<TransactionEntity>>;
-  listEntries(query: PaginationQuery): Promise<PaginatedResult<EntryEntity>>;
+  listEntries(
+    query: PaginationQuery<typeof entryListFilter>,
+  ): Promise<PaginatedResult<EntryEntity>>;
 }
 
 export interface HoldApplicationRepository {
   create(input: CreateHoldInput): Promise<CreateHoldResult>;
   commit(input: CommitHoldInput): Promise<CommitHoldResult>;
   void(input: VoidHoldInput): Promise<VoidHoldResult>;
+  findById(tenantId: string, holdId: string): Promise<HoldSummary | null>;
+  list(query: HoldListQuery): Promise<PaginatedResult<HoldSummary>>;
+  listEntries(query: HoldEntriesQuery): Promise<PaginatedResult<HoldEntry>>;
+  listCaptures(query: HoldCapturesQuery): Promise<PaginatedResult<HoldCapture>>;
+  listCreditAllocations(
+    query: HoldCreditAllocationsQuery,
+  ): Promise<PaginatedResult<HoldCreditAllocation>>;
 }
 
 export interface BalanceApplicationRepository {
@@ -119,10 +162,28 @@ export interface BalanceApplicationRepository {
   listHistory(query: BalanceHistoryQuery): Promise<PaginatedResult<BalanceSnapshotEvent>>;
 }
 
+export interface StatementRepository {
+  getAccountStatement(query: AccountStatementQuery): Promise<AccountStatement>;
+  getCreditLotStatement(query: CreditLotStatementQuery): Promise<CreditLotStatement>;
+}
+
 export interface ReconciliationApplicationRepository {
   ingest(input: IngestReconRecordsInput): Promise<ReconUpload>;
+  getUpload(tenantId: string, uploadId: string): Promise<ReconUpload | null>;
+  listUploads(
+    query: PaginationQuery<typeof reconUploadListFilter>,
+  ): Promise<PaginatedResult<ReconUpload>>;
+  listRuns(
+    query: PaginationQuery<typeof reconRunListFilter>,
+  ): Promise<PaginatedResult<ReconRunSummary>>;
+  listRecords(
+    query: ReconRecordPaginationQuery,
+  ): Promise<PaginatedResult<ReconRecordListItem> | null>;
   createRule(input: CreateReconRuleInput): Promise<ReconRule>;
-  listRules(tenantId: string): Promise<ReconRule[]>;
+  listRules(
+    query: PaginationQuery<typeof reconRuleListFilter>,
+  ): Promise<PaginatedResult<ReconRule>>;
+  listResults(query: ReconResultPaginationQuery): Promise<PaginatedResult<ReconResult> | null>;
   getRule(tenantId: string, ruleId: string): Promise<ReconRule | null>;
   run(input: RunReconInput): Promise<ReconRun>;
   getRun(tenantId: string, runId: string): Promise<ReconRun | null>;

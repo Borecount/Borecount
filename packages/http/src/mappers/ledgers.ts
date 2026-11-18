@@ -1,4 +1,4 @@
-import type { TrialBalance } from '@luxledger/core/application';
+import type { TrialBalance } from '@borecount/core/application';
 import type { TrialBalanceResponse } from '../contracts/ledgers';
 
 export const toTrialBalanceResponse = (trialBalance: TrialBalance): TrialBalanceResponse => ({

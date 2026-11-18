@@ -2,7 +2,7 @@
 
 ## Scope
 
-This runbook defines the minimum production observability baseline for runnable API applications built on LuxLedger. The reference API demo app lives in a separate repository.
+This runbook defines the minimum production observability baseline for runnable API applications built on Borecount. The reference API demo app lives in a separate repository.
 
 - Metrics endpoint: `GET /metrics` (Prometheus text format).
 - Structured request logs with stable fields: `requestId`, `tenantId`, `apiKeyId`, `route`.
@@ -11,13 +11,13 @@ This runbook defines the minimum production observability baseline for runnable 
 
 ## Exposed metrics
 
-- `luxledger_http_requests_total{route,status}`
+- `borecount_http_requests_total{route,status}`
   - Counter of completed HTTP requests by normalized route template and status code.
-- `luxledger_http_request_duration_seconds{route,status,*}`
+- `borecount_http_request_duration_seconds{route,status,*}`
   - Histogram of request latency in seconds by normalized route template and status code.
-- `luxledger_auth_failures_total{route,status}`
+- `borecount_auth_failures_total{route,status}`
   - Counter for auth failures (currently 401/403 on `/v1/*` routes).
-- `luxledger_token_issuance_failures_total{status}`
+- `borecount_token_issuance_failures_total{status}`
   - Counter for failed `POST /v1/auth/token` attempts (4xx/5xx).
 
 ## Alert rules (initial thresholds)
@@ -33,12 +33,12 @@ PromQL:
 
 ```promql
 (
-  sum(rate(luxledger_http_requests_total{status=~"5.."}[10m]))
+  sum(rate(borecount_http_requests_total{status=~"5.."}[10m]))
   /
-  sum(rate(luxledger_http_requests_total[10m]))
+  sum(rate(borecount_http_requests_total[10m]))
 ) > 0.02
 and
-sum(increase(luxledger_http_requests_total[10m])) >= 100
+sum(increase(borecount_http_requests_total[10m])) >= 100
 ```
 
 ### 2) Auth anomaly rate
@@ -50,12 +50,12 @@ PromQL:
 
 ```promql
 (
-  sum(rate(luxledger_auth_failures_total[10m]))
+  sum(rate(borecount_auth_failures_total[10m]))
   /
-  sum(rate(luxledger_http_requests_total{route=~"/v1/auth/token|/v1/.*"}[10m]))
+  sum(rate(borecount_http_requests_total{route=~"/v1/auth/token|/v1/.*"}[10m]))
 ) > 0.20
 and
-sum(increase(luxledger_http_requests_total{route=~"/v1/auth/token|/v1/.*"}[10m])) >= 50
+sum(increase(borecount_http_requests_total{route=~"/v1/auth/token|/v1/.*"}[10m])) >= 50
 ```
 
 ### 3) Token issuance failures anomaly
@@ -67,12 +67,12 @@ PromQL:
 
 ```promql
 (
-  sum(rate(luxledger_token_issuance_failures_total[10m]))
+  sum(rate(borecount_token_issuance_failures_total[10m]))
   /
-  sum(rate(luxledger_http_requests_total{route="/v1/auth/token"}[10m]))
+  sum(rate(borecount_http_requests_total{route="/v1/auth/token"}[10m]))
 ) > 0.10
 and
-sum(increase(luxledger_http_requests_total{route="/v1/auth/token"}[10m])) >= 20
+sum(increase(borecount_http_requests_total{route="/v1/auth/token"}[10m])) >= 20
 ```
 
 ## Dashboard/query references for on-call
@@ -80,7 +80,7 @@ sum(increase(luxledger_http_requests_total{route="/v1/auth/token"}[10m])) >= 20
 ### Request volume and errors by route
 
 ```promql
-sum by (route, status) (rate(luxledger_http_requests_total[5m]))
+sum by (route, status) (rate(borecount_http_requests_total[5m]))
 ```
 
 ### p95 latency by route
@@ -88,20 +88,20 @@ sum by (route, status) (rate(luxledger_http_requests_total[5m]))
 ```promql
 histogram_quantile(
   0.95,
-  sum by (le, route) (rate(luxledger_http_request_duration_seconds_bucket[5m]))
+  sum by (le, route) (rate(borecount_http_request_duration_seconds_bucket[5m]))
 )
 ```
 
 ### Auth failures by route
 
 ```promql
-sum by (route, status) (rate(luxledger_auth_failures_total[5m]))
+sum by (route, status) (rate(borecount_auth_failures_total[5m]))
 ```
 
 ### Token issuance failures by status
 
 ```promql
-sum by (status) (rate(luxledger_token_issuance_failures_total[5m]))
+sum by (status) (rate(borecount_token_issuance_failures_total[5m]))
 ```
 
 ### Structured log query examples

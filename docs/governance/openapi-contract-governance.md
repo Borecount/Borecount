@@ -1,4 +1,4 @@
-# OpenAPI Contract Governance (LL-35B)
+# OpenAPI Contract Governance
 
 ## Scope
 

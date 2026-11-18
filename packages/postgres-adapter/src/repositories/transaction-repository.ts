@@ -1,32 +1,40 @@
 import {
   aggregateAccountEntries,
   type EntryEntity,
-  isDomainError,
   parseAccountSide,
   type TransactionEntity,
   type TransactionMetadata,
-} from '@luxledger/core';
+} from '@borecount/core';
+import type { PaginationQuery } from '@borecount/core/application';
 import {
   assertAvailableBalance,
   type BulkCreateTransactionInput,
   type BulkCreateTransactionResult,
-  BulkTransactionError,
   type CorrectTransactionInput,
   type CorrectTransactionResult,
   type CreateTransactionInput,
   type CreateTransactionResult,
-  InvariantViolationError,
+  entryListFilter,
   type PaginatedResult,
-  type PaginationQuery,
-  RepositoryError,
   type ReverseTransactionInput,
   type ReverseTransactionResult,
   type TransactionApplicationRepository,
   type TransactionPaginationQuery,
-} from '@luxledger/core/application';
-import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+  transactionListFilter,
+} from '@borecount/core/application';
+import {
+  AdjustmentConflictError,
+  BulkTransactionError,
+  CreditGrantConflictError,
+  InvariantViolationError,
+  isDomainError,
+  RepositoryError,
+} from '@borecount/core/errors';
+import { and, desc, eq, getTableColumns, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { DbClient } from '../client';
+import { exactTimestamp } from '../exact-timestamp';
+import { listWhereScope, listWhereSql } from '../list-where';
 import { toEntryEntity } from '../mappers/entry-mapper';
 import { toTransactionEntity } from '../mappers/transaction-mapper';
 import { paginateByCursor } from '../paginate-by-cursor';
@@ -44,6 +52,9 @@ import { validatePosting, validatePostingEntries } from './posting-validation';
 
 type TransactionRow = typeof schema.transactions.$inferSelect;
 type EntryRow = typeof schema.entries.$inferSelect;
+
+// Hold linkage is a persistence detail, absent from TransactionEntity.
+const { holdId: _holdId, ...transactionListColumns } = getTableColumns(schema.transactions);
 
 export class DrizzleTransactionRepository implements TransactionApplicationRepository {
   public constructor(private readonly client: DbClient) {}
@@ -88,6 +99,36 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
       effectiveAt: input.effectiveAt ?? undefined,
       compareDescriptionOnRetry: true,
       payloadMismatchMessage: 'Unable to expire credit grant: reference payload mismatch',
+      skipGrantLineage: true,
+    });
+  }
+
+  public postAdjustmentInTx(
+    tx: PostgresJsDatabase<typeof schema>,
+    input: CreateTransactionInput,
+  ): Promise<CreateTransactionResult> {
+    return this.createOrResolvePostedTransaction(tx, {
+      ...input,
+      description: input.description ?? null,
+      effectiveAt: input.effectiveAt ?? undefined,
+      compareDescriptionOnRetry: true,
+      payloadMismatchMessage: 'Adjustment reference payload mismatch',
+      payloadMismatchError: (message) => new AdjustmentConflictError(message),
+      balanceSnapshotEventType: 'ADJUSTMENT',
+    });
+  }
+
+  public postCreditGrantRefundInTx(
+    tx: PostgresJsDatabase<typeof schema>,
+    input: CreateTransactionInput,
+  ): Promise<CreateTransactionResult> {
+    return this.createOrResolvePostedTransaction(tx, {
+      ...input,
+      description: input.description ?? null,
+      effectiveAt: input.effectiveAt ?? undefined,
+      compareDescriptionOnRetry: true,
+      payloadMismatchMessage: 'Credit grant refund reference payload mismatch',
+      payloadMismatchError: (message) => new CreditGrantConflictError(message),
       skipGrantLineage: true,
     });
   }
@@ -244,15 +285,18 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
     query: TransactionPaginationQuery,
   ): Promise<PaginatedResult<TransactionEntity>> {
     return this.client.runTenantTx(query.tenantId, 'list transactions', async (tx) => {
+      const where = listWhereSql(transactionListColumns, transactionListFilter, query.where);
       const predicates = [eq(schema.transactions.tenantId, query.tenantId)];
+      if (where) predicates.push(where);
       if (query.ledgerId !== undefined) {
         predicates.push(eq(schema.transactions.ledgerId, query.ledgerId));
       }
 
-      const page = await paginateByCursor<TransactionRow>({
+      const page = await paginateByCursor<TransactionRow & { cursorCreatedAt: string }>({
         query,
         scope: {
           resource: 'transactions',
+          ...listWhereScope(query.where),
           tenantId: query.tenantId,
           ledgerId: query.ledgerId ?? null,
         },
@@ -260,9 +304,9 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
           {
             column: schema.transactions.createdAt,
             key: 'created_at',
-            type: 'date',
+            type: 'timestamp',
             direction: 'asc',
-            getValue: (row: TransactionRow) => row.createdAt,
+            getValue: (row) => row.cursorCreatedAt,
           },
           {
             column: schema.transactions.id,
@@ -274,7 +318,10 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
         ],
         selectRows: async ({ cursorPredicate, limit, orderBy }) =>
           tx
-            .select()
+            .select({
+              ...getTableColumns(schema.transactions),
+              cursorCreatedAt: exactTimestamp(schema.transactions.createdAt),
+            })
             .from(schema.transactions)
             .where(and(...predicates, cursorPredicate))
             .orderBy(...orderBy)
@@ -321,18 +368,20 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
     });
   }
 
-  public async listEntries(query: PaginationQuery): Promise<PaginatedResult<EntryEntity>> {
+  public async listEntries(
+    query: PaginationQuery<typeof entryListFilter>,
+  ): Promise<PaginatedResult<EntryEntity>> {
     return this.client.runTenantTx(query.tenantId, 'list entries', async (tx) => {
-      const page = await paginateByCursor<EntryRow>({
+      const page = await paginateByCursor<EntryRow & { cursorCreatedAt: string }>({
         query,
-        scope: { resource: 'entries', tenantId: query.tenantId },
+        scope: { resource: 'entries', tenantId: query.tenantId, ...listWhereScope(query.where) },
         order: [
           {
             column: schema.entries.createdAt,
             key: 'created_at',
-            type: 'date',
+            type: 'timestamp',
             direction: 'asc',
-            getValue: (row: EntryRow) => row.createdAt,
+            getValue: (row) => row.cursorCreatedAt,
           },
           {
             column: schema.entries.id,
@@ -344,9 +393,18 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
         ],
         selectRows: async ({ cursorPredicate, limit, orderBy }) =>
           tx
-            .select()
+            .select({
+              ...getTableColumns(schema.entries),
+              cursorCreatedAt: exactTimestamp(schema.entries.createdAt),
+            })
             .from(schema.entries)
-            .where(and(eq(schema.entries.tenantId, query.tenantId), cursorPredicate))
+            .where(
+              and(
+                eq(schema.entries.tenantId, query.tenantId),
+                listWhereSql(getTableColumns(schema.entries), entryListFilter, query.where),
+                cursorPredicate,
+              ),
+            )
             .orderBy(...orderBy)
             .limit(limit),
       });
@@ -383,6 +441,7 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
       relatedTransactionId?: string | null;
       relationType?: 'REVERSAL' | 'CORRECTION' | null;
       skipGrantLineage?: boolean;
+      balanceSnapshotEventType?: 'TX_APPLIED' | 'ADJUSTMENT';
       entries: Array<{
         accountId: string;
         signedAmountMinor: bigint;
@@ -390,6 +449,7 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
       }>;
       compareDescriptionOnRetry?: boolean;
       payloadMismatchMessage: string;
+      payloadMismatchError?: (message: string) => Error;
     },
   ): Promise<{ transactionId: string; created: boolean }> {
     const effectiveAt = this.resolveEffectiveAt(input.effectiveAt);
@@ -477,7 +537,10 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
       (existing.relatedTransactionId ?? null) !== (input.relatedTransactionId ?? null) ||
       (existing.relationType ?? null) !== (input.relationType ?? null)
     ) {
-      throw new InvariantViolationError(input.payloadMismatchMessage);
+      throw (
+        input.payloadMismatchError?.(input.payloadMismatchMessage) ??
+        new InvariantViolationError(input.payloadMismatchMessage)
+      );
     }
     const existingEntriesByTransactionId = await this.loadEntriesByTransactionIds(
       tx,
@@ -486,7 +549,10 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
     );
     const existingEntries = existingEntriesByTransactionId.get(existing.id) ?? [];
     if (!this.areEquivalentTransactionEntries(existingEntries, input.entries)) {
-      throw new InvariantViolationError(input.payloadMismatchMessage);
+      throw (
+        input.payloadMismatchError?.(input.payloadMismatchMessage) ??
+        new InvariantViolationError(input.payloadMismatchMessage)
+      );
     }
     return { transactionId: existing.id, created: false };
   }
@@ -582,6 +648,7 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
       relatedTransactionId?: string | null;
       relationType?: 'REVERSAL' | 'CORRECTION' | null;
       skipGrantLineage?: boolean;
+      balanceSnapshotEventType?: 'TX_APPLIED' | 'ADJUSTMENT';
       entries: Array<{
         accountId: string;
         signedAmountMinor: bigint;
@@ -640,6 +707,7 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
       relatedTransactionId?: string | null;
       relationType?: 'REVERSAL' | 'CORRECTION' | null;
       skipGrantLineage?: boolean;
+      balanceSnapshotEventType?: 'TX_APPLIED' | 'ADJUSTMENT';
       entries: Array<{
         accountId: string;
         signedAmountMinor: bigint;
@@ -717,7 +785,7 @@ export class DrizzleTransactionRepository implements TransactionApplicationRepos
         .limit(1);
       await insertBalanceSnapshot(tx, {
         tenantId: input.tenantId,
-        eventType: 'TX_APPLIED',
+        eventType: input.balanceSnapshotEventType ?? 'TX_APPLIED',
         sourceId: transactionId,
         accountId: updatedAccount.id,
         ledgerId: updatedAccount.ledgerId,

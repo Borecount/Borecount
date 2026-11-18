@@ -1,26 +1,32 @@
-# @luxledger/express-routes
+# @borecount/express-routes
 
-Express route registration package for LuxLedger HTTP routes, aligned with `@luxledger/fastify-routes`.
+Express route registration package for Borecount HTTP routes, aligned with `@borecount/fastify-routes`.
 
 ## Composition API
 
 ```ts
 import express from 'express';
-import { registerLedgerAdapter } from '@luxledger/express-routes';
+import { registerLedgerAdapter } from '@borecount/express-routes';
 
 const app = express();
-registerLedgerAdapter(app, {
-  ledgerService,
-  apiKeyService,
+registerLedgerAdapter(app, applicationServices, {
+  authorizeAdjustment: async ({ request, direction, tenantId, apiKeyId, apiKeyRole, body }) => {
+    const actorId = await resolveEffectiveActor({
+      principal: request.authenticatedPrincipal,
+      direction,
+      tenantId,
+      apiKeyId,
+      apiKeyRole,
+      claimedActorId: body.actor_id,
+    });
+    return { actorId };
+  },
 });
 ```
 
 ## Expected dependencies
 
-- `ledgerService` (`LedgerService`)
-- `apiKeyService` (`ApiKeyService`)
-
-Both are from `@luxledger/core/application`.
+`registerLedgerAdapter` expects `ApplicationServices` from `@borecount/core/application`.
 
 ## Request context requirements
 
@@ -41,10 +47,28 @@ This package reads no environment variables. Authentication, JWT, rate limiting,
 - Error serialization:
   Express errors are translated through the same domain-error shape (`{ error, message }`) used by Fastify.
 - Middleware ordering:
-  Express host must register auth middleware before adapter routes. In Fastify, hook ordering provides this via `onRequest`.
+  The host must register authentication middleware before adapter routes.
 - JSON parsing:
   Route registration ensures JSON middleware exists for request body parsing.
 
-The complete and versioned route surface is defined by [`@luxledger/http` OpenAPI](../http/openapi/openapi.yaml). See the repository [integration guide](../../docs/integration/README.md) before composing the adapter in a host application.
+The complete and versioned route surface is defined by [`@borecount/http` OpenAPI](../http/openapi/openapi.yaml). See the repository [integration guide](../../docs/integration/README.md) before composing the adapter in a host application.
 
-Pin compatible LuxLedger package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
+Pass host policy in the third argument, `LedgerAdapterOptions`. `authorizeAdjustment` runs after body validation and auth-context checks for every credit/debit request, including retries. The host must return the trusted effective actor; the adapter requires it to exactly match `body.actor_id` before calling a service. For an explicitly trusted service integration, pass `{ authorizeAdjustment: false }`; schema validation and auth-context checks still apply, but the adapter does not authorize direction or verify the actor claim. Missing, `undefined`, `null`, or another invalid option value fails registration synchronously. Existing hosts must add a callback or explicitly opt out before upgrading. See the [trusted actor integration pattern](../../docs/integration/adjustment-authorization.md).
+
+Asset, ledger, API key, reconciliation matching-rule, upload, and run list routes accept `limit` (default 50, maximum 200), an opaque `cursor`, and endpoint-specific typed `where` filters. They return `{ data, next_cursor }`. Upload records and reconciliation run results are independently paginated through `GET /v1/reconciliation/uploads/{id}/records` and `GET /v1/reconciliation/runs/{id}/results`.
+
+Tenant clients can discover asset scales with `GET /v1/assets` and `GET /v1/assets/{id}`.
+`POST /v1/assets` requires an authenticated `ADMIN` context supplied by the host.
+The create body takes `code` and `scale`. Codes are trimmed and uppercased, scales are integers
+from 0 through 18, and duplicate codes within a tenant return `409 ASSET_CODE_CONFLICT`.
+Clients can reuse the same SERVICE credentials they use for other tenant reads.
+
+Pin compatible Borecount package versions and verify the released OpenAPI before production; see [versioning and publication](../../docs/integration/versioning.md).
+
+## JSON parsing
+
+Registration installs `express.json()` with Express defaults before ledger routes. Like other
+application middleware, it also applies to subsequently registered routes. Hosts can pass
+`jsonParser: express.json({ limit: '1mb' })` to choose parser settings, or `jsonParser: false` when
+they install their own parser before registration. Install the host error handler after routes
+and map known parser size errors to the documented 413 response.

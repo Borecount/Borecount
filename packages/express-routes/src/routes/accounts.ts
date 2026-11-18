@@ -1,5 +1,15 @@
-import { AccountSide } from '@luxledger/core';
-import type { ApplicationServices } from '@luxledger/core/application';
+import { AccountSide } from '@borecount/core';
+import type {
+  ApplicationServices,
+  accountListFilter,
+  balanceHistoryListFilter,
+  WhereFor,
+} from '@borecount/core/application';
+import {
+  accountFilterFields,
+  balanceHistoryFilterFields,
+  readWhereParameter,
+} from '@borecount/http';
 import {
   type AccountByIdParams,
   type AccountsPageResponse,
@@ -10,12 +20,20 @@ import {
   balanceAsOfQuerySchema,
   balanceHistoryQuerySchema,
   type CreateAccountRequest,
+  type CreditLotStatementQuery,
   createAccountBodySchema,
+  creditLotStatementQuerySchema,
   type ListAccountsQuery,
-} from '@luxledger/http/contracts';
-import { toAccountResponse } from '@luxledger/http/mappers';
-import { parseUuidQuery } from '@luxledger/http/query/pagination';
-import { parseUuidParam } from '@luxledger/http/validation-utils';
+  type StatementQuery,
+  statementQuerySchema,
+} from '@borecount/http/contracts';
+import {
+  toAccountResponse,
+  toAccountStatementResponse,
+  toCreditLotStatementResponse,
+} from '@borecount/http/mappers';
+import { parseUuidQuery } from '@borecount/http/query/pagination';
+import { parseUuidParam } from '@borecount/http/validation-utils';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
 import { parsePaginationQuery } from '../query/pagination';
@@ -23,7 +41,7 @@ import { requireContext } from '../request/context';
 import { validate } from '../request/validation';
 import type { RequestWithContext } from '../types';
 
-type AccountRouteServices = Pick<ApplicationServices, 'accounts' | 'balances'>;
+type AccountRouteServices = Pick<ApplicationServices, 'accounts' | 'balances' | 'statements'>;
 
 export const registerAccountRoutes = (app: Application, services: AccountRouteServices): void => {
   app.post('/v1/accounts', async (req: RequestWithContext, res: Response) =>
@@ -64,8 +82,12 @@ export const registerAccountRoutes = (app: Application, services: AccountRouteSe
   app.get('/v1/accounts', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
       const pagination = parsePaginationQuery(req.query);
+      const where = readWhereParameter<WhereFor<typeof accountListFilter>>(
+        req.originalUrl,
+        accountFilterFields,
+      );
       const ledgerId = parseUuidQuery(req.query.ledger_id);
-      if (pagination === null) {
+      if (pagination === null || where === null) {
         sendInvalidInput(res, 'Invalid querystring');
         return;
       }
@@ -84,6 +106,7 @@ export const registerAccountRoutes = (app: Application, services: AccountRouteSe
         limit: pagination.limit,
         cursor: query.cursor,
         ledgerId: query.ledger_id,
+        where,
       });
       const response: AccountsPageResponse = {
         data: page.data.map(toAccountResponse),
@@ -122,6 +145,10 @@ export const registerAccountRoutes = (app: Application, services: AccountRouteSe
     withDomainErrorHandling(res, async () => {
       const params = parseUuidParam<keyof AccountByIdParams>(req.params.id, 'id');
       const pagination = parsePaginationQuery(req.query);
+      const where = readWhereParameter<WhereFor<typeof balanceHistoryListFilter>>(
+        req.originalUrl,
+        balanceHistoryFilterFields,
+      );
       if (params === null || pagination === null) {
         sendInvalidInput(res, params === null ? 'Invalid path parameter' : 'Invalid querystring');
         return;
@@ -132,7 +159,7 @@ export const registerAccountRoutes = (app: Application, services: AccountRouteSe
         limit: pagination.limit,
         cursor: pagination.cursor,
       });
-      if (query === null) {
+      if (query === null || where === null) {
         sendInvalidInput(res, 'Invalid querystring');
         return;
       }
@@ -144,6 +171,7 @@ export const registerAccountRoutes = (app: Application, services: AccountRouteSe
         to: new Date(query.to),
         limit: pagination.limit,
         cursor: pagination.cursor,
+        where,
       });
       const response: BalanceHistoryResponse = {
         data: page.data.map((item) => ({
@@ -161,6 +189,68 @@ export const registerAccountRoutes = (app: Application, services: AccountRouteSe
         next_cursor: page.nextCursor,
       };
       res.status(200).json(response);
+    }),
+  );
+
+  app.get('/v1/accounts/:id/statement', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const params = parseUuidParam<keyof AccountByIdParams>(req.params.id, 'id');
+      const pagination = parsePaginationQuery(req.query);
+      const query = validate<StatementQuery>(statementQuerySchema, {
+        from: req.query.from,
+        as_of: req.query.as_of,
+        limit: pagination?.limit,
+        cursor: pagination?.cursor,
+      });
+      if (params === null || pagination === null || query === null) {
+        sendInvalidInput(res, params === null ? 'Invalid path parameter' : 'Invalid querystring');
+        return;
+      }
+      const { tenantId } = requireContext(req);
+      res.status(200).json(
+        toAccountStatementResponse(
+          await services.statements.getAccountStatement({
+            tenantId,
+            accountId: params.id,
+            from: new Date(query.from),
+            asOf: new Date(query.as_of),
+            limit: pagination.limit,
+            cursor: pagination.cursor,
+          }),
+        ),
+      );
+    }),
+  );
+
+  app.get('/v1/accounts/:id/credit-statement', async (req: RequestWithContext, res: Response) =>
+    withDomainErrorHandling(res, async () => {
+      const params = parseUuidParam<keyof AccountByIdParams>(req.params.id, 'id');
+      const pagination = parsePaginationQuery(req.query);
+      const query = validate<CreditLotStatementQuery>(creditLotStatementQuerySchema, {
+        from: req.query.from,
+        as_of: req.query.as_of,
+        grant_id: req.query.grant_id,
+        limit: pagination?.limit,
+        cursor: pagination?.cursor,
+      });
+      if (params === null || pagination === null || query === null) {
+        sendInvalidInput(res, params === null ? 'Invalid path parameter' : 'Invalid querystring');
+        return;
+      }
+      const { tenantId } = requireContext(req);
+      res.status(200).json(
+        toCreditLotStatementResponse(
+          await services.statements.getCreditLotStatement({
+            tenantId,
+            accountId: params.id,
+            grantId: query.grant_id,
+            from: new Date(query.from),
+            asOf: new Date(query.as_of),
+            limit: pagination.limit,
+            cursor: pagination.cursor,
+          }),
+        ),
+      );
     }),
   );
 };

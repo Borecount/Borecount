@@ -1,4 +1,4 @@
-import type { PaginatedResult } from '@luxledger/core/application';
+import type { PaginatedResult } from '@borecount/core/application';
 
 export const toPaginatedResponse = <Source, Target>(
   page: PaginatedResult<Source>,

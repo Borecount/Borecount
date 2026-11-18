@@ -1,6 +1,6 @@
 {
-  "id": "f4f72841-6c94-4c5f-a9d4-d460b834f0c8",
-  "prevId": "d31da8d3-2186-45bf-934a-2e4a8944beab",
+  "id": "9e316328-411b-4bb0-8255-76a0a5239e8e",
+  "prevId": "ecf5dabe-1c3f-4317-9ecd-5526496455ef",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -73,15 +73,8 @@
           "notNull": true,
           "default": "0"
         },
-        "inflight_debit_minor": {
-          "name": "inflight_debit_minor",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "0"
-        },
-        "inflight_credit_minor": {
-          "name": "inflight_credit_minor",
+        "reserved_delta_minor": {
+          "name": "reserved_delta_minor",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true,
@@ -243,13 +236,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "accounts_inflight_debit_nonnegative_chk": {
-          "name": "accounts_inflight_debit_nonnegative_chk",
-          "value": "\"accounts\".\"inflight_debit_minor\" >= 0"
-        },
-        "accounts_inflight_credit_nonnegative_chk": {
-          "name": "accounts_inflight_credit_nonnegative_chk",
-          "value": "\"accounts\".\"inflight_credit_minor\" >= 0"
+        "accounts_reserved_delta_side_chk": {
+          "name": "accounts_reserved_delta_side_chk",
+          "value": "(\"accounts\".\"side\" = 'DEBIT' and \"accounts\".\"reserved_delta_minor\" <= 0) or (\"accounts\".\"side\" = 'CREDIT' and \"accounts\".\"reserved_delta_minor\" >= 0)"
         },
         "accounts_grant_enabled_shape_chk": {
           "name": "accounts_grant_enabled_shape_chk",
@@ -524,14 +513,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "inflight_debit_minor": {
-          "name": "inflight_debit_minor",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "inflight_credit_minor": {
-          "name": "inflight_credit_minor",
+        "reserved_delta_minor": {
+          "name": "reserved_delta_minor",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
@@ -728,6 +711,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "source_allocation_id": {
+          "name": "source_allocation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_hold_id": {
+          "name": "source_hold_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "version": {
           "name": "version",
           "type": "bigint",
@@ -769,6 +764,13 @@
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
+        },
+        "reserved_minor": {
+          "name": "reserved_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
         },
         "created_at": {
           "name": "created_at",
@@ -821,6 +823,42 @@
           "method": "btree",
           "with": {}
         },
+        "credit_grant_capacity_versions_source_allocation_uq": {
+          "name": "credit_grant_capacity_versions_source_allocation_uq",
+          "columns": [
+            {
+              "expression": "source_allocation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "credit_grant_capacity_versions_source_hold_uq": {
+          "name": "credit_grant_capacity_versions_source_hold_uq",
+          "columns": [
+            {
+              "expression": "grant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_hold_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "credit_grant_capacity_versions_tenant_grant_version_idx": {
           "name": "credit_grant_capacity_versions_tenant_grant_version_idx",
           "columns": [
@@ -863,6 +901,32 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
+        "credit_grant_capacity_versions_source_allocation_id_credit_grant_hold_allocations_id_fk": {
+          "name": "credit_grant_capacity_versions_source_allocation_id_credit_grant_hold_allocations_id_fk",
+          "tableFrom": "credit_grant_capacity_versions",
+          "tableTo": "credit_grant_hold_allocations",
+          "columnsFrom": [
+            "source_allocation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "credit_grant_capacity_versions_source_hold_id_holds_id_fk": {
+          "name": "credit_grant_capacity_versions_source_hold_id_holds_id_fk",
+          "tableFrom": "credit_grant_capacity_versions",
+          "tableTo": "holds",
+          "columnsFrom": [
+            "source_hold_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "credit_grant_capacity_versions_grant_fk": {
           "name": "credit_grant_capacity_versions_grant_fk",
           "tableFrom": "credit_grant_capacity_versions",
@@ -902,6 +966,10 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "credit_grant_capacity_versions_reserved_chk": {
+          "name": "credit_grant_capacity_versions_reserved_chk",
+          "value": "\"credit_grant_capacity_versions\".\"reserved_minor\" >= 0 and \"credit_grant_capacity_versions\".\"reserved_minor\" <= \"credit_grant_capacity_versions\".\"remaining_minor\""
+        },
         "credit_grant_capacity_versions_version_nonnegative_chk": {
           "name": "credit_grant_capacity_versions_version_nonnegative_chk",
           "value": "\"credit_grant_capacity_versions\".\"version\" >= 0"
@@ -1132,6 +1200,188 @@
       },
       "isRLSEnabled": false
     },
+    "public.credit_grant_hold_allocations": {
+      "name": "credit_grant_hold_allocations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuid_v7()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ledger_id": {
+          "name": "ledger_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "grant_id": {
+          "name": "grant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hold_entry_id": {
+          "name": "hold_entry_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "credit_grant_hold_allocations_grant_idx": {
+          "name": "credit_grant_hold_allocations_grant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "grant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "credit_grant_hold_allocations_hold_entry_idx": {
+          "name": "credit_grant_hold_allocations_hold_entry_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "hold_entry_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "credit_grant_hold_allocations_grant_hold_entry_uq": {
+          "name": "credit_grant_hold_allocations_grant_hold_entry_uq",
+          "columns": [
+            {
+              "expression": "grant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "hold_entry_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "credit_grant_hold_allocations_tenant_id_tenants_id_fk": {
+          "name": "credit_grant_hold_allocations_tenant_id_tenants_id_fk",
+          "tableFrom": "credit_grant_hold_allocations",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "credit_grant_hold_allocations_grant_fk": {
+          "name": "credit_grant_hold_allocations_grant_fk",
+          "tableFrom": "credit_grant_hold_allocations",
+          "tableTo": "credit_grants",
+          "columnsFrom": [
+            "tenant_id",
+            "ledger_id",
+            "account_id",
+            "grant_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "ledger_id",
+            "account_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "credit_grant_hold_allocations_hold_entry_fk": {
+          "name": "credit_grant_hold_allocations_hold_entry_fk",
+          "tableFrom": "credit_grant_hold_allocations",
+          "tableTo": "hold_entries",
+          "columnsFrom": [
+            "tenant_id",
+            "account_id",
+            "hold_entry_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "account_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "credit_grant_hold_allocations_amount_positive_chk": {
+          "name": "credit_grant_hold_allocations_amount_positive_chk",
+          "value": "\"credit_grant_hold_allocations\".\"amount_minor\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.credit_grants": {
       "name": "credit_grants",
       "schema": "",
@@ -1265,6 +1515,33 @@
             },
             {
               "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "credit_grants_tenant_created_id_idx": {
+          "name": "credit_grants_tenant_created_id_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1457,15 +1734,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "direction": {
-          "name": "direction",
-          "type": "entry_direction",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amount_minor": {
-          "name": "amount_minor",
+        "signed_amount_minor": {
+          "name": "signed_amount_minor",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
@@ -1623,7 +1893,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "entries_signed_amount_nonzero_chk": {
+          "name": "entries_signed_amount_nonzero_chk",
+          "value": "\"entries\".\"signed_amount_minor\" <> 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.hold_entries": {
@@ -1655,15 +1930,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "direction": {
-          "name": "direction",
-          "type": "entry_direction",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amount_minor": {
-          "name": "amount_minor",
+        "signed_amount_minor": {
+          "name": "signed_amount_minor",
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
@@ -1733,6 +2001,33 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "hold_entries_tenant_account_id_uq": {
+          "name": "hold_entries_tenant_account_id_uq",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1794,7 +2089,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "hold_entries_signed_amount_nonzero_chk": {
+          "name": "hold_entries_signed_amount_nonzero_chk",
+          "value": "\"hold_entries\".\"signed_amount_minor\" <> 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.holds": {
@@ -1968,7 +2268,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "holds_amounts_chk": {
+          "name": "holds_amounts_chk",
+          "value": "\"holds\".\"original_amount_minor\" > 0 and \"holds\".\"remaining_amount_minor\" >= 0 and \"holds\".\"remaining_amount_minor\" <= \"holds\".\"original_amount_minor\""
+        },
+        "holds_state_amount_chk": {
+          "name": "holds_state_amount_chk",
+          "value": "(\"holds\".\"state\" = 'HELD' and \"holds\".\"remaining_amount_minor\" > 0) or (\"holds\".\"state\" in ('APPLIED', 'VOIDED') and \"holds\".\"remaining_amount_minor\" = 0)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ledgers": {
@@ -2148,8 +2457,8 @@
         }
       },
       "indexes": {
-        "recon_records_upload_idx": {
-          "name": "recon_records_upload_idx",
+        "recon_records_history_idx": {
+          "name": "recon_records_history_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -2159,6 +2468,18 @@
             },
             {
               "expression": "upload_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2534,6 +2855,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "matching_rule_ids": {
+          "name": "matching_rule_ids",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": true
+        },
         "status": {
           "name": "status",
           "type": "reconciliation_run_status",
@@ -2599,11 +2926,23 @@
         }
       },
       "indexes": {
-        "recon_runs_tenant_idx": {
-          "name": "recon_runs_tenant_idx",
+        "recon_runs_history_idx": {
+          "name": "recon_runs_history_idx",
           "columns": [
             {
               "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2720,11 +3059,23 @@
         }
       },
       "indexes": {
-        "recon_uploads_tenant_idx": {
-          "name": "recon_uploads_tenant_idx",
+        "recon_uploads_history_idx": {
+          "name": "recon_uploads_history_idx",
           "columns": [
             {
               "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2874,6 +3225,12 @@
         "description": {
           "name": "description",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -3112,6 +3469,14 @@
         "transactions_relation_pair_ck": {
           "name": "transactions_relation_pair_ck",
           "value": "(\"transactions\".\"related_transaction_id\" is null and \"transactions\".\"relation_type\" is null) or (\"transactions\".\"related_transaction_id\" is not null and \"transactions\".\"relation_type\" is not null)"
+        },
+        "transactions_metadata_object_chk": {
+          "name": "transactions_metadata_object_chk",
+          "value": "\"transactions\".\"metadata\" is null or jsonb_typeof(\"transactions\".\"metadata\") = 'object'"
+        },
+        "transactions_metadata_size_chk": {
+          "name": "transactions_metadata_size_chk",
+          "value": "\"transactions\".\"metadata\" is null or octet_length(\"transactions\".\"metadata\"::text) <= 16384"
         }
       },
       "isRLSEnabled": false
@@ -3145,15 +3510,8 @@
         "REVERSAL",
         "CONSUMPTION",
         "COMPENSATION",
-        "EXPIRATION"
-      ]
-    },
-    "public.entry_direction": {
-      "name": "entry_direction",
-      "schema": "public",
-      "values": [
-        "DEBIT",
-        "CREDIT"
+        "EXPIRATION",
+        "REFUND"
       ]
     },
     "public.hold_state": {

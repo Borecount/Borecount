@@ -1,15 +1,18 @@
-import type { ApplicationServices } from '@luxledger/core/application';
+import type { ApplicationServices, apiKeyListFilter, WhereFor } from '@borecount/core/application';
+import { apiKeyFilterFields, readWhereParameter } from '@borecount/http';
 import {
   type CreateApiKeyRequest,
   type CreateApiKeyResponse,
   createApiKeyBodySchema,
   type ListApiKeysResponse,
+  listApiKeysQuerySchema,
   type RevokeApiKeyParams,
-} from '@luxledger/http/contracts';
-import { toApiKeyContract } from '@luxledger/http/mappers';
-import { parseUuidParam } from '@luxledger/http/validation-utils';
+} from '@borecount/http/contracts';
+import { toApiKeyContract } from '@borecount/http/mappers';
+import { parseUuidParam } from '@borecount/http/validation-utils';
 import type { Application, Response } from 'express';
 import { sendInvalidInput, withDomainErrorHandling } from '../errors/handlers';
+import { parsePaginationQuery } from '../query/pagination';
 import { assertAdmin, requireContext } from '../request/context';
 import { validate } from '../request/validation';
 import type { RequestWithContext } from '../types';
@@ -22,15 +25,35 @@ export const registerAdminApiKeyRoutes = (
 ): void => {
   app.get('/v1/admin/api-keys', async (req: RequestWithContext, res: Response) =>
     withDomainErrorHandling(res, async () => {
+      const pagination = parsePaginationQuery(req.query);
+      if (
+        pagination === null ||
+        validate(listApiKeysQuerySchema, { ...req.query, limit: pagination.limit }) === null
+      ) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
+      const where = readWhereParameter<WhereFor<typeof apiKeyListFilter>>(
+        req.originalUrl,
+        apiKeyFilterFields,
+      );
+      if (where === null) {
+        sendInvalidInput(res, 'Invalid querystring');
+        return;
+      }
       const context = requireContext(req);
       assertAdmin(context);
-      const keys = await services.apiKeys.listApiKeys({
-        apiKeyId: context.apiKeyId,
-        tenantId: context.tenantId,
-        role: context.apiKeyRole,
-      });
+      const keys = await services.apiKeys.listApiKeys(
+        {
+          apiKeyId: context.apiKeyId,
+          tenantId: context.tenantId,
+          role: context.apiKeyRole,
+        },
+        { ...pagination, where },
+      );
       const response: ListApiKeysResponse = {
-        data: keys.map(toApiKeyContract),
+        data: keys.data.map(toApiKeyContract),
+        next_cursor: keys.nextCursor,
       };
       res.status(200).json(response);
     }),

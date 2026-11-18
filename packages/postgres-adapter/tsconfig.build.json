@@ -9,8 +9,8 @@
     "noEmit": false,
     "emitDeclarationOnly": true,
     "paths": {
-      "@luxledger/core": ["packages/core/dist/index.d.ts"],
-      "@luxledger/core/*": ["packages/core/dist/*/index.d.ts", "packages/core/dist/*.d.ts"]
+      "@borecount/core": ["packages/core/dist/index.d.ts"],
+      "@borecount/core/*": ["packages/core/dist/*/index.d.ts", "packages/core/dist/*.d.ts"]
     }
   },
   "include": ["src/**/*.ts"],

@@ -1,22 +1,19 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { generateApiKey, hashApiKey } from '../../api-key/credentials';
 import type { ApiKeyEntity } from '../../api-key/entity';
 import { ApiKeyRole } from '../../api-key/entity';
+import { apiKeyListFilter } from '../../api-key/list-filter';
+import { ForbiddenError, InvariantViolationError, UnauthorizedError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
-import { ForbiddenError, InvariantViolationError, UnauthorizedError } from '../errors';
+import { validateListWhere } from '../list-filters';
+import { validatePaginationQuery } from '../pagination-query';
 import type { ApiKeyRepository } from '../repositories.interface';
 import type {
   AuthContext,
-  BootstrapAdminInput,
-  BootstrapAdminResult,
   CreateApiKeyRequestInput,
   CreateApiKeyResult,
+  PaginatedResult,
+  PaginationQuery,
 } from '../types';
-
-const API_KEY_PREFIX = 'llk_';
-const API_KEY_BYTES = 32;
-
-const hashApiKey = (apiKey: string): string =>
-  createHash('sha256').update(apiKey, 'utf8').digest('hex');
 
 export class ApiKeyService {
   private readonly repository: ApiKeyRepository;
@@ -53,7 +50,7 @@ export class ApiKeyService {
     assertNonEmpty(input.name, 'name is required');
     this.assertRole(input.role);
 
-    const apiKey = `${API_KEY_PREFIX}${randomBytes(API_KEY_BYTES).toString('hex')}`;
+    const apiKey = generateApiKey();
     const created = await this.repository.create({
       tenantId: input.tenantId,
       name: input.name.trim(),
@@ -64,21 +61,15 @@ export class ApiKeyService {
     return { apiKey, key: created };
   }
 
-  public async listApiKeys(actor: AuthContext): Promise<ApiKeyEntity[]> {
+  public async listApiKeys(
+    actor: AuthContext,
+    query: Omit<PaginationQuery<typeof apiKeyListFilter>, 'tenantId'>,
+  ): Promise<PaginatedResult<ApiKeyEntity>> {
     this.assertAdmin(actor);
-    return this.repository.list(actor.tenantId);
-  }
-
-  public async bootstrapInitialAdmin(input: BootstrapAdminInput): Promise<BootstrapAdminResult> {
-    assertNonEmpty(input.tenantName, 'tenantName is required');
-    assertNonEmpty(input.keyName, 'keyName is required');
-    assertNonEmpty(input.rawApiKey, 'rawApiKey is required');
-
-    return this.repository.bootstrapInitialAdmin({
-      tenantName: input.tenantName.trim(),
-      keyName: input.keyName.trim(),
-      keyHash: hashApiKey(input.rawApiKey),
-    });
+    const scopedQuery = { ...query, tenantId: actor.tenantId };
+    validatePaginationQuery(scopedQuery);
+    validateListWhere(apiKeyListFilter, query.where);
+    return this.repository.list(scopedQuery);
   }
 
   public async revokeApiKey(actor: AuthContext, apiKeyId: string): Promise<void> {

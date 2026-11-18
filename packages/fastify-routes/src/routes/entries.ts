@@ -1,11 +1,18 @@
-import type { EntryEntity } from '@luxledger/core';
-import type { TransactionService } from '@luxledger/core/application';
+import type { EntryEntity } from '@borecount/core';
+import type { entryListFilter, TransactionService, WhereFor } from '@borecount/core/application';
+import {
+  entryFilterFields,
+  invalidWhereError,
+  readWhereParameter,
+  whereQueryProperty,
+} from '@borecount/http';
 import {
   type EntryResponse,
   entriesPageResponseSchema,
   type ListEntriesQuery,
-} from '@luxledger/http/contracts';
-import { toEntryResponse } from '@luxledger/http/mappers';
+} from '@borecount/http/contracts';
+import { toEntryResponse } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import { BasePaginatedRoute, type PaginatedRequest } from '../routing/paginated-route';
 
 export class EntriesListRoute extends BasePaginatedRoute<
@@ -15,15 +22,27 @@ export class EntriesListRoute extends BasePaginatedRoute<
 > {
   protected readonly path = '/v1/entries';
 
+  protected querystringSchema() {
+    return super.querystringSchema({
+      properties: { where: whereQueryProperty(entryFilterFields) },
+    });
+  }
+
   public constructor(private readonly transactions: TransactionService) {
     super();
   }
 
   protected list(request: PaginatedRequest<ListEntriesQuery>) {
+    const where = readWhereParameter<WhereFor<typeof entryListFilter>>(
+      request.raw.url ?? '',
+      entryFilterFields,
+    );
+    if (where === null) throw invalidWhereError();
     return this.transactions.listEntries({
       tenantId: request.tenantId as string,
-      limit: this.resolveLimit(request.query.limit),
+      limit: resolveLimit(request.query.limit),
       cursor: request.query.cursor,
+      where,
     });
   }
 

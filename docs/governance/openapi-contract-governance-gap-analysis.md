@@ -1,8 +1,8 @@
-# OpenAPI Contract Governance Gap Analysis (LL-35A Prep)
+# OpenAPI Contract Governance Gap Analysis
 
 ## Current State
 
-The LL-35A governance gaps are closed by deterministic verification:
+The previously identified governance gaps are closed by deterministic verification:
 
 - CI workflow: `.github/workflows/ci.yml`
 - Governance check script: `.github/scripts/check-openapi-contract-governance.sh`
@@ -12,7 +12,7 @@ The LL-35A governance gaps are closed by deterministic verification:
 - OpenAPI source: `packages/http/openapi/openapi.yaml`
 - Verification command: `bun run contract:verify`
 
-The reference API demo app now lives outside this repository. Contract governance stays in the package repository because `@luxledger/http` owns the framework-agnostic request and response contract.
+The reference API demo app now lives outside this repository. Contract governance stays in the package repository because `@borecount/http` owns the framework-agnostic request and response contract.
 
 ## Previously Identified Gaps
 

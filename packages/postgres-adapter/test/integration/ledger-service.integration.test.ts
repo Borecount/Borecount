@@ -1,24 +1,27 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 
-import { AccountSide } from '@luxledger/core';
+import { AccountSide } from '@borecount/core';
 import {
   BulkTransactionError,
+  CrossLedgerAccountError,
   InvariantViolationError,
+  ReconRunNotFoundError,
+  ReconUploadNotFoundError,
   RepositoryError,
-} from '@luxledger/core/application';
-import { CrossLedgerAccountError } from '@luxledger/core/transaction';
+} from '@borecount/core/errors';
 import {
   createApplicationServices,
   createDbClient,
   DrizzleTenantRepository,
-} from '@luxledger/postgres-adapter';
+} from '@borecount/postgres-adapter';
 import {
   accounts,
   assets,
+  reconResults,
   reconRuns,
   reconUploads,
   transactions,
-} from '@luxledger/postgres-adapter/schema';
+} from '@borecount/postgres-adapter/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
@@ -43,6 +46,11 @@ const assertSafeTestDatabaseUrl = (value: string): void => {
 };
 
 assertSafeTestDatabaseUrl(databaseUrl);
+
+const requireCursor = (cursor: string | null): string => {
+  if (cursor === null) throw new Error('Expected another page');
+  return cursor;
+};
 
 const client = createDbClient({
   databaseUrl,
@@ -134,6 +142,119 @@ describe('application services integration (services + repositories + real DB)',
 
   afterAll(async () => {
     await client.sql.end({ timeout: 5 });
+  });
+
+  it('paginates uploads and records with tenant and parent scoped cursors', async () => {
+    const tenant = await tenants.create({ name: 'Reconciliation pages tenant' });
+    const foreignTenant = await tenants.create({ name: 'Reconciliation pages foreign tenant' });
+    const emptyTenant = await tenants.create({ name: 'Reconciliation pages empty tenant' });
+    const makeRecords = (prefix: string) =>
+      [1, 2, 3].map((n) => ({
+        externalId: `${prefix}-${n}`,
+        amountMinor: BigInt(n),
+        currency: 'USD',
+        reference: `${prefix}-ref-${n}`,
+        occurredAt: new Date('2026-01-01T00:00:00.123Z'),
+        raw: { private: `raw-${n}` },
+      }));
+    const firstUpload = await services.reconciliation.ingest({
+      tenantId: tenant.id,
+      source: 'bank-a',
+      records: makeRecords('first'),
+    });
+    await services.reconciliation.ingest({
+      tenantId: tenant.id,
+      source: 'bank-b',
+      records: makeRecords('second'),
+    });
+    const foreignUpload = await services.reconciliation.ingest({
+      tenantId: foreignTenant.id,
+      source: 'bank-a',
+      records: makeRecords('foreign'),
+    });
+    const tiedCreatedAt = new Date('2026-01-01T00:00:00.123Z');
+    await db
+      .update(reconUploads)
+      .set({ createdAt: tiedCreatedAt })
+      .where(eq(reconUploads.tenantId, tenant.id));
+
+    const uploadsPage = await services.reconciliation.listUploads({
+      tenantId: tenant.id,
+      limit: 1,
+    });
+    expect(uploadsPage.data).toHaveLength(1);
+    expect(uploadsPage.data[0]?.id).not.toBe(foreignUpload.id);
+    expect(uploadsPage.nextCursor).not.toBeNull();
+    const uploadsPage2 = await services.reconciliation.listUploads({
+      tenantId: tenant.id,
+      limit: 1,
+      cursor: requireCursor(uploadsPage.nextCursor),
+    });
+    expect(uploadsPage2.data).toHaveLength(1);
+    expect(uploadsPage2.data[0]?.id).not.toBe(uploadsPage.data[0]?.id);
+    await expect(
+      services.reconciliation.listUploads({
+        tenantId: foreignTenant.id,
+        limit: 1,
+        cursor: requireCursor(uploadsPage.nextCursor),
+      }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
+    expect(
+      (await services.reconciliation.listUploads({ tenantId: emptyTenant.id, limit: 1 })).data,
+    ).toEqual([]);
+    expect(
+      (await services.reconciliation.listRuns({ tenantId: emptyTenant.id, limit: 1 })).data,
+    ).toEqual([]);
+
+    const recordsPage = await services.reconciliation.listRecords({
+      tenantId: tenant.id,
+      uploadId: firstUpload.id,
+      limit: 1,
+    });
+    expect(recordsPage.data).toHaveLength(1);
+    expect(recordsPage.data[0]).not.toHaveProperty('raw');
+    expect(recordsPage.nextCursor).not.toBeNull();
+    const recordsPage2 = await services.reconciliation.listRecords({
+      tenantId: tenant.id,
+      uploadId: firstUpload.id,
+      limit: 1,
+      cursor: requireCursor(recordsPage.nextCursor),
+    });
+    expect(recordsPage2.data).toHaveLength(1);
+    expect(recordsPage2.data[0]?.id).not.toBe(recordsPage.data[0]?.id);
+    const recordsPage3 = await services.reconciliation.listRecords({
+      tenantId: tenant.id,
+      uploadId: firstUpload.id,
+      limit: 1,
+      cursor: requireCursor(recordsPage2.nextCursor),
+    });
+    expect(recordsPage3.data).toHaveLength(1);
+    expect(
+      new Set([recordsPage.data[0]?.id, recordsPage2.data[0]?.id, recordsPage3.data[0]?.id]).size,
+    ).toBe(3);
+    const otherUpload = await services.reconciliation.ingest({
+      tenantId: tenant.id,
+      source: 'bank-c',
+      records: makeRecords('third'),
+    });
+    await expect(
+      services.reconciliation.listRecords({
+        tenantId: tenant.id,
+        uploadId: otherUpload.id,
+        limit: 1,
+        cursor: requireCursor(recordsPage.nextCursor),
+      }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
+    await expect(
+      services.reconciliation.getUpload(tenant.id, foreignUpload.id),
+    ).rejects.toBeInstanceOf(ReconUploadNotFoundError);
+    await expect(
+      services.reconciliation.listRecords({
+        tenantId: tenant.id,
+        uploadId: foreignUpload.id,
+        limit: 1,
+      }),
+    ).rejects.toBeInstanceOf(ReconUploadNotFoundError);
   });
 
   it('covers happy-path posting, idempotency, rollback, and cross-ledger guard via service API', async () => {
@@ -597,7 +718,153 @@ describe('application services integration (services + repositories + real DB)',
     ).toBeTrue();
 
     const persisted = await services.reconciliation.getRun(tenantId, run.id);
+    expect(persisted.matchingRuleIds).toEqual([exactRule.id]);
     expect(persisted.results).toHaveLength(run.results.length);
+
+    const collisionTimestamp = new Date('2026-01-01T00:00:00.123Z');
+    await db
+      .update(reconResults)
+      .set({ createdAt: collisionTimestamp })
+      .where(eq(reconResults.runId, run.id));
+
+    const resultIds: string[] = [];
+    let cursor: string | undefined;
+    let firstCursor: string | null = null;
+    do {
+      const page = await services.reconciliation.listResults({
+        tenantId,
+        runId: run.id,
+        limit: 2,
+        cursor,
+      });
+      resultIds.push(...page.data.map((result) => result.id));
+      firstCursor ??= page.nextCursor;
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    expect(resultIds).toHaveLength(run.results.length);
+    expect(new Set(resultIds).size).toBe(run.results.length);
+    expect(resultIds.sort()).toEqual(run.results.map((result) => result.id).sort());
+    expect(firstCursor).not.toBeNull();
+
+    const referenceRule = await services.reconciliation.createRule({
+      tenantId,
+      name: 'Reference only',
+      criteria: [{ field: 'reference', operator: 'equals' }],
+    });
+    const secondRun = await services.reconciliation.run({
+      tenantId,
+      ledgerId: ledger.id,
+      uploadId: upload.id,
+      strategy: 'one_to_one',
+      matchingRuleIds: [referenceRule.id],
+    });
+    await db
+      .update(reconRuns)
+      .set({ startedAt: new Date('2026-01-01T00:00:00.123Z') })
+      .where(eq(reconRuns.tenantId, tenantId));
+    const runPage = await services.reconciliation.listRuns({ tenantId, limit: 1 });
+    expect(runPage.data).toHaveLength(1);
+    expect(runPage.data[0]).not.toHaveProperty('results');
+    expect(runPage.nextCursor).not.toBeNull();
+    const runPage2 = await services.reconciliation.listRuns({
+      tenantId,
+      limit: 1,
+      cursor: requireCursor(runPage.nextCursor),
+    });
+    expect(runPage2.data).toHaveLength(1);
+    expect(runPage2.data[0]?.id).not.toBe(runPage.data[0]?.id);
+    await expect(
+      services.reconciliation.listRuns({
+        tenantId,
+        limit: 1,
+        cursor: requireCursor(runPage.nextCursor),
+        where: { status: { eq: 'completed' } },
+      }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
+    const combinedRunPage = await services.reconciliation.listRuns({
+      tenantId,
+      limit: 10,
+      where: {
+        ledgerId: { eq: ledger.id },
+        uploadId: { eq: upload.id },
+        status: { eq: 'completed' },
+        startedAt: { gte: new Date('2020-01-01T00:00:00.000Z') },
+      },
+    });
+    expect(combinedRunPage.data).toHaveLength(2);
+    expect(combinedRunPage.data.find((item) => item.id === run.id)?.matchingRuleIds).toEqual([
+      exactRule.id,
+    ]);
+    expect(combinedRunPage.data.find((item) => item.id === secondRun.id)?.matchingRuleIds).toEqual([
+      referenceRule.id,
+    ]);
+    await expect(
+      services.reconciliation.listResults({
+        tenantId,
+        runId: run.id,
+        limit: 2,
+        cursor: firstCursor ?? undefined,
+        where: { status: { eq: 'matched' } },
+      }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
+    await expect(
+      services.reconciliation.listResults({
+        tenantId,
+        runId: secondRun.id,
+        limit: 2,
+        cursor: firstCursor ?? undefined,
+      }),
+    ).rejects.toBeInstanceOf(InvariantViolationError);
+
+    const matchedResults = await services.reconciliation.listResults({
+      tenantId,
+      runId: run.id,
+      limit: 10,
+      where: { status: { eq: 'matched' } },
+    });
+    expect(matchedResults.data.map((result) => result.externalId)).toEqual(['ext-1']);
+    const nullExternalIdResults = await services.reconciliation.listResults({
+      tenantId,
+      runId: run.id,
+      limit: 20,
+      where: { externalId: { eq: null } },
+    });
+    expect(nullExternalIdResults.data.length).toBeGreaterThan(0);
+    const externalIdSet = await services.reconciliation.listResults({
+      tenantId,
+      runId: run.id,
+      limit: 20,
+      where: { externalId: { in: ['ext-1', 'ext-2'] } },
+    });
+    expect(externalIdSet.data.map((result) => result.externalId).sort()).toEqual([
+      'ext-1',
+      'ext-2',
+    ]);
+    const emptyPage = await services.reconciliation.listResults({
+      tenantId,
+      runId: run.id,
+      limit: 10,
+      where: { externalId: { eq: 'not-present' } },
+    });
+    expect(emptyPage).toEqual({ data: [], nextCursor: null });
+    await expect(
+      services.reconciliation.listResults({
+        tenantId: '00000000-0000-4000-8000-000000000001',
+        runId: run.id,
+        limit: 10,
+      }),
+    ).rejects.toBeInstanceOf(ReconRunNotFoundError);
+    const emptyResults = await services.reconciliation
+      .listResults({
+        tenantId,
+        runId: '00000000-0000-4000-8000-000000000999',
+        limit: 10,
+      })
+      .catch((error: unknown) => {
+        expect(error).toBeInstanceOf(ReconRunNotFoundError);
+        return null;
+      });
+    expect(emptyResults).toBeNull();
 
     const beforeDryRunRows = await db.select({ id: reconRuns.id }).from(reconRuns);
     const dryRun = await services.reconciliation.run({
@@ -610,7 +877,13 @@ describe('application services integration (services + repositories + real DB)',
     });
     const afterDryRunRows = await db.select({ id: reconRuns.id }).from(reconRuns);
     expect(dryRun.dryRun).toBeTrue();
+    expect(dryRun.matchingRuleIds).toEqual([exactRule.id]);
     expect(afterDryRunRows).toHaveLength(beforeDryRunRows.length);
+    await expect(services.reconciliation.getRun(tenantId, dryRun.id)).rejects.toBeInstanceOf(
+      ReconRunNotFoundError,
+    );
+    const history = await services.reconciliation.listRuns({ tenantId, limit: 20 });
+    expect(history.data.some((item) => item.id === dryRun.id)).toBeFalse();
   });
 
   it('rejects reconciliation when a persisted upload has no records', async () => {

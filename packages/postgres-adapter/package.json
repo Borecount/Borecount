@@ -1,7 +1,7 @@
 {
-  "name": "@luxledger/postgres-adapter",
-  "version": "0.4.0",
-  "description": "PostgreSQL persistence adapter for LuxLedger using Drizzle ORM.",
+  "name": "@borecount/postgres-adapter",
+  "version": "0.8.1",
+  "description": "PostgreSQL persistence adapter for Borecount using Drizzle ORM.",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -21,6 +21,11 @@
       "types": "./dist/drizzle-config.d.ts",
       "import": "./dist/drizzle-config.js",
       "default": "./dist/drizzle-config.js"
+    },
+    "./migrations": {
+      "types": "./dist/migrations.d.ts",
+      "import": "./dist/migrations.js",
+      "default": "./dist/migrations.js"
     }
   },
   "files": [
@@ -35,19 +40,19 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Crusader4Christ/LuxLedger.git",
+    "url": "git+https://github.com/Borecount/Borecount.git",
     "directory": "packages/postgres-adapter"
   },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@luxledger/core": "^0.4.0",
+    "@borecount/core": "^0.8.0",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.8",
     "safe-stable-stringify": "^2.5.0"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/schema.ts src/drizzle-config.ts --target=node --format=esm --packages=external --root=src --outdir=dist && bunx tsc -p tsconfig.build.json --emitDeclarationOnly && node ../../scripts/fix-dts-relative-imports.mjs packages/postgres-adapter/dist"
+    "build": "rm -rf dist && bun build src/index.ts src/schema.ts src/drizzle-config.ts src/migrations.ts --target=node --format=esm --packages=external --root=src --outdir=dist && bunx tsc -p tsconfig.build.json --emitDeclarationOnly && node ../../scripts/fix-dts-relative-imports.mjs packages/postgres-adapter/dist && mkdir -p dist/security && cp ../../examples/security/least-privilege.sql dist/security/least-privilege.sql && sed -e 's#../../examples/security/least-privilege.sql#./least-privilege.sql#g' -e 's#./adjustment-authorization.md#https://github.com/Borecount/Borecount/blob/main/docs/integration/adjustment-authorization.md#g' -e 's#../product/invariants.md#https://github.com/Borecount/Borecount/blob/main/docs/product/invariants.md#g' -e 's#examples/security/least-privilege.sql#dist/security/least-privilege.sql#g' ../../docs/integration/self-hosted-security.md > dist/security/self-hosted-security.md && mkdir -p dist/migrations/meta && cp ../../drizzle/*.sql dist/migrations/ && cp ../../drizzle/meta/_journal.json dist/migrations/meta/"
   }
 }

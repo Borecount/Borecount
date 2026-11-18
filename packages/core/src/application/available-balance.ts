@@ -1,6 +1,6 @@
 import { calculateAvailableMinor } from '../account/available-balance';
 import type { AccountSide, OverdraftPolicy } from '../account/entity';
-import { OverdraftPolicyViolationError } from './errors';
+import { OverdraftPolicyViolationError } from '../errors';
 
 export const assertAvailableBalance = (account: {
   id: string;

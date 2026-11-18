@@ -1,6 +1,7 @@
 import { validateCreditGrant } from '../../credit-grant';
+import { CreditGrantNotFoundError, InvariantViolationError } from '../../errors';
 import { assertNonEmpty } from '../../utils';
-import { CreditGrantNotFoundError, InvariantViolationError } from '../errors';
+import { validateListWhere } from '../list-filters';
 import { validatePaginationQuery } from '../pagination-query';
 import type { CreditGrantRepository } from '../repositories.interface';
 import type {
@@ -11,13 +12,16 @@ import type {
   CreditGrantLineage,
   CreditGrantListQuery,
   CreditGrantLotBalance,
+  CreditGrantRefundResult,
   CreditGrantResult,
+  CreditLineageQuery,
   CreditLotListQuery,
   PaginatedResult,
-  PaginationQuery,
   ProcessCreditGrantExpirationsInput,
+  RefundCreditGrantInput,
   ReverseCreditGrantInput,
 } from '../types';
+import { creditGrantListFilter, creditLineageListFilter } from '../types';
 
 export class CreditGrantService {
   public constructor(private readonly repository: CreditGrantRepository) {}
@@ -51,6 +55,14 @@ export class CreditGrantService {
     return this.repository.reverse(input);
   }
 
+  public async refund(input: RefundCreditGrantInput): Promise<CreditGrantRefundResult> {
+    assertNonEmpty(input.tenantId, 'tenantId is required');
+    assertNonEmpty(input.grantId, 'grantId is required');
+    assertNonEmpty(input.reference, 'reference is required');
+    validateCreditGrant(input);
+    return this.repository.refund(input);
+  }
+
   public async getById(tenantId: string, grantId: string): Promise<CreditGrant> {
     assertNonEmpty(tenantId, 'tenantId is required');
     assertNonEmpty(grantId, 'grantId is required');
@@ -74,6 +86,7 @@ export class CreditGrantService {
     })) {
       if (value !== undefined) assertNonEmpty(value, `${name} must not be empty`);
     }
+    validateListWhere(creditGrantListFilter, query.where);
     return this.repository.list(query);
   }
 
@@ -82,22 +95,25 @@ export class CreditGrantService {
   ): Promise<PaginatedResult<CreditGrantLotBalance>> {
     validatePaginationQuery(query);
     assertNonEmpty(query.accountId, 'accountId is required');
+    validateListWhere(creditGrantListFilter, query.where);
     return this.repository.listLots(query);
   }
 
   public async listLineageByGrant(
-    query: PaginationQuery & { grantId: string },
+    query: CreditLineageQuery & { grantId: string },
   ): Promise<PaginatedResult<CreditGrantLineage>> {
     validatePaginationQuery(query);
     assertNonEmpty(query.grantId, 'grantId is required');
+    validateListWhere(creditLineageListFilter, query.where);
     return this.repository.listLineage(query);
   }
 
   public async listLineageByTransaction(
-    query: PaginationQuery & { transactionId: string },
+    query: CreditLineageQuery & { transactionId: string },
   ): Promise<PaginatedResult<CreditGrantLineage>> {
     validatePaginationQuery(query);
     assertNonEmpty(query.transactionId, 'transactionId is required');
+    validateListWhere(creditLineageListFilter, query.where);
     return this.repository.listLineage(query);
   }
 

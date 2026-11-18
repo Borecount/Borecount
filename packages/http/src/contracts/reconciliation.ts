@@ -1,5 +1,17 @@
+import { whereQueryProperty } from '../query/list-filter';
+import {
+  reconResultListFilterFields,
+  reconRuleFilterFields,
+  reconRunListFilterFields,
+  reconUploadListFilterFields,
+} from '../query/list-filter-fields';
 import type { InferSchema } from '../schema-types';
 import { NonEmptyTrimmedStringSchema } from './common';
+import {
+  createPaginatedResponseSchema,
+  mergePaginationQuerySchema,
+  paginationQuerySchema,
+} from './pagination';
 
 export const reconCriterionRequestSchema = {
   type: 'object',
@@ -24,6 +36,16 @@ export const reconCriterionRequestSchema = {
     },
   },
 } as const;
+export const listReconRulesQuerySchema = mergePaginationQuerySchema({
+  properties: { where: whereQueryProperty(reconRuleFilterFields) },
+});
+export const listReconUploadsQuerySchema = mergePaginationQuerySchema({
+  properties: { where: whereQueryProperty(reconUploadListFilterFields) },
+});
+export const listReconRunsQuerySchema = mergePaginationQuerySchema({
+  properties: { where: whereQueryProperty(reconRunListFilterFields) },
+});
+export const reconRecordsListQuerySchema = paginationQuerySchema;
 
 export const createReconRuleRequestSchema = {
   type: 'object',
@@ -124,6 +146,7 @@ export const reconciliationRunByIdParamsSchema = {
     },
   },
 } as const;
+export const reconciliationUploadByIdParamsSchema = reconciliationRunByIdParamsSchema;
 
 export const reconRuleResponseSchema = {
   type: 'object',
@@ -139,14 +162,7 @@ export const reconRuleResponseSchema = {
   },
 } as const;
 
-export const reconRulesListResponseSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['data'],
-  properties: {
-    data: { type: 'array', items: reconRuleResponseSchema },
-  },
-} as const;
+export const reconRulesListResponseSchema = createPaginatedResponseSchema(reconRuleResponseSchema);
 
 export const reconUploadResponseSchema = {
   type: 'object',
@@ -160,6 +176,33 @@ export const reconUploadResponseSchema = {
     created_at: { type: 'string', format: 'date-time' },
   },
 } as const;
+export const reconUploadsListResponseSchema =
+  createPaginatedResponseSchema(reconUploadResponseSchema);
+
+export const reconRecordResponseSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'id',
+    'external_id',
+    'amount_minor',
+    'currency',
+    'reference',
+    'description',
+    'occurred_at',
+  ],
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    external_id: { type: 'string' },
+    amount_minor: { type: 'string', pattern: '^[1-9][0-9]*$' },
+    currency: { type: 'string' },
+    reference: { type: 'string' },
+    description: { type: 'string', nullable: true },
+    occurred_at: { type: 'string', format: 'date-time' },
+  },
+} as const;
+export const reconRecordsListResponseSchema =
+  createPaginatedResponseSchema(reconRecordResponseSchema);
 
 export const reconResultResponseSchema = {
   type: 'object',
@@ -194,7 +237,7 @@ export const reconResultResponseSchema = {
   },
 } as const;
 
-export const reconRunResponseSchema = {
+export const reconRunSummaryResponseSchema = {
   type: 'object',
   additionalProperties: false,
   required: [
@@ -202,6 +245,7 @@ export const reconRunResponseSchema = {
     'tenant_id',
     'ledger_id',
     'upload_id',
+    'matching_rule_ids',
     'strategy',
     'status',
     'dry_run',
@@ -212,13 +256,17 @@ export const reconRunResponseSchema = {
     'conflict_count',
     'started_at',
     'completed_at',
-    'results',
   ],
   properties: {
     id: { type: 'string', format: 'uuid' },
     tenant_id: { type: 'string', format: 'uuid' },
     ledger_id: { type: 'string', format: 'uuid' },
     upload_id: { type: 'string', format: 'uuid' },
+    matching_rule_ids: {
+      type: 'array',
+      minItems: 1,
+      items: { type: 'string', format: 'uuid' },
+    },
     strategy: { type: 'string', enum: ['one_to_one'] },
     status: { type: 'string', enum: ['pending', 'running', 'completed', 'failed'] },
     dry_run: { type: 'boolean' },
@@ -229,9 +277,24 @@ export const reconRunResponseSchema = {
     conflict_count: { type: 'integer', minimum: 0 },
     started_at: { type: 'string', format: 'date-time' },
     completed_at: { type: 'string', format: 'date-time', nullable: true },
+  },
+} as const;
+export const reconRunResponseSchema = {
+  ...reconRunSummaryResponseSchema,
+  required: [...reconRunSummaryResponseSchema.required, 'results'],
+  properties: {
+    ...reconRunSummaryResponseSchema.properties,
     results: { type: 'array', items: reconResultResponseSchema },
   },
 } as const;
+export const reconRunsListResponseSchema = createPaginatedResponseSchema(
+  reconRunSummaryResponseSchema,
+);
+export const reconResultsListQuerySchema = mergePaginationQuerySchema({
+  properties: { where: whereQueryProperty(reconResultListFilterFields) },
+});
+export const reconResultsListResponseSchema =
+  createPaginatedResponseSchema(reconResultResponseSchema);
 
 export type ReconCriterionRequest = InferSchema<typeof reconCriterionRequestSchema>;
 export type CreateReconRuleRequest = InferSchema<typeof createReconRuleRequestSchema>;
@@ -240,7 +303,13 @@ export type ReconRulesListResponse = InferSchema<typeof reconRulesListResponseSc
 export type ReconRecordRequest = InferSchema<typeof reconRecordRequestSchema>;
 export type IngestReconRecordsRequest = InferSchema<typeof ingestReconRecordsRequestSchema>;
 export type ReconUploadResponse = InferSchema<typeof reconUploadResponseSchema>;
+export type ReconRecordResponse = InferSchema<typeof reconRecordResponseSchema>;
 export type RunReconRequest = InferSchema<typeof runReconRequestSchema>;
 export type ReconResultResponse = InferSchema<typeof reconResultResponseSchema>;
 export type ReconRunResponse = InferSchema<typeof reconRunResponseSchema>;
+export type ReconRunSummaryResponse = InferSchema<typeof reconRunSummaryResponseSchema>;
+export type ReconUploadsListResponse = InferSchema<typeof reconUploadsListResponseSchema>;
+export type ReconRecordsListResponse = InferSchema<typeof reconRecordsListResponseSchema>;
+export type ReconRunsListResponse = InferSchema<typeof reconRunsListResponseSchema>;
 export type ReconRunByIdParams = InferSchema<typeof reconciliationRunByIdParamsSchema>;
+export type ReconUploadByIdParams = InferSchema<typeof reconciliationUploadByIdParamsSchema>;

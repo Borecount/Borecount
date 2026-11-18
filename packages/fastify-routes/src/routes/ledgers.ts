@@ -1,8 +1,11 @@
 import type {
   BalanceService,
   LedgerService,
+  ledgerListFilter,
   TransactionService,
-} from '@luxledger/core/application';
+  WhereFor,
+} from '@borecount/core/application';
+import { invalidWhereError, ledgerFilterFields, readWhereParameter } from '@borecount/http';
 import {
   type BulkCreateTransactionRequest,
   type BulkCreateTransactionResponse,
@@ -18,12 +21,15 @@ import {
   ledgerByIdParamsSchema,
   ledgerResponseSchema,
   ledgersListResponseSchema,
+  listLedgersQuerySchema,
   type TrialBalanceParams,
   trialBalanceParamsSchema,
   trialBalanceResponseSchema,
-} from '@luxledger/http/contracts';
-import { toTrialBalanceResponse } from '@luxledger/http/mappers';
+} from '@borecount/http/contracts';
+import { toTrialBalanceResponse } from '@borecount/http/mappers';
+import { resolveLimit } from '@borecount/http/query/pagination';
 import type { FastifyInstance } from 'fastify';
+import { handleValidationError } from '../errors/validation-error-handler';
 import { BaseRoute } from '../routing/base-route';
 
 export class LedgerRoutes extends BaseRoute {
@@ -48,6 +54,7 @@ export class LedgerRoutes extends BaseRoute {
     server.post<{ Body: CreateLedgerRequest }>(
       '/v1/ledgers',
       {
+        errorHandler: handleValidationError,
         schema: {
           body: createLedgerBodySchema,
           response: {
@@ -74,6 +81,7 @@ export class LedgerRoutes extends BaseRoute {
     server.post<{ Body: CreateTransactionRequest }>(
       '/v1/transactions',
       {
+        errorHandler: handleValidationError,
         schema: {
           body: createTransactionRequestSchema,
           response: {
@@ -117,6 +125,7 @@ export class LedgerRoutes extends BaseRoute {
     server.post<{ Body: BulkCreateTransactionRequest }>(
       '/v1/transactions/bulk',
       {
+        errorHandler: handleValidationError,
         schema: {
           body: bulkCreateTransactionRequestSchema,
           response: {
@@ -165,6 +174,7 @@ export class LedgerRoutes extends BaseRoute {
     server.get<{ Params: LedgerByIdParams }>(
       '/v1/ledgers/:id',
       {
+        errorHandler: handleValidationError,
         schema: {
           params: ledgerByIdParamsSchema,
           response: {
@@ -182,10 +192,12 @@ export class LedgerRoutes extends BaseRoute {
   }
 
   private registerGetLedgers(server: FastifyInstance): void {
-    server.get(
+    server.get<{ Querystring: { where?: string; limit?: number; cursor?: string } }>(
       '/v1/ledgers',
       {
+        errorHandler: handleValidationError,
         schema: {
+          querystring: listLedgersQuerySchema,
           response: {
             200: ledgersListResponseSchema,
           },
@@ -193,8 +205,18 @@ export class LedgerRoutes extends BaseRoute {
       },
       async (request, reply) =>
         this.handle(reply, async () => {
-          const ledgers = await this.ledgers.list(request.tenantId as string);
-          return reply.status(200).send(ledgers);
+          const where = readWhereParameter<WhereFor<typeof ledgerListFilter>>(
+            request.raw.url ?? '',
+            ledgerFilterFields,
+          );
+          if (where === null) throw invalidWhereError();
+          const result = await this.ledgers.list({
+            tenantId: request.tenantId as string,
+            limit: resolveLimit(request.query.limit),
+            cursor: request.query.cursor,
+            where,
+          });
+          return reply.status(200).send({ data: result.data, next_cursor: result.nextCursor });
         }),
     );
   }
@@ -203,6 +225,7 @@ export class LedgerRoutes extends BaseRoute {
     server.get<{ Params: TrialBalanceParams }>(
       '/v1/ledgers/:ledger_id/trial-balance',
       {
+        errorHandler: handleValidationError,
         schema: {
           params: trialBalanceParamsSchema,
           response: {
